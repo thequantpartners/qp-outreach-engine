@@ -257,6 +257,19 @@ export class OutreachRepo {
     }
   }
 
+  public static async toggleService(id: string, active: boolean): Promise<{ success: boolean; message: string }> {
+    const service = await OutreachRepo.getServiceById(id);
+    if (!service) {
+      return { success: false, message: `No se encontró la campaña con ID "${id}".` };
+    }
+    service.isActive = active;
+    await OutreachRepo.saveService(service);
+    return {
+      success: true,
+      message: `Campaña "${service.name}" (${id}) ${active ? 'ACTIVADA' : 'PAUSADA'} con éxito.`
+    };
+  }
+
   public static async deleteService(id: string, deleteLeads: boolean = true): Promise<{ success: boolean; message: string }> {
     if (DbConnection.isPg()) {
       const pool = DbConnection.getPool();
