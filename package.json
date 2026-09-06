@@ -1,0 +1,49 @@
+{
+  "name": "qp-outreach-engine",
+  "version": "1.0.0",
+  "description": "Infraestructura Centralizada de Prospección B2B, Scraping y WhatsApp Gateway Headless para The Quant Partners",
+  "main": "dist/gateway/server.js",
+  "bin": {
+    "qp-outreach": "./bin/qp-outreach.js"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/gateway/server.js",
+    "dev": "tsx watch src/gateway/server.ts",
+    "cli": "tsx src/cli/index.ts",
+    "mcp": "tsx src/cli/index.ts mcp",
+    "test:whatsapp": "tsx src/whatsapp/baileys_engine.ts",
+    "test:engine": "tsx test_engine.ts"
+  },
+  "keywords": [
+    "whatsapp-gateway",
+    "baileys",
+    "apify",
+    "b2b-outreach",
+    "anti-ban",
+    "the-quant-partners"
+  ],
+  "author": "The Quant Partners (Kenneth & Smith)",
+  "license": "ISC",
+  "dependencies": {
+    "@hapi/boom": "^10.0.1",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@whiskeysockets/baileys": "^7.0.0-rc14",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "pg": "^8.23.0",
+    "pino": "^9.6.0",
+    "qrcode": "^1.5.4",
+    "qrcode-terminal": "^0.12.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.13.1",
+    "@types/pg": "^8.23.1",
+    "@types/qrcode": "^1.5.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
