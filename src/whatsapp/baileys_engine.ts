@@ -122,7 +122,10 @@ export class BaileysEngine {
           this.isReady = false;
           const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
           
-          if (shouldReconnect) {
+          if (statusCode === DisconnectReason.connectionReplaced || statusCode === 440) {
+            console.warn('⚠️ [BaileysEngine] Conexión reemplazada por otra sesión activa en WhatsApp Web. Pausando 30 segundos antes de reintentar...');
+            setTimeout(() => this.init(), 30000);
+          } else if (shouldReconnect) {
             console.log('[BaileysEngine] Reconectando en 5 segundos...');
             setTimeout(() => this.init(), 5000);
           } else {
