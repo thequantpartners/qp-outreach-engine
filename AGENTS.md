@@ -63,16 +63,24 @@ Agrega esto a tu configuración MCP (`.cursor/mcp.json`, `claude_desktop_config.
 
 ## 3. Catálogo de Herramientas MCP para IAs
 
-| Herramienta MCP | Descripción |
-| :--- | :--- |
-| `launch_campaign` | **(Principal)** Dispara una campaña autónoma: define la oferta, queries de Apify, plantilla con permiso en 2 pasos, prompt del bot de cierre y delay anti-ban. |
-| `list_campaigns` | Lista todas las campañas/servicios registrados en la base de datos (con queries, estado activo/inactivo, plantilla y mecanismo de cierre). |
-| `outreach_status` | Verifica si WhatsApp está conectado, salud del servicio y estado global del embudo. |
-| `list_leads` | Filtra prospectos por estado (`DISCOVERED`, `OUTREACH_SENT`, `REPLIED`, `QUALIFIED`, `CLOSED_WON`, `HUMAN_TAKEOVER`). |
-| `get_chat_history` | Lee la transcripción completa de la conversación de un prospecto por su número. |
-| `send_whatsapp_message` | Envío manual inmediato a cualquier número (silencia a la IA para ese contacto). |
-| `toggle_human_takeover` | Pausa (`active: true`) o reanuda (`active: false`) el bot de IA para un lead. |
-| `trigger_scraping` | Ejecuta scraping en Apify ad-hoc para un término y ciudad, deduplicando en base de datos. |
+| Herramienta MCP | Categoría | Descripción |
+| :--- | :---: | :--- |
+| `launch_campaign` | Campañas | **(Principal)** Dispara una campaña: oferta, queries de Apify, plantilla con permiso en 2 pasos, prompt del bot y delay anti-ban. |
+| `list_campaigns` | Campañas | Lista todas las campañas/servicios registrados (queries, estado activo/inactivo, plantilla, cierre). |
+| `get_campaign` | Campañas | Ficha técnica completa y métricas específicas de conversión de una campaña por `service_id`. |
+| `update_campaign` | Campañas | Modifica campos de una campaña (nombre, plantilla, prompt, queries, cierre) sin re-raspar ni borrar leads. |
+| `toggle_campaign` | Campañas | Pausa (`active: false`) o reanuda (`active: true`) una campaña específica por su ID. |
+| `delete_campaign` | Campañas | Elimina una campaña por su ID (`service_id`) o todas las existentes pasando `service_id: "all"`. |
+| `list_leads` | Leads | Filtra prospectos por estado (`DISCOVERED`, `OUTREACH_SENT`, `REPLIED`, `QUALIFIED`, `CLOSED_WON`, `HUMAN_TAKEOVER`). |
+| `update_lead_status` | Leads | Actualiza manualmente el estado comercial de un prospecto por su número de teléfono. |
+| `delete_leads` | Leads | Elimina prospectos según filtros (`service_id`, `status`, `phone` o `all: true`). |
+| `get_chat_history` | Leads | Lee la transcripción completa de la conversación de WhatsApp con un prospecto. |
+| `send_whatsapp_message` | Leads | Envío manual inmediato a cualquier número (silencia a la IA en Human Takeover). |
+| `toggle_human_takeover` | Leads | Pausa (`active: true`) o reanuda (`active: false`) el bot de IA para un lead. |
+| `trigger_scraping` | Scraping | Ejecuta scraping en Apify ad-hoc para un término y ciudad con deduplicación en PostgreSQL. |
+| `outreach_status` | Sistema | Verifica conexión de WhatsApp, salud del servicio, métricas globales del embudo y pipeline. |
+| `get_whatsapp_qr` | Sistema | Obtiene el código QR actual de WhatsApp si la sesión requiere escaneo. |
+| `configure_settings` | Sistema | Ajusta delays anti-ban (min/max), límite diario, horarios y teléfono de alertas admin. |
 
 ### Ejemplo de Invocación MCP para `launch_campaign`:
 ```json

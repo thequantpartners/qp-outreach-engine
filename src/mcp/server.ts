@@ -31,6 +31,24 @@ const TOOLS: Tool[] = [
     }
   },
   {
+    name: 'delete_campaign',
+    description: 'Elimina una campaña específica por su ID o todas las campañas existentes si se pasa service_id: "all".',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        service_id: {
+          type: 'string',
+          description: 'ID de la campaña a eliminar (ej. "licitaciones-qp", "lar-engine", "custom-service") o "all" para eliminar todas las existentes'
+        },
+        delete_leads: {
+          type: 'boolean',
+          description: 'Si es true, elimina también los leads asociados a la campaña (default: true)'
+        }
+      },
+      required: ['service_id']
+    }
+  },
+  {
     name: 'launch_campaign',
     description: 'Inicia una campaña de prospección continua para cualquier oferta de servicio (ej. Servicios de IA, Chatbots, Automatizaciones). Scrapea prospectos en Apify, los deduplica en BD y arranca la prospección escalonada con pausas anti-ban.',
     inputSchema: {
@@ -192,6 +210,186 @@ const TOOLS: Tool[] = [
       },
       required: ['query', 'service_id']
     }
+  },
+  {
+    name: 'update_campaign',
+    description: 'Actualiza campos específicos de una campaña existente (nombre, queries, plantilla, prompt del bot, cierre, estado) sin borrar prospectos ni re-raspar.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        service_id: {
+          type: 'string',
+          description: 'ID único de la campaña a actualizar'
+        },
+        service_name: {
+          type: 'string',
+          description: 'Nuevo nombre descriptivo'
+        },
+        search_queries: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Nuevos términos de búsqueda para Apify'
+        },
+        target_locations: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Ciudades o regiones objetivo'
+        },
+        outreach_template: {
+          type: 'string',
+          description: 'Nueva plantilla en 2 pasos con tag {{name}}'
+        },
+        ai_sales_instructions: {
+          type: 'string',
+          description: 'Nuevas directivas comerciales para el bot de WhatsApp'
+        },
+        closing_type: {
+          type: 'string',
+          enum: ['MEETING_LINK', 'PAYMENT_INFO', 'VALUE_ASSET', 'HUMAN_TAKEOVER'],
+          description: 'Tipo de cierre'
+        },
+        closing_payload: {
+          type: 'object',
+          properties: {
+            meetingUrl: { type: 'string' },
+            paymentDetails: { type: 'string' },
+            closingMessage: { type: 'string' }
+          },
+          description: 'Datos del cierre'
+        },
+        is_active: {
+          type: 'boolean',
+          description: 'Estado activo o pausado'
+        }
+      },
+      required: ['service_id']
+    }
+  },
+  {
+    name: 'toggle_campaign',
+    description: 'Pausa (active: false) o reanuda (active: true) una campaña de prospección por su ID.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        service_id: {
+          type: 'string',
+          description: 'ID de la campaña'
+        },
+        active: {
+          type: 'boolean',
+          description: 'true para activar, false para pausar'
+        }
+      },
+      required: ['service_id', 'active']
+    }
+  },
+  {
+    name: 'get_campaign',
+    description: 'Obtiene la ficha técnica completa y métricas de rendimiento (leads, contactados, respondidos, calificados) de una campaña específica.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        service_id: {
+          type: 'string',
+          description: 'ID de la campaña a consultar'
+        }
+      },
+      required: ['service_id']
+    }
+  },
+  {
+    name: 'update_lead_status',
+    description: 'Actualiza manualmente el estado comercial de un prospecto (DISCOVERED, OUTREACH_SENT, REPLIED, QUALIFIED, CLOSED_WON, CLOSED_LOST, HUMAN_TAKEOVER).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        phone: {
+          type: 'string',
+          description: 'Número de WhatsApp del prospecto'
+        },
+        status: {
+          type: 'string',
+          enum: ['DISCOVERED', 'QUEUED', 'OUTREACH_SENT', 'REPLIED', 'QUALIFIED', 'CLOSED_WON', 'CLOSED_LOST', 'HUMAN_TAKEOVER'],
+          description: 'Nuevo estado comercial'
+        },
+        note: {
+          type: 'string',
+          description: 'Nota o motivo del cambio de estado'
+        }
+      },
+      required: ['phone', 'status']
+    }
+  },
+  {
+    name: 'delete_leads',
+    description: 'Elimina prospectos de la base de datos según filtros (campaña, estado, teléfono o all: true).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        service_id: {
+          type: 'string',
+          description: 'Filtrar por ID de campaña'
+        },
+        status: {
+          type: 'string',
+          enum: ['DISCOVERED', 'QUEUED', 'OUTREACH_SENT', 'REPLIED', 'QUALIFIED', 'CLOSED_WON', 'CLOSED_LOST', 'HUMAN_TAKEOVER'],
+          description: 'Filtrar por estado'
+        },
+        phone: {
+          type: 'string',
+          description: 'Teléfono específico a eliminar'
+        },
+        all: {
+          type: 'boolean',
+          description: 'Si es true, elimina todos los prospectos de la base de datos'
+        }
+      }
+    }
+  },
+  {
+    name: 'get_whatsapp_qr',
+    description: 'Consulta el estado de autenticación de WhatsApp y obtiene el código QR actual para escanear si está pendiente.',
+    inputSchema: {
+      type: 'object',
+      properties: {}
+    }
+  },
+  {
+    name: 'configure_settings',
+    description: 'Modifica la configuración operativa global del motor: límites diarios, pausas anti-ban, horario operativo y teléfono del admin.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        daily_limit: {
+          type: 'number',
+          description: 'Cantidad máxima de mensajes salientes por día (default: 35)'
+        },
+        min_delay_seconds: {
+          type: 'number',
+          description: 'Pausa mínima entre mensajes en frío (segundos, min: 60)'
+        },
+        max_delay_seconds: {
+          type: 'number',
+          description: 'Pausa máxima entre mensajes en frío (segundos)'
+        },
+        start_hour: {
+          type: 'number',
+          description: 'Hora de inicio de actividad (ej. 9 para las 09:00)'
+        },
+        end_hour: {
+          type: 'number',
+          description: 'Hora de fin de actividad (ej. 19 para las 19:00)'
+        },
+        admin_whatsapp_phone: {
+          type: 'string',
+          description: 'Número de WhatsApp de Kenneth para recibir alertas comerciales de cierre'
+        },
+        is_autonomous_active: {
+          type: 'boolean',
+          description: 'Activar o pausar el despacho de mensajes en segundo plano'
+        }
+      }
+    }
   }
 ];
 
@@ -267,6 +465,35 @@ export class McpServerManager {
                 }
               ]
             };
+          }
+
+          case 'delete_campaign': {
+            const { service_id, delete_leads = true } = args as any;
+            if (!service_id) {
+              throw new Error('Debe especificar service_id (ID de campaña o "all")');
+            }
+
+            if (service_id === 'all') {
+              const result = await OutreachRepo.deleteAllServices(delete_leads);
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: JSON.stringify(result, null, 2)
+                  }
+                ]
+              };
+            } else {
+              const result = await OutreachRepo.deleteService(service_id, delete_leads);
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: JSON.stringify(result, null, 2)
+                  }
+                ]
+              };
+            }
           }
 
           case 'launch_campaign': {
@@ -462,6 +689,184 @@ export class McpServerManager {
                     null,
                     2
                   )
+                }
+              ]
+            };
+          }
+
+          case 'update_campaign': {
+            const {
+              service_id,
+              service_name,
+              search_queries,
+              target_locations,
+              outreach_template,
+              ai_sales_instructions,
+              closing_type,
+              closing_payload,
+              is_active
+            } = args as any;
+
+            const existing = await OutreachRepo.getServiceById(service_id);
+            if (!existing) {
+              throw new Error(`No se encontró la campaña con ID "${service_id}".`);
+            }
+
+            const updated: ServiceDefinition = {
+              ...existing,
+              name: service_name !== undefined ? service_name : existing.name,
+              description: service_name !== undefined ? `Campaña: ${service_name}` : existing.description,
+              apifyQueries: search_queries !== undefined ? search_queries : existing.apifyQueries,
+              targetLocations: target_locations !== undefined ? target_locations : existing.targetLocations,
+              outreachTemplate: outreach_template !== undefined ? outreach_template : existing.outreachTemplate,
+              closingType: closing_type !== undefined ? (closing_type as ClosingType) : existing.closingType,
+              closingPayload: closing_payload !== undefined ? { ...existing.closingPayload, ...closing_payload } : existing.closingPayload,
+              aiSystemPrompt: ai_sales_instructions !== undefined ? ai_sales_instructions : existing.aiSystemPrompt,
+              isActive: is_active !== undefined ? is_active : existing.isActive
+            };
+
+            await OutreachRepo.saveService(updated);
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    success: true,
+                    message: `Campaña "${service_id}" actualizada exitosamente.`,
+                    campaign: updated
+                  }, null, 2)
+                }
+              ]
+            };
+          }
+
+          case 'toggle_campaign': {
+            const { service_id, active } = args as any;
+            const result = await OutreachRepo.toggleService(service_id, active);
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, null, 2)
+                }
+              ]
+            };
+          }
+
+          case 'get_campaign': {
+            const { service_id } = args as any;
+            const service = await OutreachRepo.getServiceById(service_id);
+            if (!service) {
+              throw new Error(`No se encontró la campaña con ID "${service_id}".`);
+            }
+            const stats = await OutreachRepo.getStats(service_id);
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    campaign: service,
+                    stats
+                  }, null, 2)
+                }
+              ]
+            };
+          }
+
+          case 'update_lead_status': {
+            const { phone, status, note } = args as any;
+            await OutreachRepo.updateLeadStatus(phone, status);
+            if (note) {
+              await OutreachRepo.addChatMessage(phone, 'human_agent', `[Nota de Sistema / Estado: ${status}] ${note}`);
+            }
+            const updated = await OutreachRepo.getLeadByPhone(phone);
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    success: true,
+                    message: `Estado de lead ${phone} actualizado a ${status}.`,
+                    lead: updated
+                  }, null, 2)
+                }
+              ]
+            };
+          }
+
+          case 'delete_leads': {
+            const { service_id, status, phone, all = false } = args as any;
+            const result = await OutreachRepo.deleteLeads({
+              serviceId: service_id,
+              status,
+              phone,
+              all
+            });
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, null, 2)
+                }
+              ]
+            };
+          }
+
+          case 'get_whatsapp_qr': {
+            const wa = BaileysEngine.getInstance();
+            const status = wa.getStatus();
+            const qr = wa.getLatestQr();
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    isReady: status.isReady,
+                    hasQr: status.hasQr,
+                    qr: qr,
+                    message: status.isReady
+                      ? 'WhatsApp está actualmente CONECTADO y listo para despachar.'
+                      : status.hasQr
+                      ? 'Código QR pendiente de escaneo. Escanea el código en WhatsApp > Dispositivos Vinculados.'
+                      : 'WhatsApp desconectado, esperando regeneración de socket.'
+                  }, null, 2)
+                }
+              ]
+            };
+          }
+
+          case 'configure_settings': {
+            const {
+              daily_limit,
+              min_delay_seconds,
+              max_delay_seconds,
+              start_hour,
+              end_hour,
+              admin_whatsapp_phone,
+              is_autonomous_active
+            } = args as any;
+
+            const updatePayload: any = {};
+            if (daily_limit !== undefined) updatePayload.dailyLimit = daily_limit;
+            if (min_delay_seconds !== undefined) updatePayload.minDelaySeconds = min_delay_seconds;
+            if (max_delay_seconds !== undefined) updatePayload.maxDelaySeconds = max_delay_seconds;
+            if (start_hour !== undefined) updatePayload.startHour = start_hour;
+            if (end_hour !== undefined) updatePayload.endHour = end_hour;
+            if (admin_whatsapp_phone !== undefined) updatePayload.adminWhatsAppPhone = admin_whatsapp_phone;
+            if (is_autonomous_active !== undefined) updatePayload.isAutonomousActive = is_autonomous_active;
+
+            await OutreachRepo.updateSettings(updatePayload);
+            const current = await OutreachRepo.getSettings();
+
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    success: true,
+                    message: 'Configuración del motor actualizada exitosamente.',
+                    settings: current
+                  }, null, 2)
                 }
               ]
             };

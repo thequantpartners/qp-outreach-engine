@@ -77,6 +77,25 @@ export async function runCli(): Promise<void> {
       break;
     }
 
+    case 'delete-campaign':
+    case 'delete-service': {
+      const id = positional[0] || (flags.id as string);
+      if (!id) {
+        console.error('❌ Error: Debe especificar el ID de la campaña o "all": qp-outreach delete-campaign <id|all>');
+        process.exit(1);
+      }
+
+      if (id === 'all') {
+        const res = await OutreachRepo.deleteAllServices(true);
+        console.log(`✅ ${res.message}`);
+      } else {
+        const res = await OutreachRepo.deleteService(id, true);
+        console.log(res.success ? `✅ ${res.message}` : `❌ ${res.message}`);
+      }
+      process.exit(0);
+      break;
+    }
+
     case 'launch': {
       const name = (flags.name as string) || 'Servicios IA B2B';
       const query = (flags.query as string) || 'inmobiliarias lima';

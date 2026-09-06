@@ -135,10 +135,12 @@ export class OutreachRepo {
       );
     `);
 
-    // Comprobar si existen servicios iniciales
-    const checkServices = await pool.query('SELECT COUNT(*) FROM services');
-    if (parseInt(checkServices.rows[0].count, 10) === 0) {
-      console.log('[OutreachRepo] Insertando presets de servicios iniciales en PostgreSQL...');
+    // Comprobar si es primera inicialización del sistema (configuración inicial no existe)
+    const checkSettings = await pool.query("SELECT COUNT(*) FROM campaign_settings WHERE id = 'main_config'");
+    const isFirstInit = parseInt(checkSettings.rows[0].count, 10) === 0;
+
+    if (isFirstInit) {
+      console.log('[OutreachRepo] Primera inicialización: insertando presets de servicios iniciales en PostgreSQL...');
       for (const s of OutreachRepo.defaultServices) {
         await pool.query(
           `INSERT INTO services (id, name, description, target_persona, apify_queries, target_locations, outreach_template, closing_type, closing_payload, ai_system_prompt, is_active)
@@ -301,6 +303,35 @@ export class OutreachRepo {
         message: wasDeleted
           ? `Campaña "${id}" eliminada exitosamente (${deletedLeadsCount} prospectos removidos).`
           : `No se encontró la campaña "${id}".`
+      };
+    }
+  }
+
+  public static async deleteAllServices(deleteLeads: boolean = true): Promise<{ success: boolean; count: number; message: string }> {
+    if (DbConnection.isPg()) {
+      const pool = DbConnection.getPool();
+      if (deleteLeads) {
+        await pool.query('DELETE FROM leads');
+      }
+      const res = await pool.query('DELETE FROM services');
+      const count = res.rowCount ?? 0;
+      return {
+        success: true,
+        count,
+        message: `Se eliminaron ${count} campañas exitosamente de PostgreSQL.`
+      };
+    } else {
+      const data = DbConnection.getFallbackData();
+      const count = (data.services || []).length;
+      data.services = [];
+      if (deleteLeads) {
+        data.leads = [];
+      }
+      DbConnection.saveFallbackData(data);
+      return {
+        success: true,
+        count,
+        message: `Se eliminaron ${count} campañas exitosamente.`
       };
     }
   }
@@ -653,7 +684,7 @@ export class OutreachRepo {
   }
 
   // --- STATS ---
-  public static async getStats(): Promise<{
+  public static async getStats(serviceId?: string): Promise<{
     totalLeads: number;
     discovered: number;
     outreachSent: number;
@@ -663,7 +694,7 @@ export class OutreachRepo {
     closedWon: number;
     closedLost: number;
   }> {
-    const leads = await OutreachRepo.getLeads({ limit: 10000 });
+    const leads = await OutreachRepo.getLeads({ serviceId, limit: 10000 });
     return {
       totalLeads: leads.length,
       discovered: leads.filter(l => l.status === 'DISCOVERED' || l.status === 'QUEUED').length,
@@ -674,5 +705,61 @@ export class OutreachRepo {
       closedWon: leads.filter(l => l.status === 'CLOSED_WON').length,
       closedLost: leads.filter(l => l.status === 'CLOSED_LOST').length
     };
+  }
+
+  // --- DELETE LEADS ---
+  public static async deleteLeads(filters: { serviceId?: string; status?: LeadStatus; phone?: string; all?: boolean }): Promise<{ success: boolean; deletedCount: number; message: string }> {
+    if (!filters.all && !filters.serviceId && !filters.status && !filters.phone) {
+      throw new Error('Debe especificar al menos un filtro (serviceId, status, phone) o all: true');
+    }
+
+    if (DbConnection.isPg()) {
+      const pool = DbConnection.getPool();
+      let query = 'DELETE FROM leads WHERE 1=1';
+      const params: any[] = [];
+      let pIndex = 1;
+
+      if (filters.phone) {
+        const clean = filters.phone.replace(/[^0-9]/g, '');
+        query += ` AND phone = $${pIndex++}`;
+        params.push(clean);
+      }
+      if (filters.serviceId) {
+        query += ` AND service_id = $${pIndex++}`;
+        params.push(filters.serviceId);
+      }
+      if (filters.status) {
+        query += ` AND status = $${pIndex++}`;
+        params.push(filters.status);
+      }
+
+      const res = await pool.query(query, params);
+      const count = res.rowCount ?? 0;
+      return {
+        success: true,
+        deletedCount: count,
+        message: `Se eliminaron ${count} prospectos exitosamente de la base de datos.`
+      };
+    } else {
+      const data = DbConnection.getFallbackData();
+      const initialCount = (data.leads || []).length;
+      if (filters.all) {
+        data.leads = [];
+      } else {
+        data.leads = (data.leads || []).filter((l: Lead) => {
+          if (filters.phone && l.phone === filters.phone.replace(/[^0-9]/g, '')) return false;
+          if (filters.serviceId && l.serviceId === filters.serviceId) return false;
+          if (filters.status && l.status === filters.status) return false;
+          return true;
+        });
+      }
+      const count = initialCount - (data.leads || []).length;
+      DbConnection.saveFallbackData(data);
+      return {
+        success: true,
+        deletedCount: count,
+        message: `Se eliminaron ${count} prospectos exitosamente.`
+      };
+    }
   }
 }
