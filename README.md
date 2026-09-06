@@ -82,7 +82,7 @@ Configura tus credenciales clave en `.env`:
 | :--- | :--- | :--- |
 | `APIFY_TOKEN` | Token de acceso para scrapers de Google Maps | [Apify Console > Settings > Integrations](https://console.apify.com/account/integrations) |
 | `OPENROUTER_API_KEY` | Llave para el motor de IA del bot de WhatsApp | [OpenRouter Keys](https://openrouter.ai/keys) |
-| `ADMIN_WHATSAPP_PHONE` | Tu número personal para alertas críticas (ej. `51963876272`) | Tu WhatsApp |
+| `ADMIN_WHATSAPP_PHONE` | Tu número personal para alertas críticas (ej. `51987654321`) | Tu WhatsApp |
 | `DATABASE_URL` *(Opcional)* | Conexión a PostgreSQL (Railway / Supabase) | Si se omite, usa base de datos local automática |
 | `API_SECRET_KEY` | Clave maestra para autenticar llamadas REST | Genera una cadena segura (ej. `qp-secret-2026`) |
 
@@ -227,7 +227,7 @@ node ./bin/qp-outreach.js mcp
    - `PORT=3100`
    - `APIFY_TOKEN=apify_api_...`
    - `OPENROUTER_API_KEY=sk-or-v1-...`
-   - `ADMIN_WHATSAPP_PHONE=51963876272`
+   - `ADMIN_WHATSAPP_PHONE=51987654321`
    - `DATABASE_URL=${{Postgres.DATABASE_URL}}` *(si conectas el plugin de PostgreSQL de Railway)*
 4. Railway detectará el `Dockerfile` y levantará el servicio con HTTPS automático.
 

@@ -142,7 +142,7 @@ Para responder a una interacción iniciada por un usuario o enviar una alerta di
 - **Payload:**
 ```json
 {
-  "to": "51963876272",
+  "to": "51987654321",
   "message": "Buenas tardes, Ing. Willy. Le comparto el dictamen pericial prometido..."
 }
 ```
@@ -150,8 +150,8 @@ Para responder a una interacción iniciada por un usuario o enviar una alerta di
 ```json
 {
   "success": true,
-  "to": "51963876272",
-  "jid": "51963876272@s.whatsapp.net",
+  "to": "51987654321",
+  "jid": "51987654321@s.whatsapp.net",
   "timestamp": "2026-09-05T20:25:00.000Z"
 }
 ```
