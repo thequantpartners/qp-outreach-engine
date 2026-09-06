@@ -222,6 +222,23 @@ export async function runCli(): Promise<void> {
       break;
     }
 
+    case 'delete-campaign':
+    case 'delete': {
+      const serviceId = positional[0] || (flags.id as string);
+      if (!serviceId) {
+        console.error('❌ Error: Formato: qp-outreach delete-campaign <service_id>');
+        process.exit(1);
+      }
+      const res = await OutreachRepo.deleteService(serviceId, true);
+      if (res.success) {
+        console.log(`✅ ${res.message}`);
+      } else {
+        console.error(`❌ ${res.message}`);
+      }
+      process.exit(0);
+      break;
+    }
+
     case 'help':
     default: {
       console.log(`

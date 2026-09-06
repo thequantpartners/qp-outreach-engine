@@ -257,6 +257,41 @@ export class OutreachRepo {
     }
   }
 
+  public static async deleteService(id: string, deleteLeads: boolean = true): Promise<{ success: boolean; message: string }> {
+    if (DbConnection.isPg()) {
+      const pool = DbConnection.getPool();
+      if (deleteLeads) {
+        await pool.query('DELETE FROM leads WHERE service_id = $1', [id]);
+      }
+      const res = await pool.query('DELETE FROM services WHERE id = $1', [id]);
+      const success = (res.rowCount ?? 0) > 0;
+      return {
+        success,
+        message: success ? `Campaña "${id}" eliminada exitosamente.` : `No se encontró la campaña "${id}".`
+      };
+    } else {
+      const data = DbConnection.getFallbackData();
+      const initialServiceCount = (data.services || []).length;
+      data.services = (data.services || []).filter((s: any) => s.id !== id);
+
+      let deletedLeadsCount = 0;
+      if (deleteLeads && data.leads) {
+        const initialLeadCount = data.leads.length;
+        data.leads = data.leads.filter((l: any) => l.serviceId !== id);
+        deletedLeadsCount = initialLeadCount - data.leads.length;
+      }
+
+      DbConnection.saveFallbackData(data);
+      const wasDeleted = data.services.length < initialServiceCount;
+      return {
+        success: wasDeleted,
+        message: wasDeleted
+          ? `Campaña "${id}" eliminada exitosamente (${deletedLeadsCount} prospectos removidos).`
+          : `No se encontró la campaña "${id}".`
+      };
+    }
+  }
+
   // --- LEADS ---
   public static async saveLeadsFromScraper(serviceId: string, items: ScrapedLead[]): Promise<{ inserted: number; skipped: number }> {
     let inserted = 0;
