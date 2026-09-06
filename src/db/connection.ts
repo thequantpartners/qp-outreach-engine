@@ -19,10 +19,9 @@ export class DbConnection {
   private static isConnectedToPg: boolean = false;
 
   public static get fallbackFilePath(): string {
-    if (process.env.STORAGE_DIR) {
-      return path.resolve(process.env.STORAGE_DIR, 'db_fallback.json');
-    }
-    return path.resolve(projectRoot, 'storage', 'db_fallback.json');
+    const rawDir = process.env.STORAGE_DIR || './storage';
+    const resolvedDir = path.isAbsolute(rawDir) ? rawDir : path.resolve(projectRoot, rawDir);
+    return path.resolve(resolvedDir, 'db_fallback.json');
   }
 
   public static async init(): Promise<void> {

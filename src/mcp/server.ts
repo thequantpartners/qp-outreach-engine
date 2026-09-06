@@ -23,6 +23,14 @@ const TOOLS: Tool[] = [
     }
   },
   {
+    name: 'list_campaigns',
+    description: 'Lista todas las campañas y servicios registrados en el motor (con su id, nombre, estado activo/inactivo, queries de scraping, mecanismo de cierre y plantilla de prospección).',
+    inputSchema: {
+      type: 'object',
+      properties: {}
+    }
+  },
+  {
     name: 'launch_campaign',
     description: 'Inicia una campaña de prospección continua para cualquier oferta de servicio (ej. Servicios de IA, Chatbots, Automatizaciones). Scrapea prospectos en Apify, los deduplica en BD y arranca la prospección escalonada con pausas anti-ban.',
     inputSchema: {
@@ -244,6 +252,18 @@ export class McpServerManager {
                     null,
                     2
                   )
+                }
+              ]
+            };
+          }
+
+          case 'list_campaigns': {
+            const services = await OutreachRepo.getServices();
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(services, null, 2)
                 }
               ]
             };

@@ -67,6 +67,7 @@ app.get('/', (_req: Request, res: Response) => {
       messagesEndpoint: '/messages',
       tools: [
         'outreach_status',
+        'list_campaigns',
         'launch_campaign',
         'list_leads',
         'get_chat_history',

@@ -8,7 +8,7 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '..');
 
 // Asegurar que el directorio de trabajo y env apunten al engine
-if (!process.env.STORAGE_DIR && process.cwd() !== projectRoot) {
+if (process.cwd() !== projectRoot) {
   process.chdir(projectRoot);
 }
 

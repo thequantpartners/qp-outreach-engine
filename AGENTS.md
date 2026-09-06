@@ -66,6 +66,7 @@ Agrega esto a tu configuración MCP (`.cursor/mcp.json`, `claude_desktop_config.
 | Herramienta MCP | Descripción |
 | :--- | :--- |
 | `launch_campaign` | **(Principal)** Dispara una campaña autónoma: define la oferta, queries de Apify, plantilla con permiso en 2 pasos, prompt del bot de cierre y delay anti-ban. |
+| `list_campaigns` | Lista todas las campañas/servicios registrados en la base de datos (con queries, estado activo/inactivo, plantilla y mecanismo de cierre). |
 | `outreach_status` | Verifica si WhatsApp está conectado, salud del servicio y estado global del embudo. |
 | `list_leads` | Filtra prospectos por estado (`DISCOVERED`, `OUTREACH_SENT`, `REPLIED`, `QUALIFIED`, `CLOSED_WON`, `HUMAN_TAKEOVER`). |
 | `get_chat_history` | Lee la transcripción completa de la conversación de un prospecto por su número. |
