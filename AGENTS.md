@@ -38,25 +38,26 @@ Agrega esto a tu configuración MCP (`.cursor/mcp.json`, `claude_desktop_config.
 
 ---
 
-## 2.3. Protocolo Obligatorio para IAs: Creación de Nuevas Campañas
+## 2.3. Protocolo Obligatorio para IAs: Creación de Campañas (Modo Co-Piloto Proactivo)
 > [!IMPORTANT]
-> **REGLA ABSOLUTA PARA CUALQUIER AGENTE DE IA (Antigravity, Cursor, Smith, Claude):**  
-> Queda **terminantemente prohibido** llamar a `launch_campaign` con datos inventados o de muestra.  
-> Antes de registrar una nueva campaña, la IA **DEBE entrevistar a Kenneth** haciéndole este cuestionario estructurado:
+> **REGLA PARA CUALQUIER AGENTE DE IA (Antigravity, Cursor, Smith, Claude):**  
+> La IA debe actuar como un estratega proactivo que **ahorra tiempo a Kenneth**.  
+> En lugar de abrumarlo con un cuestionario largo, la IA **solo le pide lo esencial (Paso 1)** y se encarga del **trabajo pesado de redacción y estrategia (Paso 2)**:
 >
-> 1. **Nombre de la campaña y nicho:** (ej. *"Agentes IA para Inmobiliarias"*).
-> 2. **Servicio y entregable exacto:** ¿Qué problema de negocio resuelve y qué recibe el cliente?
-> 3. **Política de Precios:** ¿Hay un precio fijo o rango que el bot deba informar, o siempre se deriva a Kenneth para cotización a la medida?
-> 4. **Términos de Búsqueda (Apify):** ¿Qué términos exactos buscar en Google Maps y en qué ciudad/país? (ej. *"inmobiliarias miraflores"*).
-> 5. **Mecanismo de Cierre del Bot:**
->    - `HUMAN_TAKEOVER` *(Recomendado)*: El bot atiende dudas y transfiere el chat a Kenneth cuando quieran comprar o coticen.
->    - `MEETING_LINK`: Pasa enlace de Cal.com / Calendly (debe pedir el link real).
->    - `VALUE_ASSET`: Pasa enlace de video o PDF.
->    - `PAYMENT_INFO`: Datos de transferencia.
-> 6. **Preguntas para armar el Prompt del Bot:**
->    - ¿Cuáles son las 2 o 3 objeciones o dudas más comunes del cliente?
->    - ¿Qué cosas tiene **prohibido** decir o prometer el bot?
-> 7. **Aprobación de la Plantilla:** La IA debe redactar la propuesta de primer mensaje (Permiso en 2 pasos, sin links) y pedirle la confirmación a Kenneth antes de guardar.
+> ### Paso 1: Lo único que la IA le pregunta a Kenneth (Las 3 Variables Clave)
+> 1. **Nicho / A quién va dirigida:** (ej. *"Estudios de abogados en Lima"*).
+> 2. **Servicio y entregable:** ¿Qué solución les ofrecemos y qué reciben?
+> 3. **Política de precios:** ¿Hay un precio fijo que deba decir el bot, o se transfiere a Kenneth para cotización a la medida?
+>
+> ### Paso 2: La IA genera de forma autónoma la propuesta completa:
+> Tomando esos 3 datos, la IA formula y le presenta a Kenneth en un solo mensaje:
+> - **Queries de Apify sugeridas:** 3 a 4 términos de búsqueda óptimos en Google Maps (ej. *"estudios de abogados san isidro"*, *"abogados corporativos miraflores"*).
+> - **Mecanismo de cierre:** `HUMAN_TAKEOVER` hacia Kenneth (`51902105668`).
+> - **Plantilla de Prospección:** Redactada con técnica de permiso en 2 pasos, sin links, personalizada.
+> - **Prompt del Bot:** Incluyendo las 3 objeciones típicas del nicho, respuestas recomendadas y reglas anti-alucinación.
+>
+> ### Paso 3: Validación rápida
+> Kenneth solo revisa la propuesta, da su visto bueno (*"Listo, ejecútala"*) o pide un ajuste puntual, y recién ahí la IA llama a `launch_campaign`.
 
 ---
 
