@@ -226,7 +226,7 @@ RESPONDE ESTRICTAMENTE EN FORMATO JSON VÁLIDO CON LA SIGUIENTE ESTRUCTURA:
         if (service.closingType === 'MEETING_LINK') {
           closeReply = `Excelente. Puede agendar directamente una breve sesión técnica en este enlace:\n${service.closingPayload.meetingUrl || 'https://cal.com/kenneth-qp'}`;
         } else if (service.closingType === 'PAYMENT_INFO') {
-          closeReply = `Con gusto. Para proceder, nuestros datos de pago son:\n${service.closingPayload.paymentDetails || 'BCP Soles / Yape: 51963876272'}`;
+          closeReply = `Con gusto. Para proceder, nuestros datos de pago son:\n${service.closingPayload.paymentDetails || 'BCP Soles / Yape corporativo'}`;
         } else {
           closeReply = `Con gusto, le comparto los detalles para que su equipo los revise. ¿Tienen alguna consulta específica que deseen priorizar?`;
         }

@@ -60,8 +60,8 @@ export class OutreachRepo {
       outreachTemplate: 'Buenas tardes al equipo de {{name}}.\n\nLe escribe Kenneth de The Quant Partners. Hemos desarrollado una solución específica para optimizar operaciones en su sector.\n\n¿Me permite compartirle un breve resumen por este medio?',
       closingType: 'PAYMENT_INFO',
       closingPayload: {
-        paymentDetails: 'BCP Soles: 191-XXXXXXXX-0-XX\nInterbank: 200-XXXXXXXX-XX\nYape/Plin: 51963876272',
-        closingMessage: 'Con gusto coordinamos la activación. Los datos bancarios corporativos para la confirmación del servicio son:\nBCP Soles: 191-XXXXXXXX-0-XX (CCI: 002191...)\nYape/Plin: 51963876272\nUna vez realizado nos remite el comprobante para emitir la factura.'
+        paymentDetails: 'BCP Soles: 191-XXXXXXXX-0-XX\nInterbank: 200-XXXXXXXX-XX\nYape/Plin: 519XXXXXXXX',
+        closingMessage: 'Con gusto coordinamos la activación. Los datos bancarios corporativos para la confirmación del servicio son:\nBCP Soles: 191-XXXXXXXX-0-XX (CCI: 002191...)\nYape/Plin: 519XXXXXXXX\nUna vez realizado nos remite el comprobante para emitir la factura.'
       },
       aiSystemPrompt: 'Eres un asesor comercial consultivo. Atiende dudas y consultas con cordialidad y precisión. Si el cliente solicita contratar o pagar, proporciona los datos de pago y confirma el inicio del servicio.',
       isActive: false
@@ -128,7 +128,7 @@ export class OutreachRepo {
         max_delay_seconds INT NOT NULL DEFAULT 300,
         start_hour INT NOT NULL DEFAULT 9,
         end_hour INT NOT NULL DEFAULT 19,
-        admin_whatsapp_phone VARCHAR(50) NOT NULL DEFAULT '51963876272',
+        admin_whatsapp_phone VARCHAR(50) NOT NULL DEFAULT '',
         webhook_url VARCHAR(500),
         is_autonomous_active BOOLEAN NOT NULL DEFAULT true,
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -162,11 +162,12 @@ export class OutreachRepo {
     }
 
     // Configuración inicial
+    const initialAdminPhone = process.env.ADMIN_WHATSAPP_PHONE || '';
     await pool.query(`
       INSERT INTO campaign_settings (id, daily_limit, min_delay_seconds, max_delay_seconds, start_hour, end_hour, admin_whatsapp_phone, is_autonomous_active)
-      VALUES ('main_config', 35, 180, 300, 9, 19, '51963876272', true)
+      VALUES ('main_config', 35, 180, 300, 9, 19, $1, true)
       ON CONFLICT (id) DO NOTHING;
-    `);
+    `, [initialAdminPhone]);
 
     console.log('✅ [OutreachRepo] Tablas y esquema de PostgreSQL listos.');
   }
@@ -540,7 +541,7 @@ export class OutreachRepo {
           maxDelaySeconds: 300,
           startHour: 9,
           endHour: 19,
-          adminWhatsAppPhone: '51963876272',
+          adminWhatsAppPhone: process.env.ADMIN_WHATSAPP_PHONE || '',
           isAutonomousActive: true
         };
       }
@@ -563,7 +564,7 @@ export class OutreachRepo {
         maxDelaySeconds: 300,
         startHour: 9,
         endHour: 19,
-        adminWhatsAppPhone: '51963876272',
+        adminWhatsAppPhone: process.env.ADMIN_WHATSAPP_PHONE || '',
         isAutonomousActive: true
       };
     }

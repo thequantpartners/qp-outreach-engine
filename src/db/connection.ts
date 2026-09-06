@@ -62,7 +62,7 @@ export class DbConnection {
           maxDelaySeconds: 300,
           startHour: 9,
           endHour: 19,
-          adminWhatsAppPhone: process.env.ADMIN_WHATSAPP_PHONE || '51963876272',
+          adminWhatsAppPhone: process.env.ADMIN_WHATSAPP_PHONE || '',
           webhookUrl: process.env.WEBHOOK_URL || '',
           isAutonomousActive: true
         }

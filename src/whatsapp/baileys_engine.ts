@@ -321,7 +321,7 @@ export class BaileysEngine {
    */
   public async notifyAdmin(message: string): Promise<void> {
     const settings = await OutreachRepo.getSettings();
-    const adminPhone = (settings.adminWhatsAppPhone || process.env.ADMIN_WHATSAPP_PHONE || '51963876272').replace(/[^0-9]/g, '');
+    const adminPhone = (settings.adminWhatsAppPhone || process.env.ADMIN_WHATSAPP_PHONE || '').replace(/[^0-9]/g, '');
 
     if (this.sock && this.isReady && adminPhone) {
       try {
