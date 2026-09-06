@@ -61,6 +61,22 @@ export async function runCli(): Promise<void> {
       break;
     }
 
+    case 'campaigns':
+    case 'services': {
+      const services = await OutreachRepo.getServices();
+      console.log(`\n📋 Campañas y Servicios Registrados (${services.length}):\n`);
+      for (const s of services) {
+        const icon = s.isActive ? '🟢' : '⚪';
+        console.log(`${icon} [${s.id}] ${s.name}`);
+        console.log(`   Estado: ${s.isActive ? 'ACTIVO' : 'INACTIVO'} | Cierre: ${s.closingType}`);
+        console.log(`   Queries: ${(s.apifyQueries || []).join(', ')}`);
+        console.log(`   Plantilla: ${(s.outreachTemplate || '').slice(0, 90).replace(/\n/g, ' ')}...`);
+        console.log('');
+      }
+      process.exit(0);
+      break;
+    }
+
     case 'launch': {
       const name = (flags.name as string) || 'Servicios IA B2B';
       const query = (flags.query as string) || 'inmobiliarias lima';

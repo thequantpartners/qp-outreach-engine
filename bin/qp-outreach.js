@@ -12,6 +12,12 @@ if (process.cwd() !== projectRoot) {
   process.chdir(projectRoot);
 }
 
+// En modo MCP por stdio, stdout es exclusivo para JSON-RPC
+if (process.argv.includes('mcp')) {
+  console.log = (...args) => console.error(...args);
+  console.info = (...args) => console.error(...args);
+}
+
 // Si existe dist/cli/index.js correrlo, sino usar tsx para desarrollo
 const distPath = path.resolve(projectRoot, 'dist/cli/index.js');
 
