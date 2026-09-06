@@ -170,7 +170,14 @@ Cualquier agente de IA (**Antigravity, Cursor, Claude Desktop, Windsurf, Smith**
 | `get_chat_history` | `phone` | Obtiene la transcripción completa de la conversación de un lead. |
 | `send_whatsapp_message` | `to`, `message` | Envío manual inmediato (silencia la IA para ese lead). |
 | `toggle_human_takeover` | `phone`, `active` | Pausa (`true`) o reanuda (`false`) el bot conversacional para un contacto. |
-| `trigger_scraping` | `query`, `location`, `service_id` | Scraping ad-hoc en Apify con deduplicación inmediata. |
+### 📋 Protocolo Obligatorio para IAs: Creación de Campañas
+Antes de ejecutar `launch_campaign`, cualquier agente de IA (Antigravity, Cursor, Smith, Claude) está obligado a realizar una entrevista de alineación a Kenneth cubriendo:
+1. **Nombre y nicho de la campaña**
+2. **Servicio y entregable exacto que se ofrecerá**
+3. **Política de precios:** ¿precio fijo o cotización a la medida enviada por Kenneth tras handoff?
+4. **Mecanismo de cierre:** `HUMAN_TAKEOVER` (recomendado), `MEETING_LINK` o `VALUE_ASSET`
+5. **Objeciones frecuentes y reglas negativas** (qué tiene prohibido decir o prometer)
+6. **Validación de la plantilla de prospección** (permiso en 2 pasos, sin links)
 
 ---
 

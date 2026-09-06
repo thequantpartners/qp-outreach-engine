@@ -38,6 +38,28 @@ Agrega esto a tu configuración MCP (`.cursor/mcp.json`, `claude_desktop_config.
 
 ---
 
+## 2.3. Protocolo Obligatorio para IAs: Creación de Nuevas Campañas
+> [!IMPORTANT]
+> **REGLA ABSOLUTA PARA CUALQUIER AGENTE DE IA (Antigravity, Cursor, Smith, Claude):**  
+> Queda **terminantemente prohibido** llamar a `launch_campaign` con datos inventados o de muestra.  
+> Antes de registrar una nueva campaña, la IA **DEBE entrevistar a Kenneth** haciéndole este cuestionario estructurado:
+>
+> 1. **Nombre de la campaña y nicho:** (ej. *"Agentes IA para Inmobiliarias"*).
+> 2. **Servicio y entregable exacto:** ¿Qué problema de negocio resuelve y qué recibe el cliente?
+> 3. **Política de Precios:** ¿Hay un precio fijo o rango que el bot deba informar, o siempre se deriva a Kenneth para cotización a la medida?
+> 4. **Términos de Búsqueda (Apify):** ¿Qué términos exactos buscar en Google Maps y en qué ciudad/país? (ej. *"inmobiliarias miraflores"*).
+> 5. **Mecanismo de Cierre del Bot:**
+>    - `HUMAN_TAKEOVER` *(Recomendado)*: El bot atiende dudas y transfiere el chat a Kenneth cuando quieran comprar o coticen.
+>    - `MEETING_LINK`: Pasa enlace de Cal.com / Calendly (debe pedir el link real).
+>    - `VALUE_ASSET`: Pasa enlace de video o PDF.
+>    - `PAYMENT_INFO`: Datos de transferencia.
+> 6. **Preguntas para armar el Prompt del Bot:**
+>    - ¿Cuáles son las 2 o 3 objeciones o dudas más comunes del cliente?
+>    - ¿Qué cosas tiene **prohibido** decir o prometer el bot?
+> 7. **Aprobación de la Plantilla:** La IA debe redactar la propuesta de primer mensaje (Permiso en 2 pasos, sin links) y pedirle la confirmación a Kenneth antes de guardar.
+
+---
+
 ## 3. Catálogo de Herramientas MCP para IAs
 
 | Herramienta MCP | Descripción |
