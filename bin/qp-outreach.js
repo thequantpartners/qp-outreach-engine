@@ -5,9 +5,15 @@ import { fileURLToPath, pathToFileURL } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const projectRoot = path.resolve(__dirname, '..');
+
+// Asegurar que el directorio de trabajo y env apunten al engine
+if (!process.env.STORAGE_DIR && process.cwd() !== projectRoot) {
+  process.chdir(projectRoot);
+}
 
 // Si existe dist/cli/index.js correrlo, sino usar tsx para desarrollo
-const distPath = path.resolve(__dirname, '../dist/cli/index.js');
+const distPath = path.resolve(projectRoot, 'dist/cli/index.js');
 
 if (fs.existsSync(distPath)) {
   const { runCli } = await import(pathToFileURL(distPath).href);

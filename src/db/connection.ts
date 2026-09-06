@@ -2,7 +2,14 @@ import pg from 'pg';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const projectRoot = path.resolve(__dirname, '../../');
+
+// Cargar .env de la raíz del proyecto y luego del cwd si existe
+dotenv.config({ path: path.resolve(projectRoot, '.env') });
 dotenv.config();
 
 const { Pool } = pg;
@@ -10,7 +17,13 @@ const { Pool } = pg;
 export class DbConnection {
   private static pool: pg.Pool | null = null;
   private static isConnectedToPg: boolean = false;
-  private static fallbackFilePath: string = path.resolve(process.env.STORAGE_DIR || './storage', 'db_fallback.json');
+
+  public static get fallbackFilePath(): string {
+    if (process.env.STORAGE_DIR) {
+      return path.resolve(process.env.STORAGE_DIR, 'db_fallback.json');
+    }
+    return path.resolve(projectRoot, 'storage', 'db_fallback.json');
+  }
 
   public static async init(): Promise<void> {
     const databaseUrl = process.env.DATABASE_URL;
