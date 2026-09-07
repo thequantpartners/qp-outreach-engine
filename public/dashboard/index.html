@@ -3,11 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Centro Comercial Autónomo | The Quant Partners</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <title>The Quant Partners · Centro Comercial Autónomo</title>
+  
+  <!-- Obsidian Precision Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  
+  <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script>
     tailwind.config = {
@@ -15,16 +18,18 @@
       theme: {
         extend: {
           fontFamily: {
-            sans: ['Inter', 'sans-serif'],
+            serif: ['"Playfair Display"', 'Georgia', 'serif'],
+            sans: ['Inter', '-apple-system', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
           },
           colors: {
-            obsidian: '#08090d',
-            panel: '#0f1118',
-            subpanel: '#151824',
+            obsidian: '#030407',
+            surface: '#0A0C14',
+            subsurface: '#111420',
             gold: {
-              400: '#fbbf24',
-              500: '#f59e0b',
-              600: '#d97706',
+              DEFAULT: '#D4AF37',
+              light: '#F3E5AB',
+              dark: '#997A15'
             }
           }
         }
@@ -33,38 +38,67 @@
   </script>
   <style>
     body {
-      background-color: #08090d;
-      color: #f3f4f6;
-      font-family: 'Inter', sans-serif;
+      background-color: #030407;
+      color: #E2E8F0;
+      font-family: 'Inter', -apple-system, sans-serif;
+      -webkit-font-smoothing: antialiased;
     }
     .custom-scroll::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
+      width: 4px;
+      height: 4px;
     }
     .custom-scroll::-webkit-scrollbar-track {
-      background: #0f1118;
+      background: transparent;
     }
     .custom-scroll::-webkit-scrollbar-thumb {
-      background: #272a38;
-      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 2px;
     }
     .custom-scroll::-webkit-scrollbar-thumb:hover {
-      background: #3e445b;
+      background: rgba(212, 175, 55, 0.3);
+    }
+    .text-gold-gradient {
+      background: linear-gradient(135deg, #F3E5AB 0%, #D4AF37 50%, #997A15 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .btn-gold {
+      background: linear-gradient(135deg, #F3E5AB 0%, #D4AF37 50%, #997A15 100%);
+      color: #030407;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+    .btn-gold:hover {
+      filter: brightness(1.08);
+      transform: translateY(-1px);
+    }
+    .card-luxury {
+      background-color: #0A0C14;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .card-luxury:hover {
+      border-color: rgba(212, 175, 55, 0.25);
+    }
+    .active-lead-item {
+      background: rgba(255, 255, 255, 0.03);
+      border-left: 2px solid #D4AF37 !important;
     }
   </style>
 </head>
-<body class="h-screen flex flex-col overflow-hidden bg-obsidian text-gray-100">
+<body class="h-screen flex flex-col overflow-hidden bg-obsidian text-slate-200">
 
-  <!-- PANTALLA DE ACCESO POR PIN (AUTH MODAL) -->
+  <!-- ============================================== -->
+  <!-- MODAL DE ACCESO POR PIN (AUTH) -->
+  <!-- ============================================== -->
   <div id="pinModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
-    <div class="bg-panel border border-amber-500/30 rounded-2xl p-8 max-w-md w-full shadow-2xl relative overflow-hidden">
-      <div class="absolute -top-12 -right-12 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl"></div>
-      <div class="text-center mb-6">
-        <div class="inline-flex p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl mb-3 text-amber-400">
-          <i data-lucide="shield-check" class="w-8 h-8"></i>
+    <div class="bg-surface border border-white/[0.08] rounded-2xl p-8 max-w-sm w-full shadow-2xl relative">
+      <div class="text-center mb-8">
+        <div class="inline-flex w-10 h-10 items-center justify-center rounded-xl bg-gold/10 border border-gold/20 text-gold mb-4">
+          <i data-lucide="shield-check" class="w-5 h-5"></i>
         </div>
-        <h2 id="modalCompanyTitle" class="text-2xl font-bold tracking-tight text-white">Centro Comercial Autónomo</h2>
-        <p class="text-sm text-gray-400 mt-1">Ingrese su PIN de 4 dígitos para acceder al tablero</p>
+        <p class="text-[10px] uppercase font-mono tracking-widest text-gold mb-1">The Quant Partners</p>
+        <h2 id="modalCompanyTitle" class="font-serif text-2xl font-medium tracking-tight text-white">Centro Comercial</h2>
+        <p class="text-xs text-slate-400 font-light mt-1">Ingrese el PIN de acceso autorizado</p>
       </div>
 
       <form id="pinForm" onsubmit="handlePinSubmit(event)" class="space-y-4">
@@ -75,675 +109,517 @@
             maxlength="8" 
             placeholder="••••" 
             autocomplete="current-password"
-            class="w-full text-center tracking-[0.6em] text-3xl py-3.5 bg-subpanel border border-gray-700/60 rounded-xl focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 text-white font-mono placeholder:tracking-normal placeholder:text-base placeholder:text-gray-500"
+            class="w-full text-center tracking-[0.5em] text-2xl py-3 bg-obsidian border border-white/[0.08] rounded-xl focus:border-gold focus:outline-none text-white font-mono placeholder:tracking-normal placeholder:text-sm placeholder:text-slate-600"
             required 
             autofocus
           />
         </div>
-        <div id="pinError" class="text-xs text-rose-400 text-center hidden font-medium">
-          PIN incorrecto. Verifique con su consultor de The Quant Partners.
+        <div id="pinError" class="text-xs text-rose-400 text-center hidden font-mono">
+          PIN incorrecto. Consulte con su consultor QP.
         </div>
         <button 
           type="submit" 
           id="pinBtn"
-          class="w-full py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold rounded-xl shadow-lg shadow-amber-500/20 transition duration-150 flex items-center justify-center gap-2"
+          class="w-full py-3 btn-gold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-gold/10"
         >
-          <span>Acceder al Tablero</span>
-          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+          <span>Acceder al Centro de Mando</span>
+          <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
         </button>
       </form>
-      <div class="mt-6 text-center text-xs text-gray-500">
-        The Quant Partners &bull; Software as a Result
+      <div class="mt-8 text-center text-[10px] font-mono text-slate-600 tracking-wider">
+        SOFTWARE AS A RESULT &bull; V2.0
       </div>
     </div>
   </div>
 
-  <!-- HEADER PRINCIPAL -->
-  <header class="h-16 border-b border-gray-800/80 bg-panel/70 backdrop-blur-md px-6 flex items-center justify-between flex-shrink-0 z-20">
+  <!-- ============================================== -->
+  <!-- BARRA SUPERIOR EDITORIAL (HEADER) -->
+  <!-- ============================================== -->
+  <header class="h-14 border-b border-white/[0.06] bg-surface/80 backdrop-blur-md px-5 flex items-center justify-between flex-shrink-0 z-20">
     <div class="flex items-center gap-4">
-      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 flex items-center justify-center text-black font-extrabold text-lg shadow-md shadow-amber-500/20">
+      <div class="w-8 h-8 rounded-lg bg-gold/15 border border-gold/30 flex items-center justify-center text-gold font-serif font-bold text-sm">
         QP
       </div>
       <div>
-        <h1 id="headerCompanyName" class="font-bold text-base text-white leading-tight">Departamento Comercial Autónomo</h1>
-        <p id="headerServiceName" class="text-xs text-gray-400">Cargando servicio...</p>
+        <div class="flex items-center gap-2">
+          <h1 id="headerCompanyName" class="font-serif text-sm font-medium tracking-tight text-white leading-tight">The Quant Partners</h1>
+          <span class="text-[9px] font-mono uppercase tracking-widest text-slate-500 border border-white/[0.06] px-1.5 py-0.2 rounded">Headless</span>
+        </div>
+        <p id="headerServiceName" class="text-[10px] font-mono text-slate-400">Licitaciones QP - Compras Estatales</p>
       </div>
     </div>
 
-    <!-- NAVEGACIÓN TABS -->
-    <nav class="flex items-center bg-subpanel/80 p-1 rounded-xl border border-gray-800">
-      <button onclick="switchTab('kanban')" id="tabBtnKanban" class="px-4 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition bg-amber-500/10 text-amber-400 border border-amber-500/20">
-        <i data-lucide="kanban" class="w-3.5 h-3.5"></i>
-        <span>Pipeline Kanban</span>
-      </button>
-      <button onclick="switchTab('chat')" id="tabBtnChat" class="px-4 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white flex items-center gap-2 transition">
-        <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
-        <span>Live Chat WhatsApp</span>
-        <span id="chatUnreadBadge" class="hidden w-2 h-2 rounded-full bg-amber-500"></span>
-      </button>
-      <button onclick="switchTab('metrics')" id="tabBtnMetrics" class="px-4 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white flex items-center gap-2 transition">
-        <i data-lucide="bar-chart-3" class="w-3.5 h-3.5"></i>
-        <span>Métricas Ejecutivas</span>
-      </button>
-      <button onclick="openImportModal()" id="tabBtnImport" class="px-4 py-1.5 rounded-lg text-xs font-medium text-amber-400/80 hover:text-amber-300 hover:bg-amber-500/10 flex items-center gap-2 transition border border-transparent hover:border-amber-500/20">
-        <i data-lucide="upload-cloud" class="w-3.5 h-3.5 text-amber-400"></i>
-        <span>Carga Masiva (CSV)</span>
-      </button>
-    </nav>
-
-    <!-- ESTADO DE WHATSAPP Y FILTRO DE VENDEDOR -->
-    <div class="flex items-center gap-3">
-      <!-- Filtro de Vendedor Round-Robin -->
-      <div class="relative">
-        <select id="repFilterSelect" onchange="applyRepFilter(this.value)" class="bg-subpanel border border-gray-800 text-xs rounded-lg px-3 py-1.5 text-gray-300 focus:outline-none focus:border-amber-500">
-          <option value="ALL">👥 Todos los Vendedores</option>
-        </select>
+    <!-- NAVEGACIÓN Y VISTAS -->
+    <div class="flex items-center gap-2">
+      <!-- Selector de Vista: Master-Detail Workspace vs Métricas -->
+      <div class="flex items-center bg-obsidian p-1 rounded-lg border border-white/[0.06]">
+        <button 
+          onclick="switchMainView('workspace')" 
+          id="tabBtnWorkspace" 
+          class="px-3.5 py-1 rounded-md text-xs font-medium flex items-center gap-2 transition bg-white/[0.05] text-gold border border-gold/20"
+        >
+          <i data-lucide="layout" class="w-3.5 h-3.5"></i>
+          <span>Pipeline & Chat</span>
+        </button>
+        <button 
+          onclick="switchMainView('metrics')" 
+          id="tabBtnMetrics" 
+          class="px-3.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-white flex items-center gap-2 transition"
+        >
+          <i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i>
+          <span>Métricas SaaR</span>
+        </button>
       </div>
 
-      <!-- Estado WhatsApp -->
-      <div id="waStatusBadge" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium cursor-pointer" onclick="checkWhatsAppModal()">
+      <!-- Botón de Carga Masiva (CSV / BBDD) -->
+      <button 
+        onclick="openImportModal()" 
+        id="btnOpenImport"
+        class="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-surface hover:bg-white/[0.05] border border-white/[0.08] hover:border-gold/40 flex items-center gap-1.5 transition"
+      >
+        <i data-lucide="upload-cloud" class="w-3.5 h-3.5 text-gold"></i>
+        <span>Carga Masiva (CSV)</span>
+      </button>
+
+      <!-- Estado de WhatsApp -->
+      <div 
+        id="waStatusBadge" 
+        onclick="checkWhatsAppModal()" 
+        class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-mono cursor-pointer transition hover:bg-emerald-500/15"
+        title="Clic para verificar conexión o re-escanear QR"
+      >
         <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
         <span id="waStatusText">WhatsApp Conectado</span>
       </div>
 
-      <!-- Botón Recargar -->
-      <button onclick="fetchOverview()" title="Actualizar datos" class="p-2 rounded-lg bg-subpanel hover:bg-gray-800 border border-gray-800 text-gray-400 hover:text-white transition">
-        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+      <!-- Botón Recargar Datos -->
+      <button 
+        onclick="fetchOverview()" 
+        title="Actualizar datos de PostgreSQL"
+        class="p-1.5 rounded-lg bg-surface hover:bg-white/[0.05] border border-white/[0.06] text-slate-400 hover:text-white transition"
+      >
+        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
       </button>
     </div>
   </header>
 
-  <!-- CONTENIDO PRINCIPAL DINÁMICO -->
-  <main class="flex-1 overflow-hidden relative">
-
-    <!-- ============================================== -->
-    <!-- TAB 1: PIPELINE KANBAN (6 COLUMNAS) -->
-    <!-- ============================================== -->
-    <section id="viewKanban" class="h-full flex flex-col p-4 overflow-hidden">
-      <!-- Barra Superior de Filtros / Búsqueda -->
-      <div class="flex items-center justify-between mb-3 px-1">
-        <div class="flex items-center gap-2">
-          <div class="relative w-72">
-            <i data-lucide="search" class="w-4 h-4 text-gray-500 absolute left-3 top-2.5"></i>
-            <input 
-              type="text" 
-              id="kanbanSearchInput" 
-              placeholder="Buscar por empresa o teléfono..." 
-              oninput="filterKanbanCards(this.value)"
-              class="w-full bg-panel border border-gray-800 text-xs rounded-xl pl-9 pr-4 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:border-amber-500"
-            />
-          </div>
-          <span id="kanbanTotalBadge" class="text-xs text-gray-400 bg-subpanel px-3 py-1.5 rounded-lg border border-gray-800">
-            0 prospectos visibles
-          </span>
-        </div>
-        <div class="text-xs text-gray-500 flex items-center gap-1.5">
-          <span class="inline-block w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-          <span>Sincronización en vivo activada (SSE)</span>
-        </div>
-      </div>
-
-      <!-- Tablero Kanban de 6 Columnas con Scroll Horizontal -->
-      <div class="flex-1 flex gap-3 overflow-x-auto custom-scroll pb-2 items-start">
-        
-        <!-- Columna 1: Descubiertos -->
-        <div class="w-72 flex-shrink-0 flex flex-col max-h-full bg-panel/60 border border-gray-800/80 rounded-2xl p-3">
-          <div class="flex items-center justify-between mb-3 pb-2 border-b border-gray-800/60">
-            <div class="flex items-center gap-2">
-              <span class="w-2.5 h-2.5 rounded-full bg-gray-400"></span>
-              <h3 class="font-semibold text-xs uppercase tracking-wider text-gray-300">Descubiertos</h3>
-            </div>
-            <span id="badgeCount_discovered" class="text-xs font-semibold px-2 py-0.5 rounded-md bg-gray-800 text-gray-400">0</span>
-          </div>
-          <div id="col_discovered" class="flex-1 overflow-y-auto custom-scroll space-y-2.5 pr-1"></div>
+  <!-- ============================================== -->
+  <!-- VISTA 1: ESPACIO DE TRABAJO MASTER-DETAIL (LINEAR STYLE) -->
+  <!-- ============================================== -->
+  <main id="viewWorkspace" class="flex-1 flex overflow-hidden">
+    
+    <!-- PANEL IZQUIERDO: STREAM DE PROSPECTOS DE ALTA DENSIDAD -->
+    <aside class="w-[390px] border-r border-white/[0.06] bg-surface/50 flex flex-col flex-shrink-0">
+      
+      <!-- Barra de Filtros y Búsqueda -->
+      <div class="p-3 border-b border-white/[0.06] space-y-2.5">
+        <div class="relative">
+          <i data-lucide="search" class="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5"></i>
+          <input 
+            type="text" 
+            id="leadSearchInput" 
+            placeholder="Buscar por empresa o teléfono..." 
+            oninput="handleLeadSearch(this.value)"
+            class="w-full bg-obsidian border border-white/[0.06] text-xs rounded-lg pl-8 pr-3 py-2 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-gold/40 font-mono"
+          />
         </div>
 
-        <!-- Columna 2: Contactados -->
-        <div class="w-72 flex-shrink-0 flex flex-col max-h-full bg-panel/60 border border-gray-800/80 rounded-2xl p-3">
-          <div class="flex items-center justify-between mb-3 pb-2 border-b border-gray-800/60">
-            <div class="flex items-center gap-2">
-              <span class="w-2.5 h-2.5 rounded-full bg-sky-400"></span>
-              <h3 class="font-semibold text-xs uppercase tracking-wider text-sky-300">Contactados</h3>
-            </div>
-            <span id="badgeCount_outreachSent" class="text-xs font-semibold px-2 py-0.5 rounded-md bg-sky-950/60 text-sky-400 border border-sky-800/40">0</span>
-          </div>
-          <div id="col_outreachSent" class="flex-1 overflow-y-auto custom-scroll space-y-2.5 pr-1"></div>
-        </div>
-
-        <!-- Columna 3: Respondieron -->
-        <div class="w-72 flex-shrink-0 flex flex-col max-h-full bg-panel/60 border border-gray-800/80 rounded-2xl p-3">
-          <div class="flex items-center justify-between mb-3 pb-2 border-b border-gray-800/60">
-            <div class="flex items-center gap-2">
-              <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
-              <h3 class="font-semibold text-xs uppercase tracking-wider text-amber-300">Respondieron</h3>
-            </div>
-            <span id="badgeCount_replied" class="text-xs font-semibold px-2 py-0.5 rounded-md bg-amber-950/60 text-amber-400 border border-amber-800/40">0</span>
-          </div>
-          <div id="col_replied" class="flex-1 overflow-y-auto custom-scroll space-y-2.5 pr-1"></div>
-        </div>
-
-        <!-- Columna 4: Calificados / Cita -->
-        <div class="w-72 flex-shrink-0 flex flex-col max-h-full bg-panel/60 border border-emerald-500/20 rounded-2xl p-3 bg-emerald-950/10">
-          <div class="flex items-center justify-between mb-3 pb-2 border-b border-emerald-800/40">
-            <div class="flex items-center gap-2">
-              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
-              <h3 class="font-semibold text-xs uppercase tracking-wider text-emerald-300">Calificados / Cita</h3>
-            </div>
-            <span id="badgeCount_qualified" class="text-xs font-semibold px-2 py-0.5 rounded-md bg-emerald-900/60 text-emerald-300 border border-emerald-700/50">0</span>
-          </div>
-          <div id="col_qualified" class="flex-1 overflow-y-auto custom-scroll space-y-2.5 pr-1"></div>
-        </div>
-
-        <!-- Columna 5: Cierre Ganado -->
-        <div class="w-72 flex-shrink-0 flex flex-col max-h-full bg-panel/60 border border-amber-500/30 rounded-2xl p-3 bg-amber-950/10">
-          <div class="flex items-center justify-between mb-3 pb-2 border-b border-amber-800/40">
-            <div class="flex items-center gap-2">
-              <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
-              <h3 class="font-semibold text-xs uppercase tracking-wider text-amber-200">Cierre Ganado</h3>
-            </div>
-            <span id="badgeCount_closedWon" class="text-xs font-semibold px-2 py-0.5 rounded-md bg-amber-900/60 text-amber-300 border border-amber-600/50">0</span>
-          </div>
-          <div id="col_closedWon" class="flex-1 overflow-y-auto custom-scroll space-y-2.5 pr-1"></div>
-        </div>
-
-        <!-- Columna 6: Control Humano -->
-        <div class="w-72 flex-shrink-0 flex flex-col max-h-full bg-panel/60 border border-purple-500/20 rounded-2xl p-3 bg-purple-950/10">
-          <div class="flex items-center justify-between mb-3 pb-2 border-b border-purple-800/40">
-            <div class="flex items-center gap-2">
-              <span class="w-2.5 h-2.5 rounded-full bg-purple-400"></span>
-              <h3 class="font-semibold text-xs uppercase tracking-wider text-purple-300">Control Humano</h3>
-            </div>
-            <span id="badgeCount_humanTakeover" class="text-xs font-semibold px-2 py-0.5 rounded-md bg-purple-900/60 text-purple-300 border border-purple-700/50">0</span>
-          </div>
-          <div id="col_humanTakeover" class="flex-1 overflow-y-auto custom-scroll space-y-2.5 pr-1"></div>
-        </div>
-
-      </div>
-    </section>
-
-    <!-- ============================================== -->
-    <!-- TAB 2: LIVE CHAT WHATSAPP -->
-    <!-- ============================================== -->
-    <section id="viewChat" class="h-full hidden flex overflow-hidden">
-      <!-- Panel Izquierdo: Lista de Conversaciones -->
-      <div class="w-80 border-r border-gray-800 bg-panel/70 flex flex-col flex-shrink-0">
-        <div class="p-3 border-b border-gray-800">
-          <div class="relative">
-            <i data-lucide="search" class="w-3.5 h-3.5 text-gray-500 absolute left-3 top-2.5"></i>
-            <input 
-              type="text" 
-              id="chatSearchInput" 
-              placeholder="Buscar conversación..." 
-              oninput="filterChatList(this.value)"
-              class="w-full bg-subpanel border border-gray-800 text-xs rounded-xl pl-8 pr-3 py-2 text-gray-200 focus:outline-none focus:border-amber-500"
-            />
-          </div>
-        </div>
-        <div id="chatConversationList" class="flex-1 overflow-y-auto custom-scroll divide-y divide-gray-800/50">
-          <!-- Item plantilla se inyecta dinámicamente -->
+        <!-- Píldoras de Filtro por Estado (Sin cajas rígidas) -->
+        <div class="flex items-center gap-1 overflow-x-auto custom-scroll pb-1">
+          <button onclick="setStreamFilter('ALL')" id="pillFilter_ALL" class="stream-filter-pill px-2.5 py-1 rounded-md text-[11px] font-mono tracking-tight transition bg-white/[0.08] text-white border border-white/[0.1]">
+            Todos (<span id="count_ALL">0</span>)
+          </button>
+          <button onclick="setStreamFilter('REPLIED')" id="pillFilter_REPLIED" class="stream-filter-pill px-2.5 py-1 rounded-md text-[11px] font-mono tracking-tight transition text-slate-400 hover:text-white border border-transparent hover:border-white/[0.06]">
+            Respondieron (<span id="count_REPLIED">0</span>)
+          </button>
+          <button onclick="setStreamFilter('DISCOVERED')" id="pillFilter_DISCOVERED" class="stream-filter-pill px-2.5 py-1 rounded-md text-[11px] font-mono tracking-tight transition text-slate-400 hover:text-white border border-transparent hover:border-white/[0.06]">
+            Por Contactar (<span id="count_DISCOVERED">0</span>)
+          </button>
+          <button onclick="setStreamFilter('QUALIFIED')" id="pillFilter_QUALIFIED" class="stream-filter-pill px-2.5 py-1 rounded-md text-[11px] font-mono tracking-tight transition text-slate-400 hover:text-white border border-transparent hover:border-white/[0.06]">
+            Cita / Calificado (<span id="count_QUALIFIED">0</span>)
+          </button>
+          <button onclick="setStreamFilter('CLOSED_WON')" id="pillFilter_CLOSED_WON" class="stream-filter-pill px-2.5 py-1 rounded-md text-[11px] font-mono tracking-tight transition text-slate-400 hover:text-white border border-transparent hover:border-white/[0.06]">
+            Ganado (<span id="count_CLOSED_WON">0</span>)
+          </button>
         </div>
       </div>
 
-      <!-- Panel Derecho: Visor de Chat Activo -->
-      <div class="flex-1 flex flex-col bg-obsidian relative">
-        <!-- Header del Chat Seleccionado -->
-        <div id="chatHeader" class="h-16 border-b border-gray-800 px-6 flex items-center justify-between bg-panel/40 flex-shrink-0">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-full bg-subpanel border border-gray-700 flex items-center justify-center text-amber-400 font-bold text-sm">
-              <span id="chatActiveAvatar">WA</span>
-            </div>
-            <div>
-              <div class="flex items-center gap-2">
-                <h3 id="chatActiveName" class="font-semibold text-sm text-white">Seleccione una conversación</h3>
-                <span id="chatActiveRepBadge" class="text-[10px] font-medium bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded border border-amber-500/20 hidden">Carlos</span>
-              </div>
-              <p id="chatActivePhone" class="text-xs text-gray-400">---</p>
-            </div>
-          </div>
-
-          <!-- Interruptor de Control Humano / Bot -->
-          <div id="takeoverControlContainer" class="flex items-center gap-3 hidden">
-            <div id="takeoverStatusText" class="text-xs text-right">
-              <p class="font-medium text-emerald-400">🤖 Bot IA Activo</p>
-              <p class="text-[10px] text-gray-500">Responde automáticamente</p>
-            </div>
-            <button 
-              id="takeoverToggleBtn" 
-              onclick="toggleCurrentLeadTakeover()"
-              class="px-3.5 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-2 border bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20"
-            >
-              <i data-lucide="bot" class="w-4 h-4"></i>
-              <span>Pausar Bot (Tomar Control)</span>
-            </button>
-            <a 
-              id="chatDirectWaBtn" 
-              href="#" 
-              target="_blank" 
-              title="Abrir en WhatsApp Web nativo"
-              class="p-2 rounded-xl bg-subpanel border border-gray-800 text-gray-400 hover:text-emerald-400 transition"
-            >
-              <i data-lucide="external-link" class="w-4 h-4"></i>
-            </a>
-          </div>
-        </div>
-
-        <!-- Mensajes del Chat -->
-        <div id="chatMessagesContainer" class="flex-1 overflow-y-auto custom-scroll p-6 space-y-3.5">
-          <div class="h-full flex items-center justify-center text-gray-500 text-sm">
-            Seleccione una conversación de la columna izquierda para ver el historial
-          </div>
-        </div>
-
-        <!-- PANEL CO-PILOTO IA (QPARTNER) -->
-        <div id="copilotPanel" class="p-4 border-t border-amber-500/20 bg-gradient-to-b from-[#0b0e14] to-panel/70 flex-shrink-0 hidden">
-          <div class="flex items-center justify-between mb-3">
-            <div class="flex items-center gap-2.5">
-              <span class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                <i data-lucide="sparkles" class="w-4 h-4"></i>
-              </span>
-              <div>
-                <div class="flex items-center gap-2">
-                  <h4 class="text-xs font-semibold text-amber-300 tracking-wide">Modo Co-Piloto IA (QPartner)</h4>
-                  <span class="text-[9px] font-mono uppercase bg-amber-500/10 text-amber-400/90 px-1.5 py-0.2 rounded border border-amber-500/20">QPartner Assist</span>
-                </div>
-                <p class="text-[10px] text-gray-400">Sugerencias tácticas en tiempo real de QPartner para Kenneth · Click para usar o disparar</p>
-              </div>
-            </div>
-            <div class="flex items-center gap-2">
-              <button 
-                onclick="refreshCopilotSuggestions()" 
-                id="copilotRefreshBtn"
-                class="text-[11px] text-gray-400 hover:text-amber-300 flex items-center gap-1.5 transition px-2.5 py-1 rounded-lg bg-subpanel border border-gray-800 hover:border-amber-500/30"
-                title="Regenerar sugerencias con IA"
-              >
-                <i data-lucide="refresh-cw" class="w-3 h-3"></i>
-                <span>Regenerar</span>
-              </button>
-              <button 
-                onclick="toggleCopilotCollapse()" 
-                id="copilotCollapseBtn"
-                class="text-[11px] text-gray-400 hover:text-amber-300 flex items-center gap-1.5 transition px-2.5 py-1 rounded-lg bg-subpanel border border-gray-800 hover:border-amber-500/30"
-                title="Minimizar / Expandir Co-Piloto"
-              >
-                <i id="copilotCollapseIcon" data-lucide="chevron-up" class="w-3.5 h-3.5"></i>
-                <span id="copilotCollapseText">Minimizar</span>
-              </button>
-            </div>
-          </div>
-          
-          <!-- Contenedor de Sugerencias -->
-          <div id="copilotSuggestionsContainer" class="grid grid-cols-1 lg:grid-cols-3 gap-2.5">
-            <!-- Renderizado dinámico desde app.js -->
-          </div>
-        </div>
-
-        <!-- Caja de Entrada para Respuesta Manual -->
-        <div id="chatComposer" class="p-4 border-t border-gray-800 bg-panel/30 flex-shrink-0 hidden">
-          <form onsubmit="handleSendManualMessage(event)" class="flex items-center gap-2">
-            <button
-              type="button"
-              onclick="handleQuickSendDictamen()"
-              id="chatSendDocBtn"
-              title="Despachar Dictamen Técnico EsSalud Piura (PDF) por WhatsApp"
-              class="px-3 py-3 bg-subpanel border border-amber-500/30 hover:border-amber-500/60 text-amber-300 rounded-xl text-xs flex items-center gap-1.5 transition hover:bg-amber-500/10 flex-shrink-0"
-            >
-              <i data-lucide="file-text" class="w-4 h-4 text-amber-400"></i>
-              <span class="hidden sm:inline font-medium">Dictamen (PDF)</span>
-            </button>
-            <input 
-              type="text" 
-              id="chatManualInput" 
-              placeholder="Escribe una respuesta manual por WhatsApp (activará Control Humano)..." 
-              class="flex-1 bg-subpanel border border-gray-800 rounded-xl px-4 py-3 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-amber-500"
-            />
-            <button 
-              type="submit" 
-              id="chatSendBtn"
-              class="px-5 py-3 bg-amber-500 hover:bg-amber-400 text-black font-semibold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 transition"
-            >
-              <span>Enviar</span>
-              <i data-lucide="send" class="w-3.5 h-3.5"></i>
-            </button>
-          </form>
+      <!-- Lista Fluida de Prospectos -->
+      <div id="leadsStreamContainer" class="flex-1 overflow-y-auto custom-scroll divide-y divide-white/[0.03]">
+        <!-- Inyectado dinámicamente desde app.js -->
+        <div class="p-6 text-center text-xs text-slate-500 font-light">
+          Cargando prospectos reales de PostgreSQL...
         </div>
       </div>
-    </section>
 
-    <!-- ============================================== -->
-    <!-- TAB 3: MÉTRICAS Y SALUD EJECUTIVA -->
-    <!-- ============================================== -->
-    <section id="viewMetrics" class="h-full hidden overflow-y-auto custom-scroll p-8">
-      <div class="max-w-6xl mx-auto space-y-8">
-        
-        <!-- Tarjetas de KPIs -->
-        <div>
-          <h2 class="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-4">Rendimiento Comercial Acumulado</h2>
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            
-            <div class="bg-panel border border-gray-800/80 rounded-2xl p-5 relative overflow-hidden">
-              <div class="flex items-center justify-between text-gray-400 text-xs mb-2">
-                <span>Total Contactados</span>
-                <i data-lucide="send" class="w-4 h-4 text-sky-400"></i>
-              </div>
-              <p id="kpiTotalContacted" class="text-3xl font-extrabold text-white">0</p>
-              <div class="mt-2 text-[11px] text-gray-500">Cadencia humana anti-ban</div>
-            </div>
+      <!-- Footer Stream: Total Real -->
+      <div class="p-2.5 border-t border-white/[0.06] bg-obsidian/60 flex items-center justify-between text-[10px] font-mono text-slate-500">
+        <span id="streamFooterCount">1 prospecto registrado</span>
+        <span class="flex items-center gap-1 text-gold"><span class="w-1.5 h-1.5 rounded-full bg-gold animate-pulse"></span> SSE Live Sync</span>
+      </div>
+    </aside>
 
-            <div class="bg-panel border border-gray-800/80 rounded-2xl p-5 relative overflow-hidden">
-              <div class="flex items-center justify-between text-gray-400 text-xs mb-2">
-                <span>Tasa de Respuesta</span>
-                <i data-lucide="message-circle" class="w-4 h-4 text-amber-400"></i>
-              </div>
-              <p id="kpiReplyRate" class="text-3xl font-extrabold text-amber-400">0%</p>
-              <div class="mt-2 text-[11px] text-gray-500"><span id="kpiRepliedCount">0</span> respuestas efectivas</div>
-            </div>
-
-            <div class="bg-panel border border-emerald-500/30 rounded-2xl p-5 relative overflow-hidden bg-emerald-950/10">
-              <div class="flex items-center justify-between text-emerald-400 text-xs mb-2 font-medium">
-                <span>Citas en Calendario</span>
-                <i data-lucide="calendar" class="w-4 h-4 text-emerald-400"></i>
-              </div>
-              <p id="kpiMeetingsScheduled" class="text-3xl font-extrabold text-emerald-300">0</p>
-              <div class="mt-2 text-[11px] text-emerald-500/80">Confirmadas en Cal.com</div>
-            </div>
-
-            <div class="bg-panel border border-amber-500/30 rounded-2xl p-5 relative overflow-hidden bg-amber-950/10">
-              <div class="flex items-center justify-between text-amber-300 text-xs mb-2 font-medium">
-                <span>Oportunidades Handoff</span>
-                <i data-lucide="users" class="w-4 h-4 text-amber-400"></i>
-              </div>
-              <p id="kpiQualified" class="text-3xl font-extrabold text-amber-300">0</p>
-              <div class="mt-2 text-[11px] text-amber-500/80">Transferidas a comerciales</div>
-            </div>
-
+    <!-- PANEL DERECHO: VISOR DE INTERACCIÓN & QPARTNER CO-PILOT -->
+    <section class="flex-1 flex flex-col bg-obsidian relative overflow-hidden">
+      
+      <!-- Header del Prospecto Activo -->
+      <div id="leadDetailHeader" class="h-14 border-b border-white/[0.06] px-6 flex items-center justify-between bg-surface/40 flex-shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-full bg-obsidian border border-white/[0.08] flex items-center justify-center text-gold font-mono font-semibold text-xs">
+            <span id="detailLeadAvatar">WA</span>
           </div>
-        </div>
-
-        <!-- CONCILIACIÓN DE FACTURACIÓN SAAR (RETAINER + PPQM) -->
-        <div class="bg-panel border border-amber-500/30 rounded-2xl p-6 bg-gradient-to-b from-amber-950/10 to-transparent">
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-gray-800/80">
-            <div>
-              <div class="flex items-center gap-2 mb-1">
-                <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
-                <h2 class="text-sm font-bold uppercase tracking-wider text-white">Liquidación Comercial SaaR (Software as a Result)</h2>
-                <span class="text-[10px] font-semibold bg-amber-500/10 text-amber-300 px-2 py-0.5 rounded border border-amber-500/30">PPQM Validado</span>
-              </div>
-              <p class="text-xs text-gray-400">Modelo transparente: Facturación fija por infraestructura + variable únicamente por cita asistida real.</p>
-            </div>
-            <button 
-              onclick="copySettlementSummary()" 
-              id="copySettlementBtn"
-              class="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 transition flex-shrink-0"
-            >
-              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
-              <span>Copiar Liquidación Mensual</span>
-            </button>
-          </div>
-
-          <!-- Bento Grid Liquidación -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-            
-            <!-- Base Retainer -->
-            <div class="bg-subpanel/80 border border-gray-800 rounded-xl p-4">
-              <div class="text-[11px] text-gray-400 uppercase tracking-wider mb-1 font-medium">1. Base Mensual (Retainer)</div>
-              <div class="text-2xl font-extrabold text-white" id="settlementBaseRetainer">S/. 2,800</div>
-              <p class="text-[10px] text-gray-500 mt-1">Infraestructura, SIM blindada, Scraping y Operación IA.</p>
-            </div>
-
-            <!-- Citas Asistidas (Variable) -->
-            <div class="bg-emerald-950/20 border border-emerald-500/30 rounded-xl p-4">
-              <div class="flex items-center justify-between mb-1">
-                <span class="text-[11px] text-emerald-400 uppercase tracking-wider font-medium">2. Citas Asistidas</span>
-                <span id="settlementAttendedBadge" class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-mono font-bold">0 validadas</span>
-              </div>
-              <div class="text-2xl font-extrabold text-emerald-300" id="settlementVariableTotal">S/. 0</div>
-              <p class="text-[10px] text-emerald-500/80 mt-1"><span id="settlementAttendedCount">0</span> citas x S/. <span id="settlementFeePerMeeting">200</span> de éxito comercial.</p>
-            </div>
-
-            <!-- Inasistencias (No-Show) -->
-            <div class="bg-rose-950/20 border border-rose-500/30 rounded-xl p-4">
-              <div class="flex items-center justify-between mb-1">
-                <span class="text-[11px] text-rose-400 uppercase tracking-wider font-medium">3. Inasistencias (No-Show)</span>
-                <span id="settlementNoShowBadge" class="text-[10px] bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded font-mono font-bold">0 citas</span>
-              </div>
-              <div class="text-2xl font-extrabold text-rose-300">S/. 0</div>
-              <p class="text-[10px] text-rose-400/80 mt-1">100% libre de costo. No se factura si el lead no asistió.</p>
-            </div>
-
-            <!-- Total a Facturar -->
-            <div class="bg-gradient-to-br from-amber-500/20 via-amber-600/10 to-transparent border border-amber-500/50 rounded-xl p-4 relative overflow-hidden">
-              <div class="text-[11px] text-amber-300 uppercase tracking-wider mb-1 font-semibold">Total a Facturar Mes</div>
-              <div class="text-3xl font-black text-amber-400" id="settlementGrandTotal">S/. 2,800</div>
-              <p class="text-[10px] text-amber-200/80 mt-1">Monto consolidado listo para emisión de factura.</p>
-            </div>
-
-          </div>
-
-          <div class="text-[11px] text-gray-500 flex items-center gap-2">
-            <i data-lucide="info" class="w-3.5 h-3.5 text-amber-400"></i>
-            <span>Para validar si un cliente asistió o fue No-Show, utilice los botones rápidos en la columna "Calificados / Cita" del Kanban.</span>
-          </div>
-        </div>
-
-        <!-- SALUD DE LÍNEA Y RAMPA DE CALENTAMIENTO ANTI-BAN -->
-        <div class="bg-panel border border-gray-800 rounded-2xl p-6">
-          <div class="flex items-center justify-between mb-4">
+          <div>
             <div class="flex items-center gap-2">
-              <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>
-              <h2 class="text-sm font-semibold uppercase tracking-wider text-gray-300">Salud de la Línea y Rampa de Calentamiento</h2>
+              <h2 id="detailLeadName" class="font-serif text-sm font-medium text-white">Seleccione un prospecto</h2>
+              <span id="detailLeadStatusTag" class="text-[9px] font-mono uppercase tracking-widest px-2 py-0.5 rounded border border-white/[0.08] text-slate-400 hidden">REPLIED</span>
             </div>
-            <span id="warmupStatusBadge" class="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
-              Línea Madura (Máxima Velocidad)
+            <p id="detailLeadPhone" class="text-xs font-mono text-gold/90">---</p>
+          </div>
+        </div>
+
+        <!-- Acciones Directas del Prospecto -->
+        <div id="leadDetailActions" class="flex items-center gap-3 hidden">
+          <!-- Selector Rápido de Estado Comercial -->
+          <div class="flex items-center gap-1.5 text-xs text-slate-400 font-mono">
+            <span>Estado:</span>
+            <select 
+              id="detailStatusSelect" 
+              onchange="handleLeadStatusChange(this.value)"
+              class="bg-surface border border-white/[0.08] text-xs rounded-lg px-2.5 py-1 text-slate-200 focus:outline-none focus:border-gold"
+            >
+              <option value="DISCOVERED">Descubierto</option>
+              <option value="OUTREACH_SENT">Contactado</option>
+              <option value="REPLIED">Respondieron</option>
+              <option value="QUALIFIED">Calificado / Cita</option>
+              <option value="CLOSED_WON">Cierre Ganado</option>
+              <option value="HUMAN_TAKEOVER">Control Humano</option>
+            </select>
+          </div>
+
+          <!-- Botón Takeover (Control Humano) -->
+          <button 
+            id="takeoverToggleBtn" 
+            onclick="toggleCurrentLeadTakeover()"
+            class="px-3 py-1.5 rounded-lg text-xs font-mono transition flex items-center gap-1.5 border border-white/[0.08] bg-surface text-slate-300 hover:text-white hover:border-gold/30"
+          >
+            <i data-lucide="bot" class="w-3.5 h-3.5 text-slate-400"></i>
+            <span id="takeoverBtnText">Tomar Control</span>
+          </button>
+
+          <!-- WhatsApp Web Nativo -->
+          <a 
+            id="detailDirectWaBtn" 
+            href="#" 
+            target="_blank" 
+            title="Abrir chat en WhatsApp Web"
+            class="p-1.5 rounded-lg bg-surface border border-white/[0.08] text-slate-400 hover:text-emerald-400 transition"
+          >
+            <i data-lucide="external-link" class="w-4 h-4"></i>
+          </a>
+        </div>
+      </div>
+
+      <!-- Historial de Mensajes de WhatsApp -->
+      <div id="chatMessagesContainer" class="flex-1 overflow-y-auto custom-scroll p-6 space-y-3">
+        <div class="h-full flex items-center justify-center text-slate-500 text-xs font-light">
+          Seleccione un prospecto del panel izquierdo para ver la interacción
+        </div>
+      </div>
+
+      <!-- PANEL CO-PILOTO IA (QPARTNER) -->
+      <div id="copilotPanel" class="border-t border-white/[0.06] bg-surface/90 flex-shrink-0 hidden">
+        <!-- Cabecera QPartner -->
+        <div class="px-5 py-2.5 flex items-center justify-between border-b border-white/[0.04]">
+          <div class="flex items-center gap-2">
+            <span class="w-5 h-5 rounded-md bg-gold/15 text-gold flex items-center justify-center">
+              <i data-lucide="sparkles" class="w-3 h-3"></i>
             </span>
+            <span class="font-serif text-xs font-medium text-white">QPartner Co-Pilot</span>
+            <span class="text-[9px] font-mono text-slate-500 tracking-wider">RESPUESTA TÁCTICA ASISTIDA</span>
           </div>
-
-          <p class="text-xs text-gray-400 mb-4">
-            Para proteger la línea WhatsApp contra bloqueos algorítmicos de Meta, el motor regula automáticamente el volumen diario durante los primeros días de operación.
-          </p>
-
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-            <div id="warmupStage1" class="p-3 bg-subpanel rounded-xl border border-gray-800 flex items-center justify-between transition">
-              <div>
-                <span class="font-medium text-white">Fase 1 (Días 1-2):</span>
-                <p class="text-[11px] text-gray-500">Iniciación suave de reputación</p>
-              </div>
-              <span class="text-sky-400 font-mono font-bold">10 msgs/día</span>
-            </div>
-            <div id="warmupStage2" class="p-3 bg-subpanel rounded-xl border border-gray-800 flex items-center justify-between transition">
-              <div>
-                <span class="font-medium text-white">Fase 2 (Días 3-4):</span>
-                <p class="text-[11px] text-gray-500">Escalamiento controlado</p>
-              </div>
-              <span class="text-amber-400 font-mono font-bold">20 msgs/día</span>
-            </div>
-            <div id="warmupStage3" class="p-3 bg-subpanel rounded-xl border border-gray-800 flex items-center justify-between transition">
-              <div>
-                <span class="font-medium text-white">Fase 3 (Día 5+):</span>
-                <p class="text-[11px] text-gray-500">Capacidad plena desbloqueada</p>
-              </div>
-              <span class="text-emerald-400 font-mono font-bold">35+ msgs/día</span>
-            </div>
+          <div class="flex items-center gap-2">
+            <button 
+              onclick="refreshCopilotSuggestions()" 
+              id="copilotRefreshBtn"
+              class="text-[10px] font-mono text-slate-400 hover:text-gold flex items-center gap-1 transition px-2 py-0.5 rounded bg-obsidian border border-white/[0.06]"
+              title="Regenerar sugerencias"
+            >
+              <i data-lucide="refresh-cw" class="w-2.5 h-2.5"></i>
+              <span>Regenerar</span>
+            </button>
+            <button 
+              onclick="toggleCopilotCollapse()" 
+              id="copilotCollapseBtn"
+              class="text-[10px] font-mono text-slate-400 hover:text-gold flex items-center gap-1 transition px-2 py-0.5 rounded bg-obsidian border border-white/[0.06]"
+            >
+              <i id="copilotCollapseIcon" data-lucide="chevron-up" class="w-2.5 h-2.5"></i>
+              <span id="copilotCollapseText">Minimizar</span>
+            </button>
           </div>
         </div>
 
-        <!-- Equipo Comercial & Round-Robin -->
-        <div class="bg-panel border border-gray-800 rounded-2xl p-6">
-          <h2 class="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-4 flex items-center justify-between">
-            <span>Representantes Asignados (Round-Robin)</span>
-            <span class="text-xs text-amber-400 font-normal">Rotación 1 a 1 equitativa</span>
-          </h2>
-          <div id="repsListContainer" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-            <!-- Rep cards inyectadas dinámicamente -->
-          </div>
+        <!-- Contenedor de Sugerencias -->
+        <div id="copilotSuggestionsContainer" class="p-4 grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <!-- Renderizado dinámicamente desde app.js -->
         </div>
-
-        <!-- Próximos Seguimientos Automáticos -->
-        <div class="bg-panel border border-gray-800 rounded-2xl p-6">
-          <h2 class="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-4">
-            Disciplina de Seguimiento Automático (48h / 96h)
-          </h2>
-          <p class="text-xs text-gray-400 mb-4">
-            El sistema re-engancha automáticamente a los prospectos que no respondieron al primer contacto sin que tus ejecutivos tengan que recordarlo.
-          </p>
-          <div class="space-y-2 text-xs text-gray-300">
-            <div class="p-3 bg-subpanel rounded-xl border border-gray-800 flex items-center justify-between">
-              <span class="font-medium">Cadencia Follow-up 1 (Pausa 48 horas):</span>
-              <span class="text-amber-400 font-mono">Activo (1 intento consultivo)</span>
-            </div>
-            <div class="p-3 bg-subpanel rounded-xl border border-gray-800 flex items-center justify-between">
-              <span class="font-medium">Cadencia Follow-up 2 (Pausa 96 horas):</span>
-              <span class="text-amber-400 font-mono">Activo (Cierre respetuoso de contacto)</span>
-            </div>
-          </div>
-        </div>
-
       </div>
+
+      <!-- Composer de Envíos Manuales y Dictámenes -->
+      <div id="chatComposer" class="p-4 border-t border-white/[0.06] bg-surface/50 flex-shrink-0 hidden">
+        <form onsubmit="handleSendManualMessage(event)" class="flex items-center gap-2">
+          <!-- Botón Despacho Dictamen PDF -->
+          <button
+            type="button"
+            onclick="handleQuickSendDictamen()"
+            id="chatSendDocBtn"
+            title="Despachar Dictamen Técnico EsSalud Piura (PDF)"
+            class="px-3 py-2.5 bg-obsidian border border-gold/30 hover:border-gold/60 text-gold rounded-xl text-xs flex items-center gap-1.5 transition flex-shrink-0"
+          >
+            <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+            <span class="hidden sm:inline font-mono text-[11px]">Dictamen (PDF)</span>
+          </button>
+          
+          <input 
+            type="text" 
+            id="chatManualInput" 
+            placeholder="Escribir mensaje manual por WhatsApp..." 
+            class="flex-1 bg-obsidian border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-gold"
+          />
+
+          <button 
+            type="submit" 
+            id="chatSendBtn"
+            class="px-4 py-2.5 btn-gold rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-gold/10"
+          >
+            <span>Enviar</span>
+            <i data-lucide="send" class="w-3 h-3"></i>
+          </button>
+        </form>
+      </div>
+
     </section>
 
   </main>
 
-  <!-- MODAL DE CARGA MASIVA (CSV / BBDD) -->
-  <div id="importModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 hidden">
-    <div class="bg-panel border border-amber-500/30 rounded-2xl p-6 max-w-2xl w-full shadow-2xl relative flex flex-col max-h-[90vh] overflow-hidden">
-      <!-- Header -->
-      <div class="flex items-center justify-between pb-4 border-b border-gray-800 flex-shrink-0">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-            <i data-lucide="upload-cloud" class="w-5 h-5"></i>
-          </div>
+  <!-- ============================================== -->
+  <!-- VISTA 2: MÉTRICAS Y LIQUIDACIÓN SAAR (EDITORIAL) -->
+  <!-- ============================================== -->
+  <section id="viewMetrics" class="flex-1 overflow-y-auto custom-scroll p-8 hidden">
+    <div class="max-w-5xl mx-auto space-y-8">
+      
+      <!-- Encabezado Editorial -->
+      <div class="border-b border-white/[0.06] pb-6">
+        <p class="text-[10px] uppercase font-mono tracking-widest text-gold mb-1">The Quant Partners &bull; Auditoría Comercial</p>
+        <h2 class="font-serif text-3xl font-medium tracking-tight text-white">Métricas Ejecutivas y Liquidación SaaR</h2>
+        <p class="text-xs text-slate-400 font-light mt-1">Transparencia analítica basada 100% en los registros activos de PostgreSQL.</p>
+      </div>
+
+      <!-- 4 KPIs Clave (Tipografía como UI) -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="card-luxury rounded-xl p-5">
+          <p class="text-[10px] uppercase font-mono tracking-widest text-slate-500 mb-2">Total Contactados</p>
+          <p id="kpiTotalContacted" class="font-mono text-3xl font-bold text-white">0</p>
+          <p class="text-[10px] text-slate-500 mt-2">Cadencia humana anti-ban</p>
+        </div>
+
+        <div class="card-luxury rounded-xl p-5">
+          <p class="text-[10px] uppercase font-mono tracking-widest text-slate-500 mb-2">Tasa de Respuesta</p>
+          <p id="kpiReplyRate" class="font-mono text-3xl font-bold text-gold">0%</p>
+          <p class="text-[10px] text-slate-500 mt-2"><span id="kpiRepliedCount">0</span> respuestas efectivas</p>
+        </div>
+
+        <div class="card-luxury rounded-xl p-5">
+          <p class="text-[10px] uppercase font-mono tracking-widest text-slate-500 mb-2">Citas Agendadas</p>
+          <p id="kpiMeetingsScheduled" class="font-mono text-3xl font-bold text-emerald-400">0</p>
+          <p class="text-[10px] text-slate-500 mt-2">En Cal.com validadas</p>
+        </div>
+
+        <div class="card-luxury rounded-xl p-5">
+          <p class="text-[10px] uppercase font-mono tracking-widest text-slate-500 mb-2">Oportunidades Handoff</p>
+          <p id="kpiQualified" class="font-mono text-3xl font-bold text-slate-200">0</p>
+          <p class="text-[10px] text-slate-500 mt-2">Transferidas a ejecutivos</p>
+        </div>
+      </div>
+
+      <!-- LIQUIDACIÓN COMERCIAL SAAR (RETAINER + PPQM) -->
+      <div class="card-luxury rounded-xl p-6 relative overflow-hidden">
+        <div class="flex items-center justify-between pb-4 border-b border-white/[0.06] mb-6">
           <div>
-            <h3 class="font-bold text-sm text-white flex items-center gap-2">
-              <span>Carga Masiva de Prospectos (CSV / BBDD)</span>
-              <span class="text-[10px] font-mono bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30">Auto-Sanitizado 519</span>
-            </h3>
-            <p class="text-xs text-gray-400">Ingesta listas comerciales en lote para prospección en frío o seguimiento disciplinado.</p>
+            <h3 class="font-serif text-lg font-medium text-white">Liquidación Comercial SaaR</h3>
+            <p class="text-xs text-slate-400 font-light">Software as a Result &bull; Facturación por resultados medibles</p>
+          </div>
+          <button 
+            onclick="copySettlementSummary()" 
+            id="copySettlementBtn"
+            class="px-3.5 py-1.5 bg-obsidian hover:bg-white/[0.05] border border-gold/30 text-gold rounded-lg text-xs font-mono flex items-center gap-1.5 transition"
+          >
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            <span>Copiar Liquidación Formal</span>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div class="space-y-1">
+            <span class="text-[10px] uppercase font-mono text-slate-500">1. Retainer Mensual Base</span>
+            <p id="settlementBaseRetainer" class="font-mono text-2xl font-bold text-white">S/. 2,800</p>
+            <p class="text-[11px] text-slate-400 font-light">Infraestructura, SIM satélite y Agente WhatsApp.</p>
+          </div>
+
+          <div class="space-y-1">
+            <span class="text-[10px] uppercase font-mono text-slate-500">2. Éxito Comercial (PPQM)</span>
+            <p id="settlementVariableTotal" class="font-mono text-2xl font-bold text-gold">S/. 0</p>
+            <p class="text-[11px] text-slate-400 font-light"><span id="settlementAttendedCount">0</span> citas validadas x S/. <span id="settlementFeePerMeeting">200</span></p>
+          </div>
+
+          <div class="space-y-1 border-t md:border-t-0 md:border-l border-white/[0.06] pt-4 md:pt-0 md:pl-6">
+            <span class="text-[10px] uppercase font-mono text-gold">Total a Facturar</span>
+            <p id="settlementGrandTotal" class="font-mono text-3xl font-bold text-gold">S/. 2,800</p>
+            <p class="text-[11px] text-slate-400 font-light">Inasistencias (No-Show): 0% cargo.</p>
           </div>
         </div>
-        <button onclick="closeImportModal()" class="text-gray-400 hover:text-white p-1.5 rounded-lg hover:bg-gray-800 transition">
+      </div>
+
+      <!-- RAMPA DE CALENTAMIENTO Y SALUD DE LÍNEA -->
+      <div class="card-luxury rounded-xl p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-serif text-base font-medium text-white">Salud de la Línea y Rampa Anti-Ban</h3>
+          <span id="warmupStatusBadge" class="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/20">
+            Línea Madura (Máxima Capacidad)
+          </span>
+        </div>
+        <p class="text-xs text-slate-400 font-light mb-4">
+          El motor regula automáticamente el volumen diario de despachos en frío para blindar la reputación del chip ante Meta.
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs font-mono">
+          <div id="warmupStage1" class="p-3 bg-obsidian rounded-lg border border-white/[0.06] flex items-center justify-between">
+            <span class="text-slate-300">Fase 1 (Días 1-2)</span>
+            <span class="text-slate-400">10 msgs/día</span>
+          </div>
+          <div id="warmupStage2" class="p-3 bg-obsidian rounded-lg border border-white/[0.06] flex items-center justify-between">
+            <span class="text-slate-300">Fase 2 (Días 3-4)</span>
+            <span class="text-gold">20 msgs/día</span>
+          </div>
+          <div id="warmupStage3" class="p-3 bg-obsidian rounded-lg border border-white/[0.06] flex items-center justify-between">
+            <span class="text-slate-300">Fase 3 (Día 5+)</span>
+            <span class="text-emerald-400">35+ msgs/día</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============================================== -->
+  <!-- MODAL DE CARGA MASIVA DE PROSPECTOS (CSV / BBDD) -->
+  <!-- ============================================== -->
+  <div id="importModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 hidden">
+    <div class="bg-surface border border-white/[0.08] rounded-2xl p-6 max-w-xl w-full shadow-2xl relative flex flex-col max-h-[90vh] overflow-hidden">
+      <!-- Header -->
+      <div class="flex items-center justify-between pb-4 border-b border-white/[0.06] flex-shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-gold/15 text-gold flex items-center justify-center">
+            <i data-lucide="upload-cloud" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="font-serif text-base font-medium text-white">Carga Masiva de Prospectos</h3>
+            <p class="text-xs text-slate-400 font-light">Sanitización automática de celulares (+51 9...) y deduplicación en PostgreSQL</p>
+          </div>
+        </div>
+        <button onclick="closeImportModal()" class="text-slate-400 hover:text-white p-1 rounded-lg">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
 
-      <!-- Cuerpo con Scroll -->
-      <div class="flex-1 overflow-y-auto custom-scroll space-y-4 py-4 pr-1">
-        <!-- Selección de Campaña / Servicio -->
+      <!-- Body -->
+      <div class="flex-1 overflow-y-auto custom-scroll space-y-4 py-4">
+        <!-- Servicio Destino -->
         <div>
-          <label class="block text-xs font-semibold text-gray-300 mb-1.5">
-            Campaña / Servicio Destino <span class="text-amber-400">*</span>
-          </label>
-          <select id="importServiceSelect" class="w-full bg-subpanel border border-gray-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500 font-medium">
+          <label class="block text-xs font-mono text-slate-400 mb-1.5 uppercase tracking-wider">Campaña / Servicio Destino</label>
+          <select id="importServiceSelect" class="w-full bg-obsidian border border-white/[0.08] rounded-xl px-3.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-gold font-mono">
             <option value="licitaciones-qp">Licitaciones QP - Dictámenes Periciales</option>
             <option value="lar-engine">LAR Engine - High-Ticket B2B</option>
-            <option value="custom-service">Servicio B2B Personalizado</option>
           </select>
-          <p class="text-[11px] text-gray-500 mt-1">Los prospectos ingresarán en la columna "Descubiertos" de esta campaña.</p>
         </div>
 
-        <!-- Pestañas de Modo: Subir Archivo vs Pegar Lista -->
-        <div>
-          <div class="flex items-center gap-2 border-b border-gray-800 pb-2">
-            <button 
-              type="button" 
-              onclick="switchImportTab('csv')" 
-              id="importTabBtnCsv" 
-              class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1.5 transition"
-            >
-              <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i>
-              <span>Subir Archivo .CSV</span>
-            </button>
-            <button 
-              type="button" 
-              onclick="switchImportTab('text')" 
-              id="importTabBtnText" 
-              class="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white flex items-center gap-1.5 transition"
-            >
-              <i data-lucide="align-left" class="w-3.5 h-3.5"></i>
-              <span>Pegar Lista de Números</span>
-            </button>
-          </div>
+        <!-- Modo Tabs -->
+        <div class="flex items-center gap-2 border-b border-white/[0.06] pb-2">
+          <button 
+            type="button" 
+            onclick="switchImportTab('csv')" 
+            id="importTabBtnCsv" 
+            class="px-3 py-1 rounded-md text-xs font-mono transition bg-white/[0.08] text-gold border border-gold/30"
+          >
+            Subir Archivo .CSV
+          </button>
+          <button 
+            type="button" 
+            onclick="switchImportTab('text')" 
+            id="importTabBtnText" 
+            class="px-3 py-1 rounded-md text-xs font-mono text-slate-400 hover:text-white border border-transparent"
+          >
+            Pegar Lista de Números
+          </button>
         </div>
 
-        <!-- Tab 1: Subir Archivo .CSV -->
+        <!-- Tab CSV -->
         <div id="importTabCsvContent" class="space-y-3">
           <div 
             id="csvDropZone"
             onclick="document.getElementById('csvFileInput').click()"
-            class="border-2 border-dashed border-gray-700 hover:border-amber-500/60 rounded-2xl p-6 text-center cursor-pointer bg-subpanel/50 hover:bg-subpanel/80 transition duration-150"
+            class="border border-dashed border-white/[0.1] hover:border-gold/50 rounded-xl p-6 text-center cursor-pointer bg-obsidian hover:bg-white/[0.02] transition"
           >
             <input type="file" id="csvFileInput" accept=".csv,.txt" class="hidden" onchange="handleCsvFileSelected(event)">
-            <div class="inline-flex p-3 rounded-xl bg-amber-500/10 text-amber-400 mb-2">
-              <i data-lucide="upload" class="w-6 h-6"></i>
-            </div>
-            <p class="text-xs font-semibold text-white">Haz clic para seleccionar o arrastra tu archivo CSV aquí</p>
-            <p class="text-[11px] text-gray-500 mt-1">Archivos .csv o .txt delimitados por coma o punto y coma</p>
+            <i data-lucide="upload" class="w-5 h-5 text-gold mx-auto mb-2"></i>
+            <p class="text-xs font-medium text-white">Haz clic o arrastra tu archivo .csv aquí</p>
+            <p class="text-[10px] text-slate-500 font-mono mt-1">Columnas detectadas: Teléfono, Empresa, Web</p>
           </div>
-          <div id="importFileDetails" class="hidden p-3 rounded-xl bg-subpanel border border-emerald-500/30 flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <i data-lucide="file-check" class="w-4 h-4 text-emerald-400"></i>
-              <div>
-                <p id="importFileName" class="text-xs font-semibold text-white">archivo.csv</p>
-                <p id="importFileSize" class="text-[10px] text-gray-400">0 KB</p>
-              </div>
-            </div>
-            <button onclick="clearImportFile()" class="text-xs text-rose-400 hover:text-rose-300">Quitar</button>
+          <div id="importFileDetails" class="hidden p-3 rounded-xl bg-obsidian border border-emerald-500/20 flex items-center justify-between text-xs font-mono">
+            <span id="importFileName" class="text-white truncate">archivo.csv</span>
+            <button onclick="clearImportFile()" class="text-rose-400 hover:text-rose-300">Quitar</button>
           </div>
         </div>
 
-        <!-- Tab 2: Pegar Lista de Números -->
-        <div id="importTabTextContent" class="space-y-3 hidden">
-          <div>
-            <textarea 
-              id="importRawText" 
-              rows="6" 
-              oninput="handleRawTextInput(this.value)"
-              placeholder="Pega aquí tu lista (un registro por línea). Ejemplo:&#10;993346759, ROMAN MEDICAL SAC, Lima&#10;925213683, Kendal Import&#10;51969781627, Soluciones Médicas, www.soluciones.pe&#10;987654321&#10;912345678"
-              class="w-full bg-subpanel border border-gray-800 rounded-xl p-3 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-amber-500 font-mono"
-            ></textarea>
-            <p class="text-[10px] text-gray-500 mt-1">
-              💡 Puedes copiar y pegar directamente columnas desde Excel o Google Sheets.
-            </p>
+        <!-- Tab Texto -->
+        <div id="importTabTextContent" class="space-y-2 hidden">
+          <textarea 
+            id="importRawText" 
+            rows="5" 
+            oninput="handleRawTextInput(this.value)"
+            placeholder="993346759, ROMAN MEDICAL SAC&#10;925213683, Kendal Import&#10;51969781627"
+            class="w-full bg-obsidian border border-white/[0.08] rounded-xl p-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-gold font-mono"
+          ></textarea>
+        </div>
+
+        <!-- Resumen de Validación -->
+        <div id="importValidationBox" class="p-3 bg-obsidian rounded-xl border border-white/[0.06] space-y-2">
+          <div class="grid grid-cols-3 gap-2 text-center font-mono">
+            <div>
+              <p class="text-[9px] text-slate-500 uppercase">Filas</p>
+              <p id="importParsedCount" class="text-sm font-bold text-white">0</p>
+            </div>
+            <div>
+              <p class="text-[9px] text-emerald-400 uppercase">Válidos (519...)</p>
+              <p id="importValidCount" class="text-sm font-bold text-emerald-400">0</p>
+            </div>
+            <div>
+              <p class="text-[9px] text-rose-400 uppercase">Descartados</p>
+              <p id="importInvalidCount" class="text-sm font-bold text-rose-400">0</p>
+            </div>
+          </div>
+          <div id="importPreviewContainer" class="hidden pt-2 border-t border-white/[0.06]">
+            <div id="importPreviewList" class="space-y-1 font-mono text-[10px]"></div>
           </div>
         </div>
 
-        <!-- Estadísticas de Validación en Tiempo Real -->
-        <div id="importValidationBox" class="p-3.5 rounded-xl bg-subpanel border border-gray-800 space-y-2.5">
-          <div class="flex items-center justify-between text-xs pb-2 border-b border-gray-800">
-            <span class="font-semibold text-gray-300">Resumen de Validación</span>
-            <span class="text-[10px] text-amber-400">Prefijo +51 agregado automáticamente si son 9 dígitos</span>
-          </div>
-          <div class="grid grid-cols-3 gap-2 text-center text-xs">
-            <div class="p-2 bg-panel rounded-lg border border-gray-800">
-              <p class="text-[10px] text-gray-400">Filas Detectadas</p>
-              <p id="importParsedCount" class="text-base font-bold text-white">0</p>
-            </div>
-            <div class="p-2 bg-panel rounded-lg border border-emerald-500/20 bg-emerald-950/10">
-              <p class="text-[10px] text-emerald-400">Válidos (519...)</p>
-              <p id="importValidCount" class="text-base font-bold text-emerald-400">0</p>
-            </div>
-            <div class="p-2 bg-panel rounded-lg border border-rose-500/20 bg-rose-950/10">
-              <p class="text-[10px] text-rose-400">Descartados / Inválidos</p>
-              <p id="importInvalidCount" class="text-base font-bold text-rose-400">0</p>
-            </div>
-          </div>
-          
-          <!-- Mini Preview de Primeros Leads -->
-          <div id="importPreviewContainer" class="hidden pt-1">
-            <p class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Previsualización (Primeros prospectos):</p>
-            <div id="importPreviewList" class="space-y-1 text-xs font-mono"></div>
-          </div>
-        </div>
-
-        <!-- Alerta de Resultado -->
-        <div id="importAlertBox" class="p-3 rounded-xl text-xs hidden"></div>
-
+        <div id="importAlertBox" class="p-3 rounded-xl text-xs hidden font-mono"></div>
       </div>
 
       <!-- Footer -->
-      <div class="pt-4 border-t border-gray-800 flex items-center justify-between flex-shrink-0">
+      <div class="pt-4 border-t border-white/[0.06] flex items-center justify-between flex-shrink-0">
         <button 
           type="button" 
           onclick="closeImportModal()" 
-          class="px-4 py-2.5 rounded-xl text-xs font-medium text-gray-400 hover:text-white bg-subpanel border border-gray-800 hover:bg-gray-800 transition"
+          class="px-4 py-2 rounded-xl text-xs font-mono text-slate-400 hover:text-white bg-obsidian border border-white/[0.06]"
         >
           Cancelar
         </button>
@@ -752,29 +628,30 @@
           id="importSubmitBtn" 
           onclick="submitImportLeads()" 
           disabled
-          class="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 transition disabled:opacity-40 disabled:cursor-not-allowed"
+          class="px-5 py-2 btn-gold rounded-xl text-xs flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          <i data-lucide="rocket" class="w-4 h-4"></i>
-          <span id="importSubmitBtnText">Ingestar Prospectos al Pipeline</span>
+          <span id="importSubmitBtnText">Ingestar a PostgreSQL</span>
         </button>
       </div>
     </div>
   </div>
 
-  <!-- MODAL DE RE-ESCANEO DE QR DE WHATSAPP -->
-  <div id="qrModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 hidden">
-    <div class="bg-panel border border-gray-800 rounded-2xl p-6 max-w-sm w-full text-center">
+  <!-- ============================================== -->
+  <!-- MODAL DE RE-ESCANEO QR DE WHATSAPP -->
+  <!-- ============================================== -->
+  <div id="qrModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 hidden">
+    <div class="bg-surface border border-white/[0.08] rounded-2xl p-6 max-w-sm w-full text-center">
       <div class="flex items-center justify-between mb-4">
-        <h3 class="font-semibold text-sm text-white">Vincular WhatsApp</h3>
-        <button onclick="closeQrModal()" class="text-gray-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+        <h3 class="font-serif text-sm font-medium text-white">Vincular WhatsApp Satélite</h3>
+        <button onclick="closeQrModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
       </div>
-      <div id="qrImageContainer" class="bg-white p-4 rounded-xl inline-block mb-4">
-        <img id="qrImage" src="" alt="WhatsApp QR" class="w-60 h-60 object-contain">
+      <div id="qrImageContainer" class="bg-white p-3 rounded-xl inline-block mb-4">
+        <img id="qrImage" src="" alt="WhatsApp QR" class="w-56 h-56 object-contain">
       </div>
-      <p class="text-xs text-gray-400 mb-4">
-        Abre WhatsApp en tu teléfono satélite &gt; Dispositivos vinculados &gt; Escanear código QR.
+      <p class="text-xs text-slate-400 font-light mb-4">
+        Abre WhatsApp en tu teléfono &gt; Dispositivos vinculados &gt; Vincular dispositivo.
       </p>
-      <button onclick="checkWhatsAppModal()" class="w-full py-2 bg-gray-800 hover:bg-gray-700 text-xs font-semibold rounded-xl transition">
+      <button onclick="checkWhatsAppModal()" class="w-full py-2 bg-obsidian hover:bg-white/[0.05] border border-white/[0.08] text-xs font-mono text-gold rounded-xl transition">
         Verificar Conexión
       </button>
     </div>

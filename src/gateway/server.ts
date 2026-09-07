@@ -32,8 +32,14 @@ const app = express();
 app.use(express.json());
 
 // Montar Dashboard Web estático
-const publicDashboardDir = path.resolve('public/dashboard');
+const publicDashboardDir = fs.existsSync(path.resolve('public/dashboard'))
+  ? path.resolve('public/dashboard')
+  : path.resolve(__dirname, '../../public/dashboard');
+
 app.use('/dashboard', express.static(publicDashboardDir));
+app.get('/dashboard', (_req: Request, res: Response) => {
+  res.sendFile(path.join(publicDashboardDir, 'index.html'));
+});
 
 // Suscriptores SSE para tiempo real en el Dashboard
 const clientSseSubscribers = new Set<Response>();
