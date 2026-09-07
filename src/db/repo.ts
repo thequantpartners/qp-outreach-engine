@@ -34,48 +34,6 @@ export class OutreachRepo {
       },
       aiSystemPrompt: 'Eres Kenneth, socio consultor en Licitaciones QP. Tu objetivo es conversar con directivos de empresas contratistas con un tono consultivo, analítico, seguro y profesional. NUNCA envíes enlaces web en el primer mensaje. Si muestran interés o aceptan ver el dictamen, ofrece una breve reunión de 15 minutos compartiendo el enlace. Si tienen objeciones técnicas o de costo, aclara que el dictamen preliminar no tiene costo y busca blindar sus contratos.',
       isActive: true
-    },
-    {
-      id: 'lar-engine',
-      name: 'LAR Engine - Infraestructura y Cierre High-Ticket B2B',
-      description: 'Implementación de arquitectura y motores de conversión y cierre en WhatsApp para agencias, consultores y coaches B2B.',
-      targetPersona: 'Dueños de agencias, consultores de negocios y coaches B2B que facturan más de $3,000/mes.',
-      apifyQueries: [
-        'agencia de marketing digital lima',
-        'consultoria de negocios lima',
-        'coaching empresarial lima'
-      ],
-      targetLocations: ['Lima, Peru', 'Bogota, Colombia', 'Santiago, Chile'],
-      outreachTemplate: 'Hola {{name}}, un saludo.\n\nLe escribe Kenneth de The Quant Partners.\n\nEstuvimos revisando el posicionamiento de {{name}} en consultoría y notamos una oportunidad inmediata para triplicar la tasa de respuesta en WhatsApp con prospección B2B automatizada.\n\n¿Me permite compartirle un video de 3 minutos con el desglose exacto de la arquitectura?',
-      followUpTemplate1: 'Hola {{name}}, un saludo breve. ¿Pudieron ver el video con la arquitectura de prospección y cierre B2B para su empresa, o los agarré en una semana muy cargada?',
-      followUpTemplate2: 'Hola {{name}}, solo para cerrar este contacto respetuosamente: si más adelante deciden escalar la captación B2B sin depender de referidos, me avisas por aquí. ¡Éxitos!',
-      assetFilePath: 'storage/assets/arquitectura_lar_b2b.pdf',
-      assetFileName: 'Arquitectura_LAR_B2B.pdf',
-      closingType: 'MEETING_LINK',
-      closingPayload: {
-        meetingUrl: 'https://cal.com/kenneth-qp/estrategia-b2b',
-        closingMessage: 'Perfecto. Le dejo aquí el acceso para coordinar una sesión estratégica de 20 minutos donde revisaremos la viabilidad técnica para su agencia:\nhttps://cal.com/kenneth-qp/estrategia-b2b'
-      },
-      aiSystemPrompt: 'Eres Kenneth de The Quant Partners. Hablas como un estratega de adquisición B2B de alto nivel. Respuestas concisas (máximo 2 a 3 oraciones por mensaje). No hagas discursos largos. Si preguntan detalles, califica si tienen volumen comercial y guíalos a agendar una sesión de estrategia.',
-      isActive: true
-    },
-    {
-      id: 'custom-service',
-      name: 'Servicio B2B Personalizado',
-      description: 'Plantilla adaptable para prospección continua de cualquier producto o servicio B2B.',
-      targetPersona: 'Directores y dueños de empresas B2B.',
-      apifyQueries: ['empresas de logistica lima', 'proveedores industriales lima'],
-      targetLocations: ['Lima, Peru'],
-      outreachTemplate: 'Buenas tardes al equipo de {{name}}.\n\nLe escribe Kenneth de The Quant Partners. Hemos desarrollado una solución específica para optimizar operaciones en su sector.\n\n¿Me permite compartirle un breve resumen por este medio?',
-      followUpTemplate1: 'Buenas tardes {{name}}, le escribo brevemente para consultar si pudieron revisar el resumen que les comenté o si prefieren coordinarlo luego.',
-      followUpTemplate2: 'Hola {{name}}, quedo a sus órdenes en caso requieran optimizar sus operaciones en el futuro. ¡Muchos éxitos!',
-      closingType: 'PAYMENT_INFO',
-      closingPayload: {
-        paymentDetails: 'BCP Soles: 191-XXXXXXXX-0-XX\nInterbank: 200-XXXXXXXX-XX\nYape/Plin: 519XXXXXXXX',
-        closingMessage: 'Con gusto coordinamos la activación. Los datos bancarios corporativos para la confirmación del servicio son:\nBCP Soles: 191-XXXXXXXX-0-XX (CCI: 002191...)\nYape/Plin: 519XXXXXXXX\nUna vez realizado nos remite el comprobante para emitir la factura.'
-      },
-      aiSystemPrompt: 'Eres un asesor comercial consultivo. Atiende dudas y consultas con cordialidad y precisión. Si el cliente solicita contratar o pagar, proporciona los datos de pago y confirma el inicio del servicio.',
-      isActive: false
     }
   ];
 
