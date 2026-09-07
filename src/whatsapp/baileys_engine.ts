@@ -240,6 +240,18 @@ export class BaileysEngine {
 
         if (!lead) continue;
 
+        // Asignar vendedor Round Robin si el prospecto no tenía uno asignado
+        if (!lead.assignedRepName) {
+          try {
+            const nextRep = await OutreachRepo.getNextSalesRep();
+            if (nextRep) {
+              await OutreachRepo.assignLeadToRep(senderPhone, nextRep.name, nextRep.phone);
+              lead.assignedRepName = nextRep.name;
+              lead.assignedRepPhone = nextRep.phone;
+            }
+          } catch {}
+        }
+
         // 4. Registrar mensaje del usuario en la base de datos y activar Human Takeover (El bot se silencia)
         await OutreachRepo.addChatMessage(senderPhone, 'user', incomingText);
         await OutreachRepo.updateLeadStatus(senderPhone, 'REPLIED', {
@@ -254,6 +266,7 @@ export class BaileysEngine {
             phone: senderPhone,
             role: 'user',
             content: incomingText,
+            assignedRepName: lead.assignedRepName,
             createdAt: new Date().toISOString()
           });
         } catch {}
@@ -282,16 +295,24 @@ export class BaileysEngine {
           }
         }
 
-        // 6. Notificar inmediatamente a Kenneth a su WhatsApp con sugerencias de QPartner
+        // 6. Notificar inmediatamente al asesor asignado (o admin) a su WhatsApp personal
+        const targetPhone = (lead.assignedRepPhone || settings.adminWhatsAppPhone || process.env.ADMIN_WHATSAPP_PHONE || '').replace(/[^0-9]/g, '');
+        const repDisplayName = lead.assignedRepName || 'Asesor Asignado';
+
         const alertMsg = 
-          `🚨 *NUEVO MENSAJE DE PROSPECTO (Atención en Dashboard)*\n\n` +
+          `🚨 *NUEVO MENSAJE DE PROSPECTO (Round Robin: ${repDisplayName})*\n\n` +
+          `👤 Asesor: *${repDisplayName}*\n` +
           `🏢 Empresa: *${lead.companyName || 'Contacto WhatsApp'}*\n` +
           `📱 Teléfono: *+${senderPhone}*\n` +
           `💬 Mensaje: "${incomingText}"\n\n` +
           `💡 *QPartner Co-Pilot* ha generado 3 sugerencias tácticas en tu Dashboard para responder con 1 clic:\n` +
-          `👉 http://localhost:3100/dashboard`;
+          `👉 https://qp-outreach-engine.vercel.app/dashboard`;
 
-        await this.notifyAdmin(alertMsg);
+        if (targetPhone) {
+          await this.notifyPhone(targetPhone, alertMsg);
+        } else {
+          await this.notifyAdmin(alertMsg);
+        }
       }
     });
   }
@@ -490,8 +511,24 @@ export class BaileysEngine {
             timestamp: new Date().toISOString()
           })
         });
-      } catch (webhookErr: any) {
-        console.warn('[BaileysEngine] Fallo al despachar webhook:', webhookErr.message);
+      } catch (err: any) {
+        console.error('[BaileysEngine] Error disparando webhook de alerta:', err.message);
+      }
+    }
+  }
+
+  /**
+   * Envía una notificación directa al número de WhatsApp de cualquier vendedor asignado
+   */
+  public async notifyPhone(phone: string, message: string): Promise<void> {
+    const clean = phone.replace(/[^0-9]/g, '');
+    if (this.sock && this.isReady && clean) {
+      try {
+        const jid = `${clean}@s.whatsapp.net`;
+        await this.sock.sendMessage(jid, { text: message });
+        console.log(`📲 [BaileysEngine] Alerta Round Robin enviada a ${clean}`);
+      } catch (err: any) {
+        console.error(`[BaileysEngine] Error enviando alerta a ${clean}:`, err.message);
       }
     }
   }

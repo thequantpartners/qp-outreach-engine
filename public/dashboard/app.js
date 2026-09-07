@@ -8,7 +8,9 @@ let currentOverviewData = null;
 let activeLeadPhone = null;
 let currentStreamFilter = 'ALL';
 let currentSearchQuery = '';
-let currentMainView = 'workspace'; // 'workspace' | 'metrics'
+let currentRepFilter = 'ALL';
+let currentTeamReps = [];
+let currentMainView = 'workspace'; // 'workspace' | 'discovery' | 'metrics'
 let eventSource = null;
 
 // Initialization
@@ -88,6 +90,10 @@ async function fetchOverview() {
 
     const data = await res.json();
     currentOverviewData = data;
+
+    if (data.salesReps && Array.isArray(data.salesReps)) {
+      currentTeamReps = data.salesReps;
+    }
 
     renderHeader(data);
     renderLeadsStream();
@@ -182,7 +188,18 @@ function renderLeadsStream() {
   // Actualizar contadores en píldoras
   updatePillCounts(allLeads);
 
-  // Filtrar por píldora seleccionada
+  // Poblar selector de filtro por Asesor (Round Robin)
+  const repSelect = document.getElementById('streamRepFilter');
+  if (repSelect) {
+    let repOptionsHtml = '<option value="ALL">Todos los asesores</option><option value="UNASSIGNED">Sin asignar</option>';
+    currentTeamReps.forEach(rep => {
+      repOptionsHtml += `<option value="${escapeHtml(rep.name)}">👤 ${escapeHtml(rep.name)}</option>`;
+    });
+    repSelect.innerHTML = repOptionsHtml;
+    repSelect.value = currentRepFilter;
+  }
+
+  // Filtrar por píldora de estado seleccionada
   let filtered = allLeads.filter(lead => {
     if (currentStreamFilter === 'ALL') return true;
     if (currentStreamFilter === 'REPLIED') return lead.status === 'REPLIED';
@@ -192,12 +209,20 @@ function renderLeadsStream() {
     return true;
   });
 
+  // Filtrar por asesor Round Robin
+  if (currentRepFilter === 'UNASSIGNED') {
+    filtered = filtered.filter(l => !l.assignedRepName);
+  } else if (currentRepFilter !== 'ALL') {
+    filtered = filtered.filter(l => l.assignedRepName === currentRepFilter);
+  }
+
   // Filtrar por búsqueda
   if (currentSearchQuery) {
     const q = currentSearchQuery.toLowerCase();
     filtered = filtered.filter(l => 
       (l.companyName || '').toLowerCase().includes(q) || 
-      (l.phone || '').includes(q)
+      (l.phone || '').includes(q) ||
+      (l.assignedRepName || '').toLowerCase().includes(q)
     );
   }
 
@@ -244,6 +269,8 @@ function renderLeadsStream() {
     item.className = `p-3.5 cursor-pointer transition border-l-2 border-transparent hover:bg-white/[0.02] ${isSelected ? 'active-lead-item' : ''}`;
     item.onclick = () => selectLeadForDetail(lead.phone);
 
+    const repLabel = lead.assignedRepName || 'Sin asignar';
+
     item.innerHTML = `
       <div class="flex items-center justify-between gap-2 mb-1">
         <h3 class="font-medium text-xs text-slate-100 truncate">${escapeHtml(lead.companyName)}</h3>
@@ -251,9 +278,15 @@ function renderLeadsStream() {
       </div>
       <div class="flex items-center justify-between gap-2 mb-1">
         <span class="font-mono text-[11px] text-gold/90">+${escapeHtml(lead.phone)}</span>
-        <span class="text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border ${badge.class}">
-          ${badge.label}
-        </span>
+        <div class="flex items-center gap-1.5 flex-shrink-0">
+          <span class="text-[9px] font-mono text-slate-400 bg-white/[0.03] px-1.5 py-0.5 rounded border border-white/[0.06] flex items-center gap-1" title="Asesor Asignado: ${escapeHtml(repLabel)}">
+            <i data-lucide="user" class="w-2.5 h-2.5 text-gold"></i>
+            <span class="max-w-[70px] truncate">${escapeHtml(repLabel)}</span>
+          </span>
+          <span class="text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border ${badge.class}">
+            ${badge.label}
+          </span>
+        </div>
       </div>
       <p class="text-[11px] text-slate-400 font-light truncate">
         ${escapeHtml(lead.lastMessageSnippet || '')}
@@ -263,6 +296,11 @@ function renderLeadsStream() {
   });
 
   if (window.lucide) lucide.createIcons();
+}
+
+function handleRepFilterChange(repName) {
+  currentRepFilter = repName;
+  renderLeadsStream();
 }
 
 function updatePillCounts(allLeads) {
@@ -316,14 +354,14 @@ async function selectLeadForDetail(phone) {
 
   if (!lead) return;
 
-  // Header del detalle
+  // Header del detalle central (Columna 2)
   const nameEl = document.getElementById('detailLeadName');
   const phoneEl = document.getElementById('detailLeadPhone');
   const tagEl = document.getElementById('detailLeadStatusTag');
   const actionsEl = document.getElementById('leadDetailActions');
   const waBtn = document.getElementById('detailDirectWaBtn');
   const composer = document.getElementById('chatComposer');
-  const statusSelect = document.getElementById('detailStatusSelect');
+  const avatarEl = document.getElementById('detailLeadAvatar');
 
   if (nameEl) nameEl.textContent = lead.companyName || 'Prospecto';
   if (phoneEl) phoneEl.textContent = `+${lead.phone}`;
@@ -334,9 +372,38 @@ async function selectLeadForDetail(phone) {
   if (actionsEl) actionsEl.classList.remove('hidden');
   if (waBtn) waBtn.href = `https://wa.me/${lead.phone}`;
   if (composer) composer.classList.remove('hidden');
-  if (statusSelect) statusSelect.value = lead.status;
+  if (avatarEl) {
+    const initials = (lead.companyName || 'WA').slice(0, 2).toUpperCase();
+    avatarEl.textContent = initials;
+  }
 
   updateTakeoverUI(lead.status === 'HUMAN_TAKEOVER' || !!lead.humanTakeoverAt);
+
+  // Panel de Inteligencia Comercial & Ficha (Columna 3)
+  const intelPlaceholder = document.getElementById('intelPlaceholder');
+  const intelLeadCard = document.getElementById('intelLeadCard');
+  if (intelPlaceholder) intelPlaceholder.classList.add('hidden');
+  if (intelLeadCard) intelLeadCard.classList.remove('hidden');
+
+  const intelAssignedBadge = document.getElementById('intelAssignedBadge');
+  if (intelAssignedBadge) {
+    intelAssignedBadge.textContent = lead.assignedRepName || 'Sin asignar';
+  }
+
+  const intelRepSelect = document.getElementById('intelRepSelect');
+  if (intelRepSelect) {
+    let repOptionsHtml = '<option value="">Reasignar asesor...</option>';
+    currentTeamReps.forEach(r => {
+      const isSel = lead.assignedRepName === r.name ? 'selected' : '';
+      repOptionsHtml += `<option value="${escapeHtml(r.name)}" ${isSel}>👤 ${escapeHtml(r.name)} (${escapeHtml(r.phone || 'Sin tel')})</option>`;
+    });
+    intelRepSelect.innerHTML = repOptionsHtml;
+  }
+
+  const intelStatusSelect = document.getElementById('intelStatusSelect');
+  if (intelStatusSelect) {
+    intelStatusSelect.value = lead.status;
+  }
 
   // Cargar Mensajes de Chat
   const messagesContainer = document.getElementById('chatMessagesContainer');
@@ -358,12 +425,8 @@ async function selectLeadForDetail(phone) {
     messagesContainer.innerHTML = `<div class="p-6 text-center text-xs text-rose-400 font-mono">Error cargando chat: ${escapeHtml(err.message)}</div>`;
   }
 
-  // Activar Panel Co-Piloto (QPartner)
-  const copilotPanel = document.getElementById('copilotPanel');
-  if (copilotPanel) {
-    copilotPanel.classList.remove('hidden');
-    loadCopilotSuggestions(phone);
-  }
+  // Cargar Sugerencias Tácticas Co-Piloto en Columna 3
+  loadCopilotSuggestions(phone);
 }
 
 function updateActiveLeadHeader() {
@@ -371,10 +434,80 @@ function updateActiveLeadHeader() {
   const allLeads = getConsolidatedLeads();
   const lead = allLeads.find(l => l.phone === activeLeadPhone);
   if (lead) {
-    const statusSelect = document.getElementById('detailStatusSelect');
-    if (statusSelect) statusSelect.value = lead.status;
+    const intelStatusSelect = document.getElementById('intelStatusSelect');
+    if (intelStatusSelect) intelStatusSelect.value = lead.status;
     const tagEl = document.getElementById('detailLeadStatusTag');
     if (tagEl) tagEl.textContent = lead.status;
+    const intelAssignedBadge = document.getElementById('intelAssignedBadge');
+    if (intelAssignedBadge) intelAssignedBadge.textContent = lead.assignedRepName || 'Sin asignar';
+  }
+}
+
+async function handleReassignLead(repName) {
+  if (!activeLeadPhone || !repName) return;
+  const selectedRep = currentTeamReps.find(r => r.name === repName);
+  const repPhone = selectedRep ? selectedRep.phone : '';
+
+  try {
+    const res = await fetch('/api/client/leads/reassign', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-client-pin': currentPin
+      },
+      body: JSON.stringify({
+        phone: activeLeadPhone,
+        repName,
+        repPhone
+      })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      const intelBadge = document.getElementById('intelAssignedBadge');
+      if (intelBadge) intelBadge.textContent = repName;
+
+      // Actualizar en el objeto en memoria
+      const allLeads = getConsolidatedLeads();
+      const lead = allLeads.find(l => l.phone === activeLeadPhone);
+      if (lead) {
+        lead.assignedRepName = repName;
+        lead.assignedRepPhone = repPhone;
+      }
+      renderLeadsStream();
+    } else {
+      alert('Error reasignando asesor: ' + (data.error || 'Error desconocido'));
+    }
+  } catch (err) {
+    alert('Error al reasignar asesor: ' + err.message);
+  }
+}
+
+async function handleLeadStatusChange(newStatus) {
+  if (!activeLeadPhone || !newStatus) return;
+  try {
+    const res = await fetch('/api/client/leads/status', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-client-pin': currentPin
+      },
+      body: JSON.stringify({ phone: activeLeadPhone, status: newStatus })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      const allLeads = getConsolidatedLeads();
+      const lead = allLeads.find(l => l.phone === activeLeadPhone);
+      if (lead) {
+        lead.status = newStatus;
+      }
+      const tagEl = document.getElementById('detailLeadStatusTag');
+      if (tagEl) tagEl.textContent = newStatus;
+      renderLeadsStream();
+    } else {
+      alert('Error al actualizar etapa: ' + (data.error || 'Error desconocido'));
+    }
+  } catch (err) {
+    alert('Error al actualizar etapa: ' + err.message);
   }
 }
 
@@ -603,7 +736,7 @@ async function loadCopilotSuggestions(phone) {
   applyCopilotCollapseState();
 
   container.innerHTML = `
-    <div class="col-span-full py-4 flex items-center justify-center gap-2 text-xs text-gold font-mono">
+    <div class="py-4 flex items-center justify-center gap-2 text-xs text-gold font-mono">
       <i data-lucide="loader" class="w-4 h-4 animate-spin"></i>
       <span>QPartner analizando contexto e historial comercial...</span>
     </div>
@@ -621,7 +754,7 @@ async function loadCopilotSuggestions(phone) {
     renderCopilotSuggestions(currentSuggestions);
   } catch (err) {
     container.innerHTML = `
-      <div class="col-span-full py-2 text-center text-xs text-rose-400 font-mono">
+      <div class="py-2 text-center text-xs text-rose-400 font-mono">
         No se pudieron generar sugerencias: ${escapeHtml(err.message)}
       </div>
     `;
@@ -635,39 +768,39 @@ function renderCopilotSuggestions(suggestions) {
   applyCopilotCollapseState();
 
   if (!suggestions || suggestions.length === 0) {
-    container.innerHTML = '<div class="col-span-full text-center text-xs text-slate-500 font-mono py-2">Sin sugerencias para este chat.</div>';
+    container.innerHTML = '<div class="text-center text-xs text-slate-500 font-mono py-4">Sin sugerencias tácticas para esta etapa.</div>';
     return;
   }
 
   suggestions.forEach((s, idx) => {
     const card = document.createElement('div');
-    card.className = 'bg-surface border border-white/[0.06] hover:border-gold/30 rounded-xl p-3.5 flex flex-col justify-between transition group shadow-sm';
+    card.className = 'bg-obsidian border border-white/[0.06] hover:border-gold/30 rounded-xl p-3 flex flex-col justify-between transition group shadow-sm space-y-2';
 
     card.innerHTML = `
       <div>
-        <div class="flex items-center justify-between gap-2 mb-2">
-          <span class="text-[9px] font-mono uppercase tracking-wider text-gold bg-gold/10 px-2 py-0.5 rounded border border-gold/20">
+        <div class="flex items-center justify-between gap-2 mb-1.5">
+          <span class="text-[9px] font-mono uppercase tracking-wider text-gold bg-gold/10 px-2 py-0.5 rounded border border-gold/20 font-semibold">
             ${escapeHtml(s.label)}
           </span>
           <span class="text-[9px] font-mono text-slate-500">Opción ${idx + 1}</span>
         </div>
-        <p class="text-xs text-slate-200 leading-relaxed font-light mb-2">
+        <p class="text-xs text-slate-200 leading-relaxed font-light mb-1.5 bg-surface/40 p-2.5 rounded-lg border border-white/[0.03]">
           "${escapeHtml(s.text)}"
         </p>
-        <p class="text-[10px] text-slate-400 italic mb-3 font-light">
+        <p class="text-[10px] text-slate-400 italic font-light">
           💡 ${escapeHtml(s.explanation)}
         </p>
       </div>
-      <div class="flex items-center gap-2 pt-2 border-t border-white/[0.04]">
+      <div class="flex items-center gap-1.5 pt-1.5 border-t border-white/[0.04]">
         <button 
           onclick="useCopilotSuggestion(${idx})"
-          class="flex-1 py-1 px-2 bg-obsidian hover:bg-white/[0.05] text-slate-300 hover:text-white rounded-lg text-[10px] font-mono transition border border-white/[0.06]"
+          class="flex-1 py-1 px-2 bg-surface hover:bg-white/[0.05] text-slate-300 hover:text-white rounded-lg text-[10px] font-mono transition border border-white/[0.06]"
         >
           Usar / Editar
         </button>
         <button 
           onclick="sendCopilotSuggestionDirectly(${idx})"
-          class="flex-1 py-1 px-2 btn-gold rounded-lg text-[10px] font-mono transition"
+          class="flex-1 py-1 px-2 btn-gold rounded-lg text-[10px] font-mono transition font-medium"
         >
           Enviar Ya
         </button>
@@ -1643,19 +1776,19 @@ function closeSettingsModal() {
 }
 
 function switchSettingsTab(tabName) {
-  const tabs = ['whatsapp', 'antiban', 'advisor'];
+  const tabs = ['whatsapp', 'team', 'ai', 'antiban'];
   tabs.forEach(t => {
     const btn = document.getElementById(`settingsTabBtn${t.charAt(0).toUpperCase() + t.slice(1)}`);
     const content = document.getElementById(`settingsTabContent${t.charAt(0).toUpperCase() + t.slice(1)}`);
 
     if (t === tabName) {
       if (btn) {
-        btn.className = 'px-4 py-2.5 text-xs font-mono border-b-2 border-gold text-gold font-medium flex items-center gap-2 transition';
+        btn.className = 'px-4 py-2.5 text-xs font-mono border-b-2 border-gold text-gold font-medium flex items-center gap-2 transition flex-shrink-0';
       }
       if (content) content.classList.remove('hidden');
     } else {
       if (btn) {
-        btn.className = 'px-4 py-2.5 text-xs font-mono border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-2 transition';
+        btn.className = 'px-4 py-2.5 text-xs font-mono border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-2 transition flex-shrink-0';
       }
       if (content) content.classList.add('hidden');
     }
@@ -1688,6 +1821,245 @@ function refreshSettingsQr() {
   }
 }
 
+// -----------------------------------------------------------------
+// Gestión de Equipo & Round Robin (1 a N Asesores)
+// -----------------------------------------------------------------
+function renderTeamRepsList() {
+  const container = document.getElementById('teamRepsContainer');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  if (!currentTeamReps || currentTeamReps.length === 0) {
+    container.innerHTML = `
+      <div class="p-6 text-center text-xs text-slate-500 font-mono bg-obsidian rounded-xl border border-white/[0.04]">
+        No hay asesores configurados. Agrega uno o selecciona un preset (1 a 5 vendedores).
+      </div>
+    `;
+    return;
+  }
+
+  currentTeamReps.forEach((rep, index) => {
+    const row = document.createElement('div');
+    row.className = `p-3 rounded-xl border ${rep.isActive ? 'border-white/[0.08] bg-obsidian' : 'border-white/[0.04] bg-obsidian/40 opacity-60'} space-y-2 transition`;
+
+    row.innerHTML = `
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <label class="relative flex items-center cursor-pointer">
+            <input 
+              type="checkbox" 
+              ${rep.isActive ? 'checked' : ''} 
+              onchange="toggleRepActive(${index})"
+              class="sr-only peer"
+            />
+            <div class="w-8 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3.5 after:transition-all peer-checked:bg-gold"></div>
+          </label>
+          <span class="text-xs font-mono font-medium text-white">${rep.isActive ? 'Activo (Recibe Leads)' : 'En Pausa'}</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] font-mono text-slate-400 bg-white/[0.04] px-2 py-0.5 rounded border border-white/[0.06]">
+            ${rep.leadsAssignedCount || 0} leads
+          </span>
+          <button 
+            type="button" 
+            onclick="removeTeamRep(${index})" 
+            class="text-slate-500 hover:text-rose-400 p-1 rounded transition" 
+            title="Eliminar asesor"
+          >
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div>
+          <label class="block text-[10px] font-mono text-slate-400 mb-0.5">Nombre del Asesor</label>
+          <input 
+            type="text" 
+            value="${escapeHtml(rep.name || '')}" 
+            placeholder="Ej: Kenneth (Director)"
+            oninput="updateTeamRepField(${index}, 'name', this.value)"
+            class="w-full bg-surface border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-gold"
+          />
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-slate-400 mb-0.5">WhatsApp Alertas (519...)</label>
+          <input 
+            type="text" 
+            value="${escapeHtml(rep.phone || '')}" 
+            placeholder="Ej: 51902105668"
+            oninput="updateTeamRepField(${index}, 'phone', this.value)"
+            class="w-full bg-surface border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-xs font-mono text-white placeholder:text-slate-600 focus:outline-none focus:border-gold"
+          />
+        </div>
+      </div>
+    `;
+    container.appendChild(row);
+  });
+
+  if (window.lucide) lucide.createIcons();
+}
+
+function addTeamRepSlot() {
+  currentTeamReps.push({
+    id: 'rep_' + Date.now(),
+    name: '',
+    phone: '',
+    isActive: true,
+    leadsAssignedCount: 0
+  });
+  renderTeamRepsList();
+}
+
+function removeTeamRep(index) {
+  if (confirm(`¿Deseas eliminar este asesor del equipo Round Robin?`)) {
+    currentTeamReps.splice(index, 1);
+    renderTeamRepsList();
+  }
+}
+
+function toggleRepActive(index) {
+  if (currentTeamReps[index]) {
+    currentTeamReps[index].isActive = !currentTeamReps[index].isActive;
+    renderTeamRepsList();
+  }
+}
+
+function updateTeamRepField(index, field, value) {
+  if (currentTeamReps[index]) {
+    if (field === 'phone') {
+      currentTeamReps[index].phone = value.replace(/[^0-9]/g, '');
+    } else {
+      currentTeamReps[index][field] = value.trim();
+    }
+  }
+}
+
+function setTeamRepsCount(n) {
+  const defaultNames = ['Kenneth (Director)', 'Asesor Comercial 2', 'Asesor Comercial 3', 'Asesor Comercial 4', 'Asesor Comercial 5'];
+  
+  if (currentTeamReps.length < n) {
+    const toAdd = n - currentTeamReps.length;
+    for (let i = 0; i < toAdd; i++) {
+      const idx = currentTeamReps.length;
+      currentTeamReps.push({
+        id: 'rep_' + Date.now() + '_' + idx,
+        name: defaultNames[idx] || `Asesor ${idx + 1}`,
+        phone: '',
+        isActive: true,
+        leadsAssignedCount: 0
+      });
+    }
+  } else if (currentTeamReps.length > n) {
+    if (confirm(`Tienes ${currentTeamReps.length} asesores configurados. ¿Deseas ajustar la lista a ${n}?`)) {
+      currentTeamReps = currentTeamReps.slice(0, n);
+    }
+  }
+  renderTeamRepsList();
+}
+
+// -----------------------------------------------------------------
+// Configuración de Proveedores de IA (LLMs)
+// -----------------------------------------------------------------
+function handleAiProviderChange(provider) {
+  const modelSelect = document.getElementById('settingAiModel');
+  const keyInput = document.getElementById('settingAiApiKey');
+  if (!modelSelect) return;
+
+  if (provider === 'gemini') {
+    if (keyInput) keyInput.placeholder = 'AIzaSy... (Google AI Studio API Key)';
+    modelSelect.innerHTML = `
+      <option value="gemini-2.0-flash">Google Gemini 2.0 Flash (Ultra Rápido y Económico - Recomendado)</option>
+      <option value="gemini-1.5-flash">Google Gemini 1.5 Flash (Gran estabilidad)</option>
+      <option value="gemini-1.5-pro">Google Gemini 1.5 Pro (Máxima capacidad de razonamiento)</option>
+    `;
+  } else if (provider === 'openai') {
+    if (keyInput) keyInput.placeholder = 'sk-... (OpenAI Platform API Key)';
+    modelSelect.innerHTML = `
+      <option value="gpt-4o-mini">OpenAI GPT-4o-mini (Rápido y Estable - Recomendado)</option>
+      <option value="gpt-4o">OpenAI GPT-4o (Máxima inteligencia)</option>
+    `;
+  } else {
+    // openrouter
+    if (keyInput) keyInput.placeholder = 'sk-or-v1-... (OpenRouter API Key)';
+    modelSelect.innerHTML = `
+      <option value="google/gemini-2.0-flash-001">Google Gemini 2.0 Flash (Ultra Rápido y Económico - Recomendado)</option>
+      <option value="anthropic/claude-3.5-sonnet">Anthropic Claude 3.5 Sonnet (Máxima Calidad de Redacción B2B)</option>
+      <option value="openai/gpt-4o-mini">OpenAI GPT-4o-mini (Rápido y Estable)</option>
+      <option value="deepseek/deepseek-chat">DeepSeek V3 (Excelente relación calidad/costo)</option>
+    `;
+  }
+}
+
+function toggleAiKeyVisibility() {
+  const keyInput = document.getElementById('settingAiApiKey');
+  const icon = document.getElementById('aiKeyVisibilityIcon');
+  if (!keyInput) return;
+
+  if (keyInput.type === 'password') {
+    keyInput.type = 'text';
+    if (icon) icon.setAttribute('data-lucide', 'eye-off');
+  } else {
+    keyInput.type = 'password';
+    if (icon) icon.setAttribute('data-lucide', 'eye');
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+async function handleTestAiConnection() {
+  const provider = document.getElementById('settingAiProvider')?.value || 'openrouter';
+  const apiKey = document.getElementById('settingAiApiKey')?.value || '';
+  const model = document.getElementById('settingAiModel')?.value || '';
+  const btn = document.getElementById('testAiBtn');
+  const btnText = document.getElementById('testAiBtnText');
+  const badge = document.getElementById('aiTestResultBadge');
+
+  if (btn) btn.disabled = true;
+  if (btnText) btnText.textContent = 'Probando inferencia...';
+  if (badge) {
+    badge.className = 'text-xs font-mono text-gold flex items-center gap-1';
+    badge.innerHTML = '<i data-lucide="loader" class="w-3 h-3 animate-spin"></i><span>Conectando...</span>';
+    badge.classList.remove('hidden');
+    if (window.lucide) lucide.createIcons();
+  }
+
+  try {
+    const res = await fetch('/api/client/ai/test', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-client-pin': currentPin
+      },
+      body: JSON.stringify({ provider, apiKey, model })
+    });
+    const data = await res.json();
+
+    if (res.ok && data.success) {
+      if (badge) {
+        badge.className = 'text-xs font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg flex items-center gap-1.5';
+        badge.innerHTML = `<i data-lucide="check-circle" class="w-3.5 h-3.5"></i><span>Conectado (${data.latencyMs}ms)</span>`;
+      }
+    } else {
+      if (badge) {
+        badge.className = 'text-xs font-mono text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2.5 py-1 rounded-lg flex items-center gap-1.5';
+        badge.innerHTML = `<i data-lucide="alert-circle" class="w-3.5 h-3.5"></i><span>${escapeHtml(data.error || 'Error de conexión')}</span>`;
+      }
+    }
+  } catch (err) {
+    if (badge) {
+      badge.className = 'text-xs font-mono text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2.5 py-1 rounded-lg flex items-center gap-1.5';
+      badge.innerHTML = `<i data-lucide="alert-circle" class="w-3.5 h-3.5"></i><span>${escapeHtml(err.message)}</span>`;
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+    if (btnText) btnText.textContent = 'Probar Conexión IA';
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
+// -----------------------------------------------------------------
+// Cargar y Guardar Configuración Consolidada
+// -----------------------------------------------------------------
 async function loadSettingsData() {
   if (!currentPin) return;
 
@@ -1715,6 +2087,43 @@ async function loadSettingsData() {
     if (maxDelayEl) maxDelayEl.value = settings.maxDelaySeconds ?? 300;
     if (dailyLimitEl) dailyLimitEl.value = settings.dailyLimit ?? 15;
     if (adminPhoneEl) adminPhoneEl.value = settings.adminWhatsAppPhone || '';
+
+    // Poblado Equipo Round Robin
+    if (settings.salesReps && Array.isArray(settings.salesReps)) {
+      currentTeamReps = settings.salesReps;
+    } else if (data.salesReps && Array.isArray(data.salesReps)) {
+      currentTeamReps = data.salesReps;
+    }
+    renderTeamRepsList();
+
+    // Poblado IA & LLMs
+    const aiProviderEl = document.getElementById('settingAiProvider');
+    const aiApiKeyEl = document.getElementById('settingAiApiKey');
+    const aiModelEl = document.getElementById('settingAiModel');
+    const aiKeyStatusBadge = document.getElementById('aiKeyStatusBadge');
+
+    if (aiProviderEl && settings.aiProvider) {
+      aiProviderEl.value = settings.aiProvider;
+      handleAiProviderChange(settings.aiProvider);
+    }
+    if (aiModelEl && settings.aiModel) {
+      aiModelEl.value = settings.aiModel;
+    }
+    if (aiApiKeyEl) {
+      if (settings.aiApiKey) {
+        aiApiKeyEl.value = settings.aiApiKey;
+        if (aiKeyStatusBadge) {
+          aiKeyStatusBadge.textContent = 'API Key Configurada';
+          aiKeyStatusBadge.className = 'text-[10px] font-mono text-emerald-400 font-semibold';
+        }
+      } else {
+        aiApiKeyEl.value = '';
+        if (aiKeyStatusBadge) {
+          aiKeyStatusBadge.textContent = 'Usando Playbook Heurístico';
+          aiKeyStatusBadge.className = 'text-[10px] font-mono text-slate-500';
+        }
+      }
+    }
 
     // Estado WhatsApp
     const cardConnected = document.getElementById('settingsWaCardConnected');
@@ -1751,10 +2160,17 @@ async function handleSaveSettings() {
   const dailyLimit = parseInt(document.getElementById('settingDailyLimit')?.value || '15', 10);
   const adminWhatsAppPhone = document.getElementById('settingAdminPhone')?.value || '';
 
+  const aiProvider = document.getElementById('settingAiProvider')?.value || 'openrouter';
+  const aiApiKey = document.getElementById('settingAiApiKey')?.value || '';
+  const aiModel = document.getElementById('settingAiModel')?.value || '';
+
   if (minDelaySeconds < 60) {
     alert('Por seguridad anti-baneo, el delay mínimo no puede ser menor a 60 segundos.');
     return;
   }
+
+  // Filtrar asesores válidos (con nombre)
+  const validReps = currentTeamReps.filter(r => r.name && r.name.trim().length > 0);
 
   if (btn) btn.disabled = true;
   if (btnText) btnText.textContent = 'Guardando...';
@@ -1773,7 +2189,11 @@ async function handleSaveSettings() {
         minDelaySeconds,
         maxDelaySeconds,
         dailyLimit,
-        adminWhatsAppPhone
+        adminWhatsAppPhone,
+        salesReps: validReps,
+        aiProvider,
+        aiApiKey,
+        aiModel
       })
     });
 
@@ -1781,7 +2201,7 @@ async function handleSaveSettings() {
     if (res.ok && data.success) {
       if (alertBox) {
         alertBox.className = 'p-3 rounded-xl text-xs font-mono bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 block';
-        alertBox.textContent = '✅ Configuración guardada y sincronizada en PostgreSQL correctamente.';
+        alertBox.textContent = '✅ Configuración y equipo guardados en PostgreSQL correctamente.';
       }
       setTimeout(() => {
         if (alertBox) alertBox.classList.add('hidden');

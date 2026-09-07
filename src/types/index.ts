@@ -73,6 +73,15 @@ export interface ChatMessage {
   createdAt: string;
 }
 
+export interface SalesRep {
+  id: string;
+  name: string;
+  phone: string;
+  isActive: boolean;
+  leadsAssignedCount: number;
+  createdAt?: string;
+}
+
 export interface CampaignSettings {
   dailyLimit: number;
   minDelaySeconds: number;
@@ -83,6 +92,11 @@ export interface CampaignSettings {
   webhookUrl?: string;
   alertWebhookUrl?: string;
   isAutonomousActive: boolean;
+  salesReps?: SalesRep[];
+  roundRobinIndex?: number;
+  aiProvider?: 'openrouter' | 'gemini' | 'openai';
+  aiApiKey?: string;
+  aiModel?: string;
 }
 
 export const SendMessageSchema = z.object({

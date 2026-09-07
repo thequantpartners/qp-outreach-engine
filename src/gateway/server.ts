@@ -165,7 +165,8 @@ app.get('/api/client/overview', authenticateClientPin, async (_req: Request, res
   try {
     const waStatus = whatsapp.getStatus();
     const overview = await OutreachRepo.getDashboardOverview();
-    const salesReps = RoundRobinManager.getSalesReps();
+    const configuredReps = await OutreachRepo.getSalesReps();
+    const salesReps = configuredReps.length > 0 ? configuredReps : RoundRobinManager.getSalesReps();
 
     let qrData: string | undefined;
     const latestQr = whatsapp.getLatestQr();
@@ -230,7 +231,11 @@ app.get('/api/client/settings', authenticateClientPin, async (_req: Request, res
         maxDelaySeconds: settings.maxDelaySeconds ?? 300,
         dailyLimit: settings.dailyLimit ?? 15,
         adminWhatsAppPhone: settings.adminWhatsAppPhone || '',
-        isAutonomousActive: settings.isAutonomousActive ?? false
+        isAutonomousActive: settings.isAutonomousActive ?? false,
+        salesReps: settings.salesReps || [],
+        aiProvider: settings.aiProvider || 'openrouter',
+        aiApiKey: settings.aiApiKey ? (settings.aiApiKey.length > 8 ? '••••••••' + settings.aiApiKey.slice(-4) : '••••••••') : '',
+        aiModel: settings.aiModel || 'google/gemini-2.0-flash-001'
       },
       whatsapp: waStatus
     });
@@ -242,7 +247,7 @@ app.get('/api/client/settings', authenticateClientPin, async (_req: Request, res
 // Guardar configuración comercial
 app.post('/api/client/settings', authenticateClientPin, async (req: Request, res: Response) => {
   try {
-    const { startHour, endHour, minDelaySeconds, maxDelaySeconds, dailyLimit, adminWhatsAppPhone } = req.body || {};
+    const { startHour, endHour, minDelaySeconds, maxDelaySeconds, dailyLimit, adminWhatsAppPhone, salesReps, aiProvider, aiApiKey, aiModel } = req.body || {};
     
     await OutreachRepo.updateSettings({
       ...(startHour !== undefined ? { startHour: parseInt(startHour, 10) } : {}),
@@ -250,7 +255,11 @@ app.post('/api/client/settings', authenticateClientPin, async (req: Request, res
       ...(minDelaySeconds !== undefined ? { minDelaySeconds: parseInt(minDelaySeconds, 10) } : {}),
       ...(maxDelaySeconds !== undefined ? { maxDelaySeconds: parseInt(maxDelaySeconds, 10) } : {}),
       ...(dailyLimit !== undefined ? { dailyLimit: parseInt(dailyLimit, 10) } : {}),
-      ...(adminWhatsAppPhone !== undefined ? { adminWhatsAppPhone: String(adminWhatsAppPhone).replace(/[^0-9]/g, '') } : {})
+      ...(adminWhatsAppPhone !== undefined ? { adminWhatsAppPhone: String(adminWhatsAppPhone).replace(/[^0-9]/g, '') } : {}),
+      ...(Array.isArray(salesReps) ? { salesReps } : {}),
+      ...(aiProvider !== undefined ? { aiProvider } : {}),
+      ...(aiApiKey !== undefined && !aiApiKey.startsWith('••••') ? { aiApiKey } : {}),
+      ...(aiModel !== undefined ? { aiModel } : {})
     });
 
     const updated = await OutreachRepo.getSettings();
@@ -260,6 +269,71 @@ app.post('/api/client/settings', authenticateClientPin, async (req: Request, res
     });
 
     res.json({ success: true, settings: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Guardar equipo de vendedores Round Robin
+app.post('/api/client/team', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const { salesReps } = req.body || {};
+    if (!Array.isArray(salesReps)) {
+      res.status(400).json({ error: 'salesReps debe ser un array' });
+      return;
+    }
+    const saved = await OutreachRepo.saveSalesReps(salesReps);
+    broadcastDashboardEvent({
+      type: 'settings_updated',
+      team: saved
+    });
+    res.json({ success: true, salesReps: saved });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Reasignar prospecto a un vendedor
+app.post('/api/client/leads/reassign', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const { phone, repName, repPhone } = req.body || {};
+    if (!phone || !repName) {
+      res.status(400).json({ error: 'phone y repName son requeridos' });
+      return;
+    }
+    const clean = String(phone).replace(/[^0-9]/g, '');
+    const cleanRepPhone = String(repPhone || '').replace(/[^0-9]/g, '');
+    const ok = await OutreachRepo.assignLeadToRep(clean, repName, cleanRepPhone);
+    if (ok) {
+      broadcastDashboardEvent({
+        type: 'lead_updated',
+        phone: clean,
+        assignedRepName: repName,
+        assignedRepPhone: cleanRepPhone
+      });
+      res.json({ success: true, phone: clean, assignedRepName: repName });
+    } else {
+      res.status(404).json({ error: 'Lead no encontrado' });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Probar conexión de API Key de IA (OpenRouter, Gemini, OpenAI)
+app.post('/api/client/ai/test', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    let { provider = 'openrouter', apiKey, model } = req.body || {};
+    if (!apiKey || apiKey.startsWith('••••')) {
+      const currentSettings = await OutreachRepo.getSettings();
+      apiKey = currentSettings.aiApiKey || process.env.OPENROUTER_API_KEY || '';
+    }
+    if (!apiKey) {
+      res.status(400).json({ error: 'Debes proporcionar una API Key válida para probar la conexión.' });
+      return;
+    }
+    const result = await OpenRouterCloser.testConnection(provider, apiKey, model);
+    res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

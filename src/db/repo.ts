@@ -5,7 +5,8 @@ import {
   LeadStatus,
   ChatMessage,
   CampaignSettings,
-  ScrapedLead
+  ScrapedLead,
+  SalesRep
 } from '../types/index.js';
 
 export class OutreachRepo {
@@ -163,6 +164,11 @@ export class OutreachRepo {
       ALTER TABLE leads ADD COLUMN IF NOT EXISTS scheduled_meeting_at TIMESTAMP WITH TIME ZONE;
 
       ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS alert_webhook_url VARCHAR(500);
+      ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS sales_reps JSONB DEFAULT '[]'::jsonb;
+      ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS round_robin_index INT DEFAULT 0;
+      ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS ai_provider VARCHAR(50) DEFAULT 'openrouter';
+      ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS ai_api_key TEXT DEFAULT '';
+      ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS ai_model VARCHAR(100) DEFAULT 'google/gemini-2.0-flash-001';
 
       ALTER TABLE leads ADD COLUMN IF NOT EXISTS assigned_rep_name VARCHAR(100);
       ALTER TABLE leads ADD COLUMN IF NOT EXISTS assigned_rep_phone VARCHAR(50);
@@ -407,6 +413,11 @@ export class OutreachRepo {
         clean = `51${clean}`;
       }
 
+      let assignedRep: SalesRep | null = null;
+      try {
+        assignedRep = await OutreachRepo.getNextSalesRep();
+      } catch {}
+
       const leadData: Lead = {
         serviceId,
         companyName: item.title || 'Empresa B2B',
@@ -416,6 +427,8 @@ export class OutreachRepo {
         category: item.categoryName,
         status: 'DISCOVERED',
         source: item.source || 'google_maps',
+        assignedRepName: assignedRep?.name,
+        assignedRepPhone: assignedRep?.phone,
         customFields: item.metadata || {},
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
@@ -424,10 +437,22 @@ export class OutreachRepo {
       if (DbConnection.isPg()) {
         try {
           const res = await DbConnection.getPool().query(
-            `INSERT INTO leads (service_id, company_name, phone, website, address, category, status, source, custom_fields, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+            `INSERT INTO leads (service_id, company_name, phone, website, address, category, status, source, assigned_rep_name, assigned_rep_phone, custom_fields, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
              ON CONFLICT (phone) DO NOTHING RETURNING id`,
-            [leadData.serviceId, leadData.companyName, leadData.phone, leadData.website, leadData.address, leadData.category, leadData.status, leadData.source, JSON.stringify(leadData.customFields || {})]
+            [
+              leadData.serviceId,
+              leadData.companyName,
+              leadData.phone,
+              leadData.website,
+              leadData.address,
+              leadData.category,
+              leadData.status,
+              leadData.source,
+              leadData.assignedRepName,
+              leadData.assignedRepPhone,
+              JSON.stringify(leadData.customFields || {})
+            ]
           );
           if (res.rowCount && res.rowCount > 0) {
             inserted++;
@@ -625,13 +650,17 @@ export class OutreachRepo {
     repPhone: string,
     notes?: string,
     closingMode?: string
-  ): Promise<void> {
-    await OutreachRepo.updateLeadStatus(phone, 'QUALIFIED', {
+  ): Promise<boolean> {
+    const clean = phone.replace(/[^0-9]/g, '');
+    const lead = await OutreachRepo.getLeadByPhone(clean);
+    if (!lead) return false;
+    await OutreachRepo.updateLeadStatus(clean, lead.status, {
       assignedRepName: repName,
       assignedRepPhone: repPhone,
       handoffNotes: notes,
       closingMode
     });
+    return true;
   }
 
   public static async updateMeetingAttendance(
@@ -876,6 +905,11 @@ export class OutreachRepo {
         continue;
       }
 
+      let assignedRep: SalesRep | null = null;
+      try {
+        assignedRep = await OutreachRepo.getNextSalesRep();
+      } catch {}
+
       const leadData: Lead = {
         serviceId,
         companyName: (lead.name || 'Empresa B2B').trim(),
@@ -885,6 +919,8 @@ export class OutreachRepo {
         category: lead.category?.trim(),
         status: 'DISCOVERED',
         followUpCount: 0,
+        assignedRepName: assignedRep?.name,
+        assignedRepPhone: assignedRep?.phone,
         customFields: lead.customFields || {},
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
@@ -893,8 +929,8 @@ export class OutreachRepo {
       if (DbConnection.isPg()) {
         try {
           const res = await DbConnection.getPool().query(
-            `INSERT INTO leads (service_id, company_name, phone, website, address, category, status, follow_up_count, custom_fields, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $8, NOW(), NOW())
+            `INSERT INTO leads (service_id, company_name, phone, website, address, category, status, follow_up_count, assigned_rep_name, assigned_rep_phone, custom_fields, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $8, $9, $10, NOW(), NOW())
              ON CONFLICT (phone) DO NOTHING RETURNING id`,
             [
               leadData.serviceId,
@@ -904,6 +940,8 @@ export class OutreachRepo {
               leadData.address,
               leadData.category,
               leadData.status,
+              leadData.assignedRepName,
+              leadData.assignedRepPhone,
               JSON.stringify(leadData.customFields)
             ]
           );
@@ -1030,7 +1068,12 @@ export class OutreachRepo {
           startHour: 9,
           endHour: 19,
           adminWhatsAppPhone: process.env.ADMIN_WHATSAPP_PHONE || '',
-          isAutonomousActive: false
+          isAutonomousActive: false,
+          salesReps: [],
+          roundRobinIndex: 0,
+          aiProvider: 'openrouter',
+          aiApiKey: '',
+          aiModel: 'google/gemini-2.0-flash-001'
         };
       }
       const r = res.rows[0];
@@ -1043,7 +1086,12 @@ export class OutreachRepo {
         adminWhatsAppPhone: r.admin_whatsapp_phone,
         webhookUrl: r.webhook_url,
         alertWebhookUrl: r.alert_webhook_url,
-        isAutonomousActive: r.is_autonomous_active ?? false
+        isAutonomousActive: r.is_autonomous_active ?? false,
+        salesReps: r.sales_reps || [],
+        roundRobinIndex: r.round_robin_index ?? 0,
+        aiProvider: r.ai_provider || 'openrouter',
+        aiApiKey: r.ai_api_key || '',
+        aiModel: r.ai_model || 'google/gemini-2.0-flash-001'
       };
     } else {
       const data = DbConnection.getFallbackData();
@@ -1054,7 +1102,12 @@ export class OutreachRepo {
         startHour: 9,
         endHour: 19,
         adminWhatsAppPhone: process.env.ADMIN_WHATSAPP_PHONE || '',
-        isAutonomousActive: false
+        isAutonomousActive: false,
+        salesReps: [],
+        roundRobinIndex: 0,
+        aiProvider: 'openrouter',
+        aiApiKey: '',
+        aiModel: 'google/gemini-2.0-flash-001'
       };
     }
   }
@@ -1074,6 +1127,11 @@ export class OutreachRepo {
            webhook_url = $7,
            alert_webhook_url = $8,
            is_autonomous_active = $9,
+           sales_reps = $10,
+           round_robin_index = $11,
+           ai_provider = $12,
+           ai_api_key = $13,
+           ai_model = $14,
            updated_at = NOW()
          WHERE id = 'main_config'`,
         [
@@ -1085,7 +1143,12 @@ export class OutreachRepo {
           updated.adminWhatsAppPhone,
           updated.webhookUrl,
           updated.alertWebhookUrl,
-          updated.isAutonomousActive
+          updated.isAutonomousActive,
+          JSON.stringify(updated.salesReps || []),
+          updated.roundRobinIndex ?? 0,
+          updated.aiProvider || 'openrouter',
+          updated.aiApiKey || '',
+          updated.aiModel || 'google/gemini-2.0-flash-001'
         ]
       );
     } else {
@@ -1093,6 +1156,49 @@ export class OutreachRepo {
       data.settings = { ...(data.settings || {}), ...settings };
       DbConnection.saveFallbackData(data);
     }
+  }
+
+  // --- SALES REPS & ROUND ROBIN ---
+  public static async getSalesReps(): Promise<SalesRep[]> {
+    const settings = await OutreachRepo.getSettings();
+    return settings.salesReps || [];
+  }
+
+  public static async saveSalesReps(reps: SalesRep[]): Promise<SalesRep[]> {
+    await OutreachRepo.updateSettings({ salesReps: reps });
+    return reps;
+  }
+
+  public static async getNextSalesRep(): Promise<SalesRep | null> {
+    const settings = await OutreachRepo.getSettings();
+    const reps = (settings.salesReps || []).filter(r => r.isActive);
+    if (reps.length === 0) {
+      return null;
+    }
+    if (reps.length === 1) {
+      const single = reps[0];
+      single.leadsAssignedCount = (single.leadsAssignedCount || 0) + 1;
+      const allReps = (settings.salesReps || []).map(r => r.id === single.id ? single : r);
+      await OutreachRepo.updateSettings({ salesReps: allReps });
+      return single;
+    }
+
+    let currentIndex = settings.roundRobinIndex ?? 0;
+    if (currentIndex >= reps.length) {
+      currentIndex = 0;
+    }
+    const chosen = reps[currentIndex];
+    chosen.leadsAssignedCount = (chosen.leadsAssignedCount || 0) + 1;
+
+    const nextIndex = (currentIndex + 1) % reps.length;
+    const allReps = (settings.salesReps || []).map(r => r.id === chosen.id ? chosen : r);
+
+    await OutreachRepo.updateSettings({
+      salesReps: allReps,
+      roundRobinIndex: nextIndex
+    });
+
+    return chosen;
   }
 
   // --- STATS ---

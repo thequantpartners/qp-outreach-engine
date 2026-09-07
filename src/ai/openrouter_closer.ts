@@ -21,6 +21,84 @@ export interface CopilotSuggestion {
 }
 
 export class OpenRouterCloser {
+  public static async getAiConfig(): Promise<{ provider: 'openrouter' | 'gemini' | 'openai'; apiKey: string; model: string }> {
+    try {
+      const settings = await OutreachRepo.getSettings();
+      const provider = (settings.aiProvider as any) || 'openrouter';
+      const apiKey = settings.aiApiKey || process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || '';
+      
+      let defaultModel = 'google/gemini-2.0-flash-001';
+      if (provider === 'gemini') defaultModel = 'gemini-2.0-flash';
+      if (provider === 'openai') defaultModel = 'gpt-4o-mini';
+
+      const model = settings.aiModel || defaultModel;
+      return { provider, apiKey, model };
+    } catch {
+      return {
+        provider: 'openrouter',
+        apiKey: process.env.OPENROUTER_API_KEY || '',
+        model: 'google/gemini-2.0-flash-001'
+      };
+    }
+  }
+
+  public static getEndpoint(provider: string): string {
+    if (provider === 'gemini') {
+      return 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
+    }
+    if (provider === 'openai') {
+      return 'https://api.openai.com/v1/chat/completions';
+    }
+    return 'https://openrouter.ai/api/v1/chat/completions';
+  }
+
+  public static async testConnection(
+    provider: 'openrouter' | 'gemini' | 'openai',
+    apiKey: string,
+    model?: string
+  ): Promise<{ success: boolean; latencyMs?: number; error?: string; modelUsed?: string }> {
+    const startTime = Date.now();
+    const url = OpenRouterCloser.getEndpoint(provider);
+    
+    let chosenModel = model;
+    if (!chosenModel) {
+      if (provider === 'gemini') chosenModel = 'gemini-2.0-flash';
+      else if (provider === 'openai') chosenModel = 'gpt-4o-mini';
+      else chosenModel = 'google/gemini-2.0-flash-001';
+    }
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+          ...(provider === 'openrouter' ? {
+            'HTTP-Referer': 'https://qp-outreach-engine.vercel.app',
+            'X-Title': 'QP Outreach Engine'
+          } : {})
+        },
+        body: JSON.stringify({
+          model: chosenModel,
+          messages: [{ role: 'user', content: 'Ping. Responde brevemente con OK.' }],
+          max_tokens: 10
+        })
+      });
+
+      const data: any = await res.json();
+      const latencyMs = Date.now() - startTime;
+
+      if (res.ok && (data.choices?.[0]?.message?.content || data.candidates?.[0])) {
+        return { success: true, latencyMs, modelUsed: chosenModel };
+      } else {
+        const errorMsg = data.error?.message || data.error || `HTTP ${res.status}: Respuesta inesperada del proveedor`;
+        return { success: false, error: typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg) };
+      }
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  }
+
   private static getApiKey(): string | undefined {
     return process.env.OPENROUTER_API_KEY;
   }
@@ -312,14 +390,15 @@ RESPONDE ESTRICTAMENTE EN FORMATO JSON VÁLIDO:
     service?: ServiceDefinition
   ): Promise<CopilotSuggestion[]> {
     const history = await OutreachRepo.getChatHistory(lead.phone, 12);
-    const apiKey = OpenRouterCloser.getApiKey();
+    const aiConfig = await OpenRouterCloser.getAiConfig();
 
-    if (!apiKey) {
+    if (!aiConfig.apiKey) {
       return OpenRouterCloser.heuristicCopilotSuggestions(lead, history, service);
     }
 
     try {
-      const model = OpenRouterCloser.getModel();
+      const model = aiConfig.model;
+      const endpoint = OpenRouterCloser.getEndpoint(aiConfig.provider);
       const serviceName = service?.name || 'The Quant Partners';
       const serviceDesc = service?.description || 'Soluciones B2B de IA y Licitaciones';
       const targetPersona = service?.targetPersona || 'Decisores de compra';
@@ -389,12 +468,12 @@ Devuelve ÚNICAMENTE un JSON array con 3 elementos:
         content: `Genera las 3 sugerencias tácticas para responder a: "${lastClientMsg || 'Conversación en curso'}"`
       });
 
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          'Authorization': `Bearer ${aiConfig.apiKey}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://quantpartners.pe',
+          'HTTP-Referer': 'https://qp-outreach-engine.vercel.app',
           'X-Title': 'QP Outreach Engine - QPartner Co-Pilot'
         },
         body: JSON.stringify({

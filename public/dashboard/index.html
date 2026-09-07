@@ -284,15 +284,15 @@
   </div>
 
   <!-- ============================================== -->
-  <!-- VISTA 1: ESPACIO DE TRABAJO MASTER-DETAIL (LINEAR STYLE) -->
+  <!-- VISTA 1: ESPACIO DE TRABAJO 3 COLUMNAS (OBSIDIAN PRECISION) -->
   <!-- ============================================== -->
   <main id="viewWorkspace" class="flex-1 flex overflow-hidden">
     
-    <!-- PANEL IZQUIERDO: STREAM DE PROSPECTOS DE ALTA DENSIDAD -->
-    <aside class="w-[390px] border-r border-white/[0.06] bg-surface/50 flex flex-col flex-shrink-0">
+    <!-- COLUMNA 1: INBOX Y STREAM DE PROSPECTOS -->
+    <aside class="w-[300px] xl:w-[320px] border-r border-white/[0.06] bg-surface/50 flex flex-col flex-shrink-0">
       
-      <!-- Barra de Filtros y Búsqueda -->
-      <div class="p-3 border-b border-white/[0.06] space-y-2.5">
+      <!-- Barra de Búsqueda y Filtros -->
+      <div class="p-3 border-b border-white/[0.06] space-y-2">
         <div class="relative">
           <i data-lucide="search" class="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5"></i>
           <input 
@@ -304,21 +304,33 @@
           />
         </div>
 
-        <!-- Píldoras de Filtro por Estado (Sin cajas rígidas) -->
-        <div class="flex items-center gap-1 overflow-x-auto custom-scroll pb-1">
-          <button onclick="setStreamFilter('ALL')" id="pillFilter_ALL" class="stream-filter-pill px-2.5 py-1 rounded-md text-[11px] font-mono tracking-tight transition bg-white/[0.08] text-white border border-white/[0.1]">
+        <!-- Filtro por Asesor (Round Robin) -->
+        <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-obsidian border border-white/[0.06]">
+          <i data-lucide="users" class="w-3 h-3 text-gold flex-shrink-0"></i>
+          <select 
+            id="streamRepFilter" 
+            onchange="handleRepFilterChange(this.value)"
+            class="w-full bg-transparent text-[11px] font-mono text-slate-300 focus:outline-none"
+          >
+            <option value="ALL">Todos los asesores</option>
+          </select>
+        </div>
+
+        <!-- Píldoras de Filtro por Estado -->
+        <div class="flex items-center gap-1 overflow-x-auto custom-scroll pb-0.5">
+          <button onclick="setStreamFilter('ALL')" id="pillFilter_ALL" class="stream-filter-pill px-2.5 py-1 rounded-md text-[10px] font-mono tracking-tight transition bg-white/[0.08] text-white border border-white/[0.1]">
             Todos (<span id="count_ALL">0</span>)
           </button>
-          <button onclick="setStreamFilter('REPLIED')" id="pillFilter_REPLIED" class="stream-filter-pill px-2.5 py-1 rounded-md text-[11px] font-mono tracking-tight transition text-slate-400 hover:text-white border border-transparent hover:border-white/[0.06]">
+          <button onclick="setStreamFilter('REPLIED')" id="pillFilter_REPLIED" class="stream-filter-pill px-2.5 py-1 rounded-md text-[10px] font-mono tracking-tight transition text-slate-400 hover:text-white border border-transparent hover:border-white/[0.06]">
             Respondieron (<span id="count_REPLIED">0</span>)
           </button>
-          <button onclick="setStreamFilter('DISCOVERED')" id="pillFilter_DISCOVERED" class="stream-filter-pill px-2.5 py-1 rounded-md text-[11px] font-mono tracking-tight transition text-slate-400 hover:text-white border border-transparent hover:border-white/[0.06]">
+          <button onclick="setStreamFilter('DISCOVERED')" id="pillFilter_DISCOVERED" class="stream-filter-pill px-2.5 py-1 rounded-md text-[10px] font-mono tracking-tight transition text-slate-400 hover:text-white border border-transparent hover:border-white/[0.06]">
             Por Contactar (<span id="count_DISCOVERED">0</span>)
           </button>
-          <button onclick="setStreamFilter('QUALIFIED')" id="pillFilter_QUALIFIED" class="stream-filter-pill px-2.5 py-1 rounded-md text-[11px] font-mono tracking-tight transition text-slate-400 hover:text-white border border-transparent hover:border-white/[0.06]">
+          <button onclick="setStreamFilter('QUALIFIED')" id="pillFilter_QUALIFIED" class="stream-filter-pill px-2.5 py-1 rounded-md text-[10px] font-mono tracking-tight transition text-slate-400 hover:text-white border border-transparent hover:border-white/[0.06]">
             Cita / Calificado (<span id="count_QUALIFIED">0</span>)
           </button>
-          <button onclick="setStreamFilter('CLOSED_WON')" id="pillFilter_CLOSED_WON" class="stream-filter-pill px-2.5 py-1 rounded-md text-[11px] font-mono tracking-tight transition text-slate-400 hover:text-white border border-transparent hover:border-white/[0.06]">
+          <button onclick="setStreamFilter('CLOSED_WON')" id="pillFilter_CLOSED_WON" class="stream-filter-pill px-2.5 py-1 rounded-md text-[10px] font-mono tracking-tight transition text-slate-400 hover:text-white border border-transparent hover:border-white/[0.06]">
             Ganado (<span id="count_CLOSED_WON">0</span>)
           </button>
         </div>
@@ -326,63 +338,45 @@
 
       <!-- Lista Fluida de Prospectos -->
       <div id="leadsStreamContainer" class="flex-1 overflow-y-auto custom-scroll divide-y divide-white/[0.03]">
-        <!-- Inyectado dinámicamente desde app.js -->
         <div class="p-6 text-center text-xs text-slate-500 font-light">
           Cargando prospectos reales de PostgreSQL...
         </div>
       </div>
 
       <!-- Footer Stream: Total Real -->
-      <div class="p-2.5 border-t border-white/[0.06] bg-obsidian/60 flex items-center justify-between text-[10px] font-mono text-slate-500">
-        <span id="streamFooterCount">1 prospecto registrado</span>
-        <span class="flex items-center gap-1 text-gold"><span class="w-1.5 h-1.5 rounded-full bg-gold animate-pulse"></span> SSE Live Sync</span>
+      <div class="p-2 border-t border-white/[0.06] bg-obsidian/60 flex items-center justify-between text-[10px] font-mono text-slate-500">
+        <span id="streamFooterCount">1 prospecto</span>
+        <span class="flex items-center gap-1 text-gold"><span class="w-1.5 h-1.5 rounded-full bg-gold animate-pulse"></span> Live Sync</span>
       </div>
     </aside>
 
-    <!-- PANEL DERECHO: VISOR DE INTERACCIÓN & QPARTNER CO-PILOT -->
-    <section class="flex-1 flex flex-col bg-obsidian relative overflow-hidden">
+    <!-- COLUMNA 2: CHAT DE WHATSAPP CENTRAL -->
+    <section class="flex-1 min-w-0 flex flex-col bg-obsidian border-r border-white/[0.06] relative overflow-hidden">
       
-      <!-- Header del Prospecto Activo -->
-      <div id="leadDetailHeader" class="h-14 border-b border-white/[0.06] px-6 flex items-center justify-between bg-surface/40 flex-shrink-0">
-        <div class="flex items-center gap-3">
-          <div class="w-8 h-8 rounded-full bg-obsidian border border-white/[0.08] flex items-center justify-center text-gold font-mono font-semibold text-xs">
+      <!-- Header del Chat -->
+      <div id="leadDetailHeader" class="h-14 border-b border-white/[0.06] px-5 flex items-center justify-between bg-surface/40 flex-shrink-0">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-8 h-8 rounded-full bg-obsidian border border-white/[0.08] flex items-center justify-center text-gold font-mono font-semibold text-xs flex-shrink-0">
             <span id="detailLeadAvatar">WA</span>
           </div>
-          <div>
+          <div class="min-w-0">
             <div class="flex items-center gap-2">
-              <h2 id="detailLeadName" class="font-serif text-sm font-medium text-white">Seleccione un prospecto</h2>
-              <span id="detailLeadStatusTag" class="text-[9px] font-mono uppercase tracking-widest px-2 py-0.5 rounded border border-white/[0.08] text-slate-400 hidden">REPLIED</span>
+              <h2 id="detailLeadName" class="font-serif text-sm font-medium text-white truncate">Seleccione un prospecto</h2>
+              <span id="detailLeadStatusTag" class="text-[9px] font-mono uppercase tracking-widest px-2 py-0.5 rounded border border-white/[0.08] text-slate-400 hidden flex-shrink-0">REPLIED</span>
             </div>
-            <p id="detailLeadPhone" class="text-xs font-mono text-gold/90">---</p>
+            <p id="detailLeadPhone" class="text-xs font-mono text-gold/90 truncate">---</p>
           </div>
         </div>
 
-        <!-- Acciones Directas del Prospecto -->
-        <div id="leadDetailActions" class="flex items-center gap-3 hidden">
-          <!-- Selector Rápido de Estado Comercial -->
-          <div class="flex items-center gap-1.5 text-xs text-slate-400 font-mono">
-            <span>Estado:</span>
-            <select 
-              id="detailStatusSelect" 
-              onchange="handleLeadStatusChange(this.value)"
-              class="bg-surface border border-white/[0.08] text-xs rounded-lg px-2.5 py-1 text-slate-200 focus:outline-none focus:border-gold"
-            >
-              <option value="DISCOVERED">Descubierto</option>
-              <option value="OUTREACH_SENT">Contactado</option>
-              <option value="REPLIED">Respondieron</option>
-              <option value="QUALIFIED">Calificado / Cita</option>
-              <option value="CLOSED_WON">Cierre Ganado</option>
-              <option value="HUMAN_TAKEOVER">Control Humano</option>
-            </select>
-          </div>
-
+        <!-- Acciones Cabecera Chat -->
+        <div id="leadDetailActions" class="flex items-center gap-2 hidden flex-shrink-0">
           <!-- Botón Takeover (Control Humano) -->
           <button 
             id="takeoverToggleBtn" 
             onclick="toggleCurrentLeadTakeover()"
-            class="px-3 py-1.5 rounded-lg text-xs font-mono transition flex items-center gap-1.5 border border-white/[0.08] bg-surface text-slate-300 hover:text-white hover:border-gold/30"
+            class="px-2.5 py-1 rounded-lg text-[11px] font-mono transition flex items-center gap-1.5 border border-white/[0.08] bg-surface text-slate-300 hover:text-white hover:border-gold/30"
           >
-            <i data-lucide="bot" class="w-3.5 h-3.5 text-slate-400"></i>
+            <i data-lucide="bot" class="w-3 h-3 text-slate-400"></i>
             <span id="takeoverBtnText">Tomar Control</span>
           </button>
 
@@ -394,82 +388,31 @@
             title="Abrir chat en WhatsApp Web"
             class="p-1.5 rounded-lg bg-surface border border-white/[0.08] text-slate-400 hover:text-emerald-400 transition"
           >
-            <i data-lucide="external-link" class="w-4 h-4"></i>
+            <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
           </a>
         </div>
       </div>
 
       <!-- Historial de Mensajes de WhatsApp -->
-      <div id="chatMessagesContainer" class="flex-1 overflow-y-auto custom-scroll p-6 space-y-3">
+      <div id="chatMessagesContainer" class="flex-1 overflow-y-auto custom-scroll p-5 space-y-3">
         <div class="h-full flex items-center justify-center text-slate-500 text-xs font-light">
-          Seleccione un prospecto del panel izquierdo para ver la interacción
+          Seleccione un prospecto del panel izquierdo para ver la conversación
         </div>
       </div>
 
-      <!-- PANEL CO-PILOTO IA (QPARTNER) -->
-      <div id="copilotPanel" class="border-t border-white/[0.06] bg-surface/90 flex-shrink-0 hidden">
-        <!-- Cabecera QPartner -->
-        <div class="px-5 py-2.5 flex items-center justify-between border-b border-white/[0.04]">
-          <div class="flex items-center gap-2">
-            <span class="w-5 h-5 rounded-md bg-gold/15 text-gold flex items-center justify-center">
-              <i data-lucide="sparkles" class="w-3 h-3"></i>
-            </span>
-            <span class="font-serif text-xs font-medium text-white">QPartner Co-Pilot</span>
-            <span class="text-[9px] font-mono text-slate-500 tracking-wider">RESPUESTA TÁCTICA ASISTIDA</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <button 
-              onclick="refreshCopilotSuggestions()" 
-              id="copilotRefreshBtn"
-              class="text-[10px] font-mono text-slate-400 hover:text-gold flex items-center gap-1 transition px-2 py-0.5 rounded bg-obsidian border border-white/[0.06]"
-              title="Regenerar sugerencias"
-            >
-              <i data-lucide="refresh-cw" class="w-2.5 h-2.5"></i>
-              <span>Regenerar</span>
-            </button>
-            <button 
-              onclick="toggleCopilotCollapse()" 
-              id="copilotCollapseBtn"
-              class="text-[10px] font-mono text-slate-400 hover:text-gold flex items-center gap-1 transition px-2 py-0.5 rounded bg-obsidian border border-white/[0.06]"
-            >
-              <i id="copilotCollapseIcon" data-lucide="chevron-up" class="w-2.5 h-2.5"></i>
-              <span id="copilotCollapseText">Minimizar</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- Contenedor de Sugerencias -->
-        <div id="copilotSuggestionsContainer" class="p-4 grid grid-cols-1 lg:grid-cols-3 gap-3">
-          <!-- Renderizado dinámicamente desde app.js -->
-        </div>
-      </div>
-
-      <!-- Composer de Envíos Manuales y Dictámenes -->
-      <div id="chatComposer" class="p-4 border-t border-white/[0.06] bg-surface/50 flex-shrink-0 hidden">
+      <!-- Composer de Envíos Manuales -->
+      <div id="chatComposer" class="p-3 border-t border-white/[0.06] bg-surface/40 flex-shrink-0 hidden">
         <form onsubmit="handleSendManualMessage(event)" class="flex items-center gap-2">
-          <!-- Botón Despacho Dictamen PDF -->
-          <button
-            type="button"
-            onclick="handleQuickSendDictamen()"
-            id="chatSendDocBtn"
-            title="Despachar Dictamen Técnico EsSalud Piura (PDF)"
-            class="px-3 py-2.5 bg-obsidian border border-gold/30 hover:border-gold/60 text-gold rounded-xl text-xs flex items-center gap-1.5 transition flex-shrink-0"
-          >
-            <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
-            <span class="hidden sm:inline font-mono text-[11px]">Dictamen (PDF)</span>
-          </button>
-          
           <input 
             type="text" 
             id="chatManualInput" 
             placeholder="Escribir mensaje manual por WhatsApp..." 
-            class="flex-1 bg-obsidian border border-white/[0.08] rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-gold"
+            class="flex-1 bg-obsidian border border-white/[0.08] rounded-xl px-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-gold"
           />
-
           <button 
             type="submit" 
             id="chatSendBtn"
-            class="px-4 py-2.5 btn-gold rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-gold/10"
+            class="px-4 py-2 btn-gold rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-gold/10"
           >
             <span>Enviar</span>
             <i data-lucide="send" class="w-3 h-3"></i>
@@ -478,6 +421,120 @@
       </div>
 
     </section>
+
+    <!-- COLUMNA 3: PANEL DE INTELIGENCIA COMERCIAL & QPARTNER CO-PILOT -->
+    <aside class="w-[330px] xl:w-[360px] border-l border-white/[0.06] bg-surface/40 flex flex-col flex-shrink-0 overflow-y-auto custom-scroll">
+      
+      <!-- Cabecera Panel Inteligencia -->
+      <div class="h-14 border-b border-white/[0.06] px-4 flex items-center justify-between flex-shrink-0 bg-surface/60">
+        <div class="flex items-center gap-2">
+          <div class="w-6 h-6 rounded-md bg-gold/15 text-gold flex items-center justify-center">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+          </div>
+          <span class="font-serif text-xs font-medium text-white">Inteligencia Comercial</span>
+        </div>
+        <span class="text-[9px] font-mono text-gold bg-gold/10 border border-gold/20 px-2 py-0.5 rounded font-semibold">
+          QPartner
+        </span>
+      </div>
+
+      <!-- Contenido del Panel Inteligencia (Activo cuando hay un lead seleccionado) -->
+      <div id="intelPanelContent" class="p-4 space-y-4 flex-1">
+        
+        <!-- Estado Placeholder si no hay lead seleccionado -->
+        <div id="intelPlaceholder" class="text-center py-12 text-slate-500 text-xs font-light">
+          Selecciona un prospecto para ver su ficha y sugerencias tácticas
+        </div>
+
+        <!-- Ficha Ejecutiva del Prospecto -->
+        <div id="intelLeadCard" class="space-y-3 hidden">
+          
+          <!-- Asignación Round Robin (Vendedor) -->
+          <div class="p-3 bg-obsidian rounded-xl border border-white/[0.06] space-y-1.5">
+            <div class="flex items-center justify-between text-[10px] font-mono">
+              <span class="text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                <i data-lucide="user-check" class="w-3 h-3 text-gold"></i>
+                <span>Asesor Asignado:</span>
+              </span>
+              <span id="intelAssignedBadge" class="text-gold font-bold">---</span>
+            </div>
+            <select 
+              id="intelRepSelect" 
+              onchange="handleReassignLead(this.value)"
+              class="w-full bg-surface border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-gold font-mono"
+            >
+              <option value="">Reasignar asesor...</option>
+            </select>
+          </div>
+
+          <!-- Selector de Etapa Comercial -->
+          <div class="p-3 bg-obsidian rounded-xl border border-white/[0.06] space-y-1.5">
+            <label class="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">
+              Etapa Comercial:
+            </label>
+            <select 
+              id="intelStatusSelect" 
+              onchange="handleLeadStatusChange(this.value)"
+              class="w-full bg-surface border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-gold font-mono"
+            >
+              <option value="DISCOVERED">Por Contactar (DISCOVERED)</option>
+              <option value="OUTREACH_SENT">Contactado (OUTREACH_SENT)</option>
+              <option value="REPLIED">Respondieron (REPLIED)</option>
+              <option value="QUALIFIED">Calificado / Cita (QUALIFIED)</option>
+              <option value="CLOSED_WON">Cierre Ganado (CLOSED_WON)</option>
+              <option value="HUMAN_TAKEOVER">Control Humano (TAKEOVER)</option>
+            </select>
+          </div>
+
+          <!-- Acciones Rápidas de Cierre -->
+          <div class="p-3 bg-obsidian rounded-xl border border-white/[0.06] space-y-2">
+            <label class="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">
+              Herramientas de Cierre Rápido:
+            </label>
+            <div class="space-y-1.5">
+              <button 
+                type="button"
+                onclick="handleQuickSendDictamen()" 
+                id="intelSendDocBtn"
+                class="w-full py-2 px-3 bg-surface hover:bg-white/[0.05] border border-gold/30 hover:border-gold text-gold rounded-lg text-xs font-mono flex items-center justify-center gap-1.5 transition"
+              >
+                <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+                <span>Despachar Dictamen (PDF)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Bloque QPartner Co-Pilot: 3 Sugerencias Tácticas -->
+          <div class="pt-2 border-t border-white/[0.06] space-y-2.5">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-1.5 text-xs font-serif text-white font-medium">
+                <i data-lucide="message-square" class="w-3.5 h-3.5 text-gold"></i>
+                <span>Sugerencias Tácticas</span>
+              </div>
+              <button 
+                onclick="refreshCopilotSuggestions()" 
+                id="copilotRefreshBtn"
+                class="text-[10px] font-mono text-slate-400 hover:text-gold flex items-center gap-1 px-2 py-0.5 rounded bg-obsidian border border-white/[0.06] transition"
+                title="Regenerar con IA"
+              >
+                <i data-lucide="refresh-cw" class="w-2.5 h-2.5"></i>
+                <span>Regenerar</span>
+              </button>
+            </div>
+
+            <!-- Contenedor Vertical de Sugerencias -->
+            <div id="copilotSuggestionsContainer" class="space-y-2.5">
+              <div class="p-3 text-center text-xs text-slate-500 font-light">
+                Generando opciones tácticas para esta conversación...
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </aside>
 
   </main>
 
@@ -990,30 +1047,38 @@
       </div>
 
       <!-- Settings Tabs Navigation -->
-      <div class="flex border-b border-white/[0.06] bg-obsidian/60 px-6 pt-2">
+      <div class="flex border-b border-white/[0.06] bg-obsidian/60 px-6 pt-2 overflow-x-auto custom-scroll">
         <button 
           id="settingsTabBtnWhatsapp" 
           onclick="switchSettingsTab('whatsapp')" 
-          class="px-4 py-2.5 text-xs font-mono border-b-2 border-gold text-gold font-medium flex items-center gap-2 transition"
+          class="px-4 py-2.5 text-xs font-mono border-b-2 border-gold text-gold font-medium flex items-center gap-2 transition flex-shrink-0"
         >
           <i data-lucide="smartphone" class="w-3.5 h-3.5"></i>
           <span>Conexión WhatsApp</span>
         </button>
         <button 
+          id="settingsTabBtnTeam" 
+          onclick="switchSettingsTab('team')" 
+          class="px-4 py-2.5 text-xs font-mono border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-2 transition flex-shrink-0"
+        >
+          <i data-lucide="users" class="w-3.5 h-3.5"></i>
+          <span>Equipo & Round Robin</span>
+        </button>
+        <button 
+          id="settingsTabBtnAi" 
+          onclick="switchSettingsTab('ai')" 
+          class="px-4 py-2.5 text-xs font-mono border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-2 transition flex-shrink-0"
+        >
+          <i data-lucide="sparkles" class="w-3.5 h-3.5 text-gold"></i>
+          <span>IA & Proveedores (LLM)</span>
+        </button>
+        <button 
           id="settingsTabBtnAntiban" 
           onclick="switchSettingsTab('antiban')" 
-          class="px-4 py-2.5 text-xs font-mono border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-2 transition"
+          class="px-4 py-2.5 text-xs font-mono border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-2 transition flex-shrink-0"
         >
           <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
           <span>Anti-Baneo & Cadencia</span>
-        </button>
-        <button 
-          id="settingsTabBtnAdvisor" 
-          onclick="switchSettingsTab('advisor')" 
-          class="px-4 py-2.5 text-xs font-mono border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-2 transition"
-        >
-          <i data-lucide="user-check" class="w-3.5 h-3.5"></i>
-          <span>Asesor Comercial</span>
         </button>
       </div>
 
@@ -1069,7 +1134,126 @@
           </div>
         </div>
 
-        <!-- TAB 2: ANTI-BANEO & CADENCIA -->
+        <!-- TAB 2: EQUIPO & ROUND ROBIN -->
+        <div id="settingsTabContentTeam" class="space-y-4 hidden">
+          <div class="p-3 bg-gold/10 border border-gold/20 rounded-xl text-xs space-y-1 text-slate-200">
+            <div class="flex items-center gap-2 font-medium text-gold">
+              <i data-lucide="shuffle" class="w-4 h-4"></i>
+              <span>Reparto Secuencial Estricto (Round Robin)</span>
+            </div>
+            <p class="text-[11px] text-slate-400 font-light leading-relaxed">
+              Los prospectos se asignan equitativamente entre los vendedores activos (1 a 1 en orden circular). Cuando un prospecto responde o escribe, la alerta de WhatsApp se despacha directamente al asesor asignado.
+            </p>
+          </div>
+
+          <!-- Selector Rápido de Cantidad de Vendedores -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between text-xs font-mono">
+              <span class="text-slate-400">¿Cuántos vendedores en el equipo?</span>
+              <button 
+                type="button" 
+                onclick="addTeamRepSlot()"
+                class="text-gold hover:text-white flex items-center gap-1 text-[11px] transition"
+              >
+                <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+                <span>+ Agregar Asesor</span>
+              </button>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="setTeamRepsCount(1)" class="team-preset-btn px-3 py-1.5 rounded-lg bg-obsidian border border-white/[0.08] hover:border-gold text-xs font-mono text-slate-300">1 Vendedor</button>
+              <button type="button" onclick="setTeamRepsCount(2)" class="team-preset-btn px-3 py-1.5 rounded-lg bg-obsidian border border-white/[0.08] hover:border-gold text-xs font-mono text-slate-300">2 Vendedores</button>
+              <button type="button" onclick="setTeamRepsCount(3)" class="team-preset-btn px-3 py-1.5 rounded-lg bg-obsidian border border-white/[0.08] hover:border-gold text-xs font-mono text-slate-300">3 Vendedores</button>
+              <button type="button" onclick="setTeamRepsCount(4)" class="team-preset-btn px-3 py-1.5 rounded-lg bg-obsidian border border-white/[0.08] hover:border-gold text-xs font-mono text-slate-300">4 Vendedores</button>
+              <button type="button" onclick="setTeamRepsCount(5)" class="team-preset-btn px-3 py-1.5 rounded-lg bg-obsidian border border-white/[0.08] hover:border-gold text-xs font-mono text-slate-300">5 Vendedores</button>
+            </div>
+          </div>
+
+          <!-- Lista Dinámica de Vendedores -->
+          <div id="teamRepsContainer" class="space-y-3 max-h-[320px] overflow-y-auto custom-scroll pr-1">
+            <!-- Inyectado dinámicamente desde app.js -->
+          </div>
+        </div>
+
+        <!-- TAB 3: INTELIGENCIA ARTIFICIAL (LLMs) -->
+        <div id="settingsTabContentAi" class="space-y-4 hidden">
+          <div class="p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl text-xs space-y-1 text-slate-200">
+            <div class="flex items-center gap-2 font-medium text-purple-300">
+              <i data-lucide="sparkles" class="w-4 h-4 text-gold"></i>
+              <span>Motor Cognitivo de QPartner Co-Pilot</span>
+            </div>
+            <p class="text-[11px] text-slate-400 font-light leading-relaxed">
+              Configura la API Key para que la IA lea el contexto del lead y redacte respuestas tácticas personalizadas en tiempo real. Si no ingresas una clave, se usará el playbook heurístico de alta conversión.
+            </p>
+          </div>
+
+          <!-- Selector de Proveedor -->
+          <div>
+            <label class="block text-xs font-mono text-slate-400 mb-1.5">Proveedor de IA</label>
+            <select 
+              id="settingAiProvider" 
+              onchange="handleAiProviderChange(this.value)"
+              class="w-full bg-obsidian border border-white/[0.08] rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-gold font-mono"
+            >
+              <option value="openrouter">OpenRouter (Universal: Claude 3.5, GPT-4o, DeepSeek, Gemini)</option>
+              <option value="gemini">Google Gemini (Gemini 2.0 Flash / Pro)</option>
+              <option value="openai">OpenAI (GPT-4o, GPT-4o-mini)</option>
+            </select>
+          </div>
+
+          <!-- Input de API Key -->
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="text-xs font-mono text-slate-400">API Key del Proveedor</label>
+              <span id="aiKeyStatusBadge" class="text-[10px] font-mono text-slate-500">Persistente en DB</span>
+            </div>
+            <div class="relative">
+              <input 
+                type="password" 
+                id="settingAiApiKey" 
+                placeholder="sk-or-v1-... / AIzaSy... / sk-..." 
+                class="w-full bg-obsidian border border-white/[0.08] rounded-xl pl-3 pr-10 py-2.5 text-xs font-mono text-white focus:outline-none focus:border-gold placeholder:text-slate-600"
+              />
+              <button 
+                type="button" 
+                onclick="toggleAiKeyVisibility()" 
+                class="absolute right-3 top-2.5 text-slate-400 hover:text-white"
+                title="Mostrar/Ocultar API Key"
+              >
+                <i id="aiKeyVisibilityIcon" data-lucide="eye" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Selector de Modelo -->
+          <div>
+            <label class="block text-xs font-mono text-slate-400 mb-1.5">Modelo de Inferencia</label>
+            <select 
+              id="settingAiModel" 
+              class="w-full bg-obsidian border border-white/[0.08] rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-gold font-mono"
+            >
+              <option value="google/gemini-2.0-flash-001">Google Gemini 2.0 Flash (Ultra Rápido y Económico - Recomendado)</option>
+              <option value="anthropic/claude-3.5-sonnet">Anthropic Claude 3.5 Sonnet (Máxima Calidad de Redacción B2B)</option>
+              <option value="openai/gpt-4o-mini">OpenAI GPT-4o-mini (Rápido y Estable)</option>
+              <option value="deepseek/deepseek-chat">DeepSeek V3 (Excelente relación calidad/costo)</option>
+            </select>
+          </div>
+
+          <!-- Botón Probar Conexión -->
+          <div class="pt-2 flex items-center justify-between">
+            <button 
+              type="button" 
+              onclick="handleTestAiConnection()" 
+              id="testAiBtn"
+              class="px-4 py-2 rounded-xl bg-obsidian border border-white/[0.08] hover:border-purple-400 text-xs font-mono text-purple-300 hover:text-white transition flex items-center gap-2"
+            >
+              <i data-lucide="zap" class="w-3.5 h-3.5 text-purple-400"></i>
+              <span id="testAiBtnText">Probar Conexión IA</span>
+            </button>
+            <div id="aiTestResultBadge" class="text-xs font-mono hidden"></div>
+          </div>
+        </div>
+
+        <!-- TAB 4: ANTI-BANEO & CADENCIA -->
         <div id="settingsTabContentAntiban" class="space-y-4 hidden">
           <div class="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-300 flex items-start gap-2">
             <i data-lucide="shield-alert" class="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5"></i>
@@ -1145,26 +1329,16 @@
             />
             <span class="text-[10px] text-slate-500">Recomendado para líneas nuevas: 15 envíos en frío por día.</span>
           </div>
-        </div>
-
-        <!-- TAB 3: ASESOR COMERCIAL -->
-        <div id="settingsTabContentAdvisor" class="space-y-4 hidden">
-          <div class="p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl text-xs space-y-1">
-            <p class="font-medium text-white">Derivación y Notificaciones Human Takeover</p>
-            <p class="text-[11px] text-slate-400 font-light">
-              Cuando un prospecto responde o califica positivamente, el sistema activa automáticamente el modo de control humano para que intervengas con la propuesta de cierre.
-            </p>
-          </div>
 
           <div>
-            <label class="block text-xs font-mono text-slate-400 mb-1.5">WhatsApp del Asesor Comercial (Internacional)</label>
+            <label class="block text-xs font-mono text-slate-400 mb-1.5">WhatsApp Administrador (Fallback de Alertas)</label>
             <input 
               type="text" 
               id="settingAdminPhone" 
               placeholder="51902105668" 
               class="w-full bg-obsidian border border-white/[0.08] rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-gold"
             />
-            <span class="text-[10px] text-slate-500">Ej: 51902105668 (sin espacios ni signos +)</span>
+            <span class="text-[10px] text-slate-500">Número al que se envían las alertas si no hay asesores de equipo activos.</span>
           </div>
         </div>
 
