@@ -4,6 +4,8 @@
 
 // State Management
 let currentPin = localStorage.getItem('qp_client_pin') || sessionStorage.getItem('qp_client_pin') || '';
+let currentUserRole = localStorage.getItem('qp_user_role') || 'owner'; // 'owner' | 'sales_rep'
+let currentUserName = localStorage.getItem('qp_user_name') || 'Kenneth (Director)';
 let currentOverviewData = null;
 let activeLeadPhone = null;
 let currentStreamFilter = 'ALL';
@@ -24,17 +26,68 @@ document.addEventListener('DOMContentLoaded', () => {
   checkAuth();
 });
 
-// 1. Autenticación por PIN
+// 1. Autenticación por PIN y Roles
 function checkAuth() {
   const pinModal = document.getElementById('pinModal');
   if (currentPin) {
     pinModal.classList.add('hidden');
+    applyRolePermissions();
     fetchOverview();
     initSSE();
   } else {
     pinModal.classList.remove('hidden');
     const input = document.getElementById('pinInput');
     if (input) input.focus();
+  }
+}
+
+function handleLogout() {
+  currentPin = '';
+  currentUserRole = 'owner';
+  currentUserName = '';
+  localStorage.removeItem('qp_client_pin');
+  sessionStorage.removeItem('qp_client_pin');
+  localStorage.removeItem('qp_user_role');
+  localStorage.removeItem('qp_user_name');
+  if (eventSource) {
+    eventSource.close();
+    eventSource = null;
+  }
+  const pinInput = document.getElementById('pinInput');
+  if (pinInput) pinInput.value = '';
+  checkAuth();
+}
+
+function applyRolePermissions() {
+  const tabDiscovery = document.getElementById('tabBtnDiscovery');
+  const tabMetrics = document.getElementById('tabBtnMetrics');
+  const btnImport = document.getElementById('btnOpenImport');
+  const btnSettings = document.getElementById('btnOpenSettings');
+  const banner = document.getElementById('onboardingBanner');
+  const repFilterWrapper = document.getElementById('streamRepFilter')?.parentElement;
+  const userProfileBadge = document.getElementById('userProfileBadge');
+  const userProfileName = document.getElementById('userProfileName');
+
+  if (userProfileBadge && userProfileName) {
+    userProfileName.textContent = currentUserName || (currentUserRole === 'owner' ? 'Kenneth (Director)' : 'Asesor');
+    userProfileBadge.classList.remove('hidden');
+    userProfileBadge.classList.add('flex');
+  }
+
+  if (currentUserRole === 'sales_rep') {
+    if (tabDiscovery) tabDiscovery.classList.add('hidden');
+    if (tabMetrics) tabMetrics.classList.add('hidden');
+    if (btnImport) btnImport.classList.add('hidden');
+    if (btnSettings) btnSettings.classList.add('hidden');
+    if (banner) banner.classList.add('hidden');
+    if (repFilterWrapper) repFilterWrapper.classList.add('hidden');
+    switchMainView('workspace');
+  } else {
+    if (tabDiscovery) tabDiscovery.classList.remove('hidden');
+    if (tabMetrics) tabMetrics.classList.remove('hidden');
+    if (btnImport) btnImport.classList.remove('hidden');
+    if (btnSettings) btnSettings.classList.remove('hidden');
+    if (repFilterWrapper) repFilterWrapper.classList.remove('hidden');
   }
 }
 
@@ -59,13 +112,18 @@ async function handlePinSubmit(e) {
     const data = await res.json();
     if (res.ok && data.success) {
       currentPin = pin;
+      currentUserRole = data.role || 'owner';
+      currentUserName = data.repName || 'Kenneth (Director)';
       localStorage.setItem('qp_client_pin', pin);
       sessionStorage.setItem('qp_client_pin', pin);
+      localStorage.setItem('qp_user_role', currentUserRole);
+      localStorage.setItem('qp_user_name', currentUserName);
       document.getElementById('pinModal').classList.add('hidden');
+      applyRolePermissions();
       fetchOverview();
       initSSE();
     } else {
-      errorEl.textContent = data.error || 'Clave incorrecta.';
+      errorEl.textContent = data.error || 'Clave o PIN incorrecto.';
       errorEl.classList.remove('hidden');
     }
   } catch (err) {
@@ -88,14 +146,20 @@ async function fetchOverview() {
     });
 
     if (res.status === 401) {
-      sessionStorage.removeItem('qp_client_pin');
-      currentPin = '';
-      checkAuth();
+      handleLogout();
       return;
     }
 
     const data = await res.json();
     currentOverviewData = data;
+
+    if (data.role) {
+      currentUserRole = data.role;
+      if (data.repName) currentUserName = data.repName;
+      localStorage.setItem('qp_user_role', currentUserRole);
+      localStorage.setItem('qp_user_name', currentUserName);
+      applyRolePermissions();
+    }
 
     if (data.salesReps && Array.isArray(data.salesReps)) {
       currentTeamReps = data.salesReps;
@@ -107,12 +171,12 @@ async function fetchOverview() {
     renderMetrics(data);
     updateOnboardingBanner(data);
 
-    // Si hay un lead activo, refrescar su detalle; si no, seleccionar el primero disponible
+    // Si hay un lead activo, refrescar su detalle; si no, seleccionar el primero disponible en PC
     if (activeLeadPhone) {
       updateActiveLeadHeader();
     } else {
       const allLeads = getConsolidatedLeads();
-      if (allLeads.length > 0) {
+      if (allLeads.length > 0 && window.innerWidth >= 1024) {
         selectLeadForDetail(allLeads[0].phone);
       }
     }
@@ -654,9 +718,55 @@ function handleLeadSearch(val) {
   renderLeadsStream();
 }
 
-// 6. Seleccionar Prospecto y Abrir Detalle / Chat Directo
+// 6. Navegación Móvil Estilo WhatsApp (100% Responsivo)
+function openMobileChat(phone) {
+  if (window.innerWidth < 1024) {
+    const col1 = document.getElementById('colLeadsList');
+    const col2 = document.getElementById('colActiveChat');
+    if (col1 && col2) {
+      col1.classList.add('hidden');
+      col2.classList.remove('hidden');
+      col2.classList.add('flex', 'w-full');
+    }
+  }
+}
+
+function closeMobileChat() {
+  const col1 = document.getElementById('colLeadsList');
+  const col2 = document.getElementById('colActiveChat');
+  const col3 = document.getElementById('leadDetailIntelPanel');
+  if (col1 && col2) {
+    col1.classList.remove('hidden');
+    col2.classList.add('hidden');
+    col2.classList.remove('flex', 'w-full');
+  }
+  if (col3 && window.innerWidth < 1024) {
+    col3.classList.add('hidden');
+    col3.classList.remove('flex');
+  }
+}
+
+function toggleMobileLeadInfo(forceState) {
+  const col3 = document.getElementById('leadDetailIntelPanel');
+  if (!col3) return;
+  if (forceState !== undefined) {
+    if (forceState) {
+      col3.classList.remove('hidden');
+      col3.classList.add('flex');
+    } else {
+      col3.classList.add('hidden');
+      col3.classList.remove('flex');
+    }
+    return;
+  }
+  col3.classList.toggle('hidden');
+  col3.classList.toggle('flex');
+}
+
+// 7. Seleccionar Prospecto y Abrir Detalle / Chat Directo
 async function selectLeadForDetail(phone) {
   activeLeadPhone = phone;
+  openMobileChat(phone);
   renderLeadsStream(); // Actualizar el resaltado en el stream izquierdo
 
   const allLeads = getConsolidatedLeads();
@@ -813,12 +923,25 @@ async function handleReassignLead(repName) {
       const intelBadge = document.getElementById('intelAssignedBadge');
       if (intelBadge) intelBadge.textContent = repName;
 
-      // Actualizar en el objeto en memoria
-      const allLeads = getConsolidatedLeads();
-      const lead = allLeads.find(l => l.phone === activeLeadPhone);
-      if (lead) {
-        lead.assignedRepName = repName;
-        lead.assignedRepPhone = repPhone;
+      // Actualizar directamente en la memoria global de kanban y activeChats
+      if (currentOverviewData && currentOverviewData.kanban) {
+        Object.values(currentOverviewData.kanban).forEach(list => {
+          if (Array.isArray(list)) {
+            list.forEach(l => {
+              if (l && l.phone === activeLeadPhone) {
+                l.assignedRepName = repName;
+                l.assignedRepPhone = repPhone;
+              }
+            });
+          }
+        });
+      }
+      if (currentOverviewData && currentOverviewData.activeChats) {
+        currentOverviewData.activeChats.forEach(c => {
+          if (c.leadPhone === activeLeadPhone) {
+            c.assignedRepName = repName;
+          }
+        });
       }
       renderLeadsStream();
     } else {
@@ -843,14 +966,31 @@ async function handleReassignLeadCampaign(serviceId) {
     });
     const data = await res.json();
     if (res.ok && data.success) {
-      const allLeads = getConsolidatedLeads();
-      const lead = allLeads.find(l => l.phone === activeLeadPhone);
-      if (lead) {
-        lead.serviceId = targetId || null;
-        const matched = currentServicesList.find(s => s.id === targetId);
-        lead.serviceName = matched ? matched.name : (targetId ? targetId : 'Directo');
-        const badge = document.getElementById('intelCampaignBadge');
-        if (badge) badge.textContent = lead.serviceName;
+      const matched = currentServicesList.find(s => s.id === targetId);
+      const campName = matched ? matched.name : (targetId ? targetId : 'Directo');
+      const badge = document.getElementById('intelCampaignBadge');
+      if (badge) badge.textContent = campName;
+
+      // Actualizar directamente en la memoria global de kanban y activeChats
+      if (currentOverviewData && currentOverviewData.kanban) {
+        Object.values(currentOverviewData.kanban).forEach(list => {
+          if (Array.isArray(list)) {
+            list.forEach(l => {
+              if (l && l.phone === activeLeadPhone) {
+                l.serviceId = targetId || null;
+                l.serviceName = campName;
+              }
+            });
+          }
+        });
+      }
+      if (currentOverviewData && currentOverviewData.activeChats) {
+        currentOverviewData.activeChats.forEach(c => {
+          if (c.leadPhone === activeLeadPhone) {
+            c.serviceId = targetId || null;
+            c.serviceName = campName;
+          }
+        });
       }
       renderLeadsStream();
     } else {
@@ -2157,6 +2297,72 @@ function closeQrModal() {
   }
 }
 
+// Sistema de Alertas Sonoras y Visuales en Vivo (Web Audio API)
+function playNotificationSound() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+
+    // Tono 1 (587.33 Hz - Re5)
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(587.33, now);
+    gain1.gain.setValueAtTime(0.12, now);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.22);
+
+    // Tono 2 (880 Hz - La5)
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(880, now + 0.1);
+    gain2.gain.setValueAtTime(0.15, now + 0.1);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(now + 0.1);
+    osc2.stop(now + 0.38);
+  } catch (err) {
+    // Silencioso si el navegador aún no ha recibido interacción
+  }
+}
+
+function showNotificationToast(message) {
+  let toast = document.getElementById('liveNotificationToast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'liveNotificationToast';
+    toast.className = 'fixed bottom-5 right-5 z-50 max-w-sm p-3.5 rounded-xl bg-surface/95 border border-gold/40 text-slate-100 shadow-2xl backdrop-blur-md flex items-center gap-3 text-xs font-sans transition-all duration-300 transform translate-y-10 opacity-0 pointer-events-none';
+    document.body.appendChild(toast);
+  }
+
+  toast.innerHTML = `
+    <div class="w-8 h-8 rounded-lg bg-gold/15 border border-gold/30 flex items-center justify-center text-gold flex-shrink-0">
+      <i data-lucide="bell" class="w-4 h-4"></i>
+    </div>
+    <div class="flex-1 min-w-0">
+      <p class="font-medium text-slate-100 text-xs">${escapeHtml(message)}</p>
+      <span class="text-[10px] text-gold font-mono">En tiempo real</span>
+    </div>
+  `;
+  if (window.lucide) lucide.createIcons();
+
+  toast.classList.remove('translate-y-10', 'opacity-0', 'pointer-events-none');
+  toast.classList.add('translate-y-0', 'opacity-100');
+
+  if (window.toastTimeout) clearTimeout(window.toastTimeout);
+  window.toastTimeout = setTimeout(() => {
+    toast.classList.add('translate-y-10', 'opacity-0', 'pointer-events-none');
+    toast.classList.remove('translate-y-0', 'opacity-100');
+  }, 5000);
+}
+
 // 15. Real-Time SSE
 function initSSE() {
   if (eventSource) {
@@ -2175,13 +2381,27 @@ function initSSE() {
       if (event.type === 'new_message') {
         const cleanEventPhone = (event.phone || '').replace(/[^0-9]/g, '');
         const cleanActivePhone = (activeLeadPhone || '').replace(/[^0-9]/g, '');
+
+        if (event.role === 'user') {
+          playNotificationSound();
+          showNotificationToast(`📩 Mensaje de ${event.companyName || ('+' + cleanEventPhone)}: "${(event.content || '').slice(0, 50)}"`);
+        }
+
         if (cleanActivePhone && cleanActivePhone === cleanEventPhone) {
           selectLeadForDetail(activeLeadPhone);
         }
         fetchOverview();
       }
 
-      if (event.type === 'lead_updated' || event.type === 'appointment_booked' || event.type === 'meeting_attendance_updated' || event.type === 'settings_updated' || event.type === 'whatsapp_disconnected') {
+      if (event.type === 'lead_updated') {
+        if (event.assignedRepName && currentUserRole === 'sales_rep' && event.assignedRepName === currentUserName) {
+          playNotificationSound();
+          showNotificationToast(`👤 ¡Se te ha asignado un nuevo chat! (+${event.phone})`);
+        }
+        fetchOverview();
+      }
+
+      if (event.type === 'appointment_booked' || event.type === 'meeting_attendance_updated' || event.type === 'settings_updated' || event.type === 'whatsapp_disconnected') {
         fetchOverview();
       }
 
@@ -2407,7 +2627,7 @@ function renderTeamRepsList() {
           </button>
         </div>
       </div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
         <div>
           <label class="block text-[11px] font-sans font-medium text-slate-400 mb-1">Nombre del Asesor</label>
           <input 
@@ -2428,6 +2648,17 @@ function renderTeamRepsList() {
             class="w-full input-luxury px-3 py-1.5 text-xs font-mono text-white placeholder:text-slate-500"
           />
         </div>
+        <div>
+          <label class="block text-[11px] font-sans font-medium text-gold mb-1">PIN Acceso (4-6 dígitos)</label>
+          <input 
+            type="text" 
+            maxlength="6"
+            value="${escapeHtml(rep.pin || '')}" 
+            placeholder="Ej: 1234"
+            oninput="updateTeamRepField(${index}, 'pin', this.value)"
+            class="w-full input-luxury px-3 py-1.5 text-xs font-mono text-gold placeholder:text-slate-500 border-gold/30"
+          />
+        </div>
       </div>
     `;
     container.appendChild(row);
@@ -2441,6 +2672,7 @@ function addTeamRepSlot() {
     id: 'rep_' + Date.now(),
     name: '',
     phone: '',
+    pin: '',
     isActive: true,
     leadsAssignedCount: 0
   });
@@ -2465,6 +2697,8 @@ function updateTeamRepField(index, field, value) {
   if (currentTeamReps[index]) {
     if (field === 'phone') {
       currentTeamReps[index].phone = value.replace(/[^0-9]/g, '');
+    } else if (field === 'pin') {
+      currentTeamReps[index].pin = value.trim();
     } else {
       currentTeamReps[index][field] = value.trim();
     }

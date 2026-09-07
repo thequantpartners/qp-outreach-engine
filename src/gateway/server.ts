@@ -109,12 +109,36 @@ interface AuthAttemptRecord {
 }
 const authAttemptsByIp = new Map<string, AuthAttemptRecord>();
 
-// Middleware de autenticación por PIN para el Dashboard del Cliente
-function authenticateClientPin(req: Request, res: Response, next: NextFunction): void {
+// Middleware de autenticación por PIN para el Dashboard del Cliente (Dueño vs Asesores)
+async function authenticateClientPin(req: Request, res: Response, next: NextFunction): Promise<void> {
   const configuredPin = process.env.CLIENT_PIN || 'KennethQP#2026';
   const providedPin = (req.headers['x-client-pin'] as string) || (req.query.pin as string);
-  if (!providedPin || providedPin !== configuredPin) {
-    res.status(401).json({ error: 'PIN o contraseña de acceso no autorizado o inválido.' });
+  if (!providedPin) {
+    res.status(401).json({ error: 'PIN o contraseña de acceso no proporcionado.' });
+    return;
+  }
+  const cleanPin = String(providedPin).trim();
+  if (cleanPin === configuredPin) {
+    (req as any).clientUser = { role: 'owner', repName: 'Kenneth (Director)' };
+    next();
+    return;
+  }
+
+  // Verificar si es el PIN personal de algún Asesor Comercial
+  const rep = await OutreachRepo.findSalesRepByPin(cleanPin);
+  if (rep) {
+    (req as any).clientUser = { role: 'sales_rep', repName: rep.name, repPhone: rep.phone };
+    next();
+    return;
+  }
+
+  res.status(401).json({ error: 'PIN de acceso no autorizado o inválido.' });
+}
+
+function requireOwnerRole(req: Request, res: Response, next: NextFunction): void {
+  const user = (req as any).clientUser;
+  if (user && user.role !== 'owner') {
+    res.status(403).json({ error: 'Acceso restringido. Esta acción solo puede ser ejecutada por el Director Comercial / Administrador.' });
     return;
   }
   next();
@@ -154,7 +178,7 @@ app.get('/', (_req: Request, res: Response) => {
 });
 
 // --- CLIENT DASHBOARD API ---
-app.post('/api/client/auth', (req: Request, res: Response) => {
+app.post('/api/client/auth', async (req: Request, res: Response) => {
   const rawIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
   const ip = rawIp.replace(/^.*:/, ''); // Sanitizar IPv6 localhost
   const now = Date.now();
@@ -172,36 +196,91 @@ app.post('/api/client/auth', (req: Request, res: Response) => {
 
   const configuredPin = process.env.CLIENT_PIN || 'KennethQP#2026';
   const { pin } = req.body || {};
+  const cleanPin = pin ? String(pin).trim() : '';
 
-  if (pin && String(pin).trim() === configuredPin) {
+  // 1. Acceso Dueño / Admin
+  if (cleanPin && cleanPin === configuredPin) {
     authAttemptsByIp.delete(ip); // Restablecer intentos al acertar
     res.json({
       success: true,
+      role: 'owner',
+      repName: 'Kenneth (Director)',
       companyName: process.env.COMPANY_NAME || 'Centro Comercial B2B',
       serviceName: process.env.SERVICE_NAME || 'Departamento Comercial Autónomo'
     });
-  } else {
-    const current = attempt || { count: 0, blockedUntil: 0 };
-    current.count += 1;
-    if (current.count >= 5) {
-      current.blockedUntil = now + 15 * 60 * 1000; // Bloqueo de 15 min tras 5 fallos
-    }
-    authAttemptsByIp.set(ip, current);
-
-    const remaining = Math.max(0, 5 - current.count);
-    const errorMsg = current.count >= 5 
-      ? 'Demasiados intentos fallidos. Bloqueado por 15 minutos.' 
-      : `Contraseña incorrecta. Te quedan ${remaining} intento(s).`;
-    res.status(401).json({ success: false, error: errorMsg });
+    return;
   }
+
+  // 2. Acceso Asesor Comercial individual
+  if (cleanPin) {
+    const matchedRep = await OutreachRepo.findSalesRepByPin(cleanPin);
+    if (matchedRep) {
+      authAttemptsByIp.delete(ip);
+      res.json({
+        success: true,
+        role: 'sales_rep',
+        repName: matchedRep.name,
+        repPhone: matchedRep.phone,
+        companyName: process.env.COMPANY_NAME || 'Centro Comercial B2B',
+        serviceName: process.env.SERVICE_NAME || 'Departamento Comercial Autónomo'
+      });
+      return;
+    }
+  }
+
+  // Fallo de autenticación
+  const current = attempt || { count: 0, blockedUntil: 0 };
+  current.count += 1;
+  if (current.count >= 5) {
+    current.blockedUntil = now + 15 * 60 * 1000; // Bloqueo de 15 min tras 5 fallos
+  }
+  authAttemptsByIp.set(ip, current);
+
+  const remaining = Math.max(0, 5 - current.count);
+  const errorMsg = current.count >= 5 
+    ? 'Demasiados intentos fallidos. Bloqueado por 15 minutos.' 
+    : `Contraseña o PIN incorrecto. Te quedan ${remaining} intento(s).`;
+  res.status(401).json({ success: false, error: errorMsg });
 });
 
-app.get('/api/client/overview', authenticateClientPin, async (_req: Request, res: Response) => {
+app.get('/api/client/overview', authenticateClientPin, async (req: Request, res: Response) => {
   try {
+    const clientUser = (req as any).clientUser;
     const waStatus = whatsapp.getStatus();
     const overview = await OutreachRepo.getDashboardOverview();
     const configuredReps = await OutreachRepo.getSalesReps();
     const salesReps = configuredReps.length > 0 ? configuredReps : RoundRobinManager.getSalesReps();
+
+    let kanban = overview.kanban;
+    let activeChats = overview.activeChats;
+    let metrics = overview.metrics;
+
+    // Si el usuario es un asesor comercial, filtrar exclusivamente a los chats asignados a su nombre
+    if (clientUser && clientUser.role === 'sales_rep') {
+      const repName = clientUser.repName;
+      const filterLeadList = (list: any[]) => (list || []).filter(l => l.assignedRepName === repName);
+      
+      kanban = {
+        discovered: filterLeadList(kanban.discovered),
+        outreachSent: filterLeadList(kanban.outreachSent),
+        replied: filterLeadList(kanban.replied),
+        humanTakeover: filterLeadList(kanban.humanTakeover),
+        qualified: filterLeadList(kanban.qualified),
+        closedWon: filterLeadList(kanban.closedWon)
+      };
+
+      activeChats = (activeChats || []).filter((c: any) => c.assignedRepName === repName);
+
+      const totalAssigned = Object.values(kanban).reduce((acc: number, list: any) => acc + list.length, 0);
+      metrics = {
+        ...metrics,
+        totalLeads: totalAssigned,
+        replied: kanban.replied.length + kanban.humanTakeover.length,
+        qualified: kanban.qualified.length,
+        meetingsScheduled: kanban.qualified.length,
+        closedWon: kanban.closedWon.length
+      };
+    }
 
     let qrData: string | undefined;
     const latestQr = whatsapp.getLatestQr();
@@ -211,15 +290,17 @@ app.get('/api/client/overview', authenticateClientPin, async (_req: Request, res
     }
 
     res.json({
+      role: clientUser?.role || 'owner',
+      repName: clientUser?.repName,
       companyName: process.env.COMPANY_NAME || 'The Quant Partners',
       serviceName: process.env.SERVICE_NAME || 'Departamento Comercial Autónomo',
       isWhatsAppReady: waStatus.isReady,
       hasQr: waStatus.hasQr,
       qrData,
       salesReps,
-      metrics: overview.metrics,
-      kanban: overview.kanban,
-      activeChats: overview.activeChats
+      metrics,
+      kanban,
+      activeChats
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -283,7 +364,7 @@ app.get('/api/client/settings', authenticateClientPin, async (_req: Request, res
 });
 
 // Guardar configuración comercial
-app.post('/api/client/settings', authenticateClientPin, async (req: Request, res: Response) => {
+app.post('/api/client/settings', authenticateClientPin, requireOwnerRole, async (req: Request, res: Response) => {
   try {
     const { 
       startHour, endHour, minDelaySeconds, maxDelaySeconds, dailyLimit, 
@@ -320,7 +401,7 @@ app.post('/api/client/settings', authenticateClientPin, async (req: Request, res
 });
 
 // Guardar equipo de vendedores Round Robin
-app.post('/api/client/team', authenticateClientPin, async (req: Request, res: Response) => {
+app.post('/api/client/team', authenticateClientPin, requireOwnerRole, async (req: Request, res: Response) => {
   try {
     const { salesReps } = req.body || {};
     if (!Array.isArray(salesReps)) {
@@ -385,7 +466,7 @@ app.post('/api/client/ai/test', authenticateClientPin, async (req: Request, res:
 });
 
 // Desconectar y limpiar sesión de WhatsApp para nuevo número
-app.post('/api/client/whatsapp/disconnect', authenticateClientPin, async (_req: Request, res: Response) => {
+app.post('/api/client/whatsapp/disconnect', authenticateClientPin, requireOwnerRole, async (_req: Request, res: Response) => {
   try {
     await whatsapp.disconnectAndClearSession();
     broadcastDashboardEvent({
@@ -647,10 +728,10 @@ app.get('/api/client/services', authenticateClientPin, async (_req: Request, res
   }
 });
 
-// Guardar o crear campaña desde el dashboard
-app.post('/api/client/services', authenticateClientPin, async (req: Request, res: Response) => {
+// Guardar o crear campaña desde el dashboard (Solo Dueño)
+app.post('/api/client/services', authenticateClientPin, requireOwnerRole, async (req: Request, res: Response) => {
   try {
-    const { id, name, description, outreachTemplate, followUpTemplate1, aiSystemPrompt, closingType, targetLocations, apifyQueries, isActive } = req.body || {};
+    const { id, name, description, outreachTemplate, followUpTemplate1, closingType, targetLocations, apifyQueries, isActive } = req.body || {};
     if (!name || !String(name).trim()) {
       res.status(400).json({ error: 'El nombre de la campaña es requerido.' });
       return;
@@ -671,7 +752,7 @@ app.post('/api/client/services', authenticateClientPin, async (req: Request, res
       followUpTemplate1: followUpTemplate1 || `Estimado equipo de {{name}}, ¿pudieron revisar la propuesta anterior? Quedo a su disposición.`,
       closingType: (closingType as any) || 'HUMAN_TAKEOVER',
       closingPayload: {},
-      aiSystemPrompt: aiSystemPrompt || `Eres Kenneth de The Quant Partners. Asistes al prospecto con tono consultivo y respuestas de máximo 2 oraciones. Si muestran interés, transfiere a Kenneth (+51902105668).`,
+      aiSystemPrompt: `El bot no es autónomo para responder objeciones. Al responder el prospecto, la conversación se transfiere de inmediato al asesor asignado (Human Takeover).`,
       isActive: isActive !== undefined ? !!isActive : true
     };
     await OutreachRepo.saveService(serviceDef);
@@ -682,8 +763,8 @@ app.post('/api/client/services', authenticateClientPin, async (req: Request, res
   }
 });
 
-// Actualizar campos específicos de una campaña (estrategia, plantillas, prompt, etc.)
-app.patch('/api/client/services/:id', authenticateClientPin, async (req: Request, res: Response) => {
+// Actualizar campos específicos de una campaña (Solo Dueño)
+app.patch('/api/client/services/:id', authenticateClientPin, requireOwnerRole, async (req: Request, res: Response) => {
   try {
     const serviceId = String(req.params.id);
     const service = await OutreachRepo.getServiceById(serviceId);
@@ -691,25 +772,31 @@ app.patch('/api/client/services/:id', authenticateClientPin, async (req: Request
       res.status(404).json({ error: 'Campaña no encontrada.' });
       return;
     }
-    const { name, outreachTemplate, followUpTemplate, aiInstructions, searchQueries, targetLocations, active } = req.body || {};
-    if (name) service.name = String(name).trim();
-    if (outreachTemplate !== undefined) service.outreachTemplate = outreachTemplate;
-    if (followUpTemplate !== undefined) service.followUpTemplate1 = followUpTemplate;
-    if (aiInstructions !== undefined) service.aiSystemPrompt = aiInstructions;
-    if (searchQueries !== undefined) service.apifyQueries = searchQueries;
-    if (targetLocations !== undefined) service.targetLocations = targetLocations;
-    if (active !== undefined) service.isActive = !!active;
 
-    await OutreachRepo.saveService(service);
+    const { name, description, outreachTemplate, followUpTemplate1, closingType, targetLocations, apifyQueries, isActive } = req.body || {};
+    
+    const updated = {
+      ...service,
+      ...(name !== undefined ? { name: String(name).trim() } : {}),
+      ...(description !== undefined ? { description: String(description).trim() } : {}),
+      ...(outreachTemplate !== undefined ? { outreachTemplate: String(outreachTemplate).trim() } : {}),
+      ...(followUpTemplate1 !== undefined ? { followUpTemplate1: String(followUpTemplate1).trim() } : {}),
+      ...(closingType !== undefined ? { closingType } : {}),
+      ...(Array.isArray(targetLocations) ? { targetLocations } : {}),
+      ...(Array.isArray(apifyQueries) ? { apifyQueries } : {}),
+      ...(isActive !== undefined ? { isActive: !!isActive } : {})
+    };
+
+    await OutreachRepo.saveService(updated);
     broadcastDashboardEvent({ type: 'campaign_updated', serviceId });
-    res.json({ success: true, service });
+    res.json({ success: true, service: updated });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Asistente IA para formular campaña completa en 1 clic
-app.post('/api/client/services/ai-generate', authenticateClientPin, async (req: Request, res: Response) => {
+// Asistente IA para formular campaña completa en 1 clic (Solo Dueño)
+app.post('/api/client/services/ai-generate', authenticateClientPin, requireOwnerRole, async (req: Request, res: Response) => {
   try {
     const { name, niche, solution, location = 'Lima, Peru' } = req.body || {};
     if (!niche && !name) {
@@ -730,7 +817,6 @@ Debes responder ÚNICAMENTE un JSON válido (sin bloques de código markdown, si
   "serviceName": "Nombre ejecutivo de la campaña (máximo 5 palabras)",
   "outreachTemplate": "Plantilla del primer mensaje en frío personalizada con {{name}}. Máximo 3 párrafos muy breves. Tono respetuoso, consultivo y profesional. TERMINA OBLIGATORIAMENTE con una pregunta de permiso en 2 pasos para compartir valor (ej: ¿Me permite compartírselo por aquí para que lo evalúen?). NUNCA incluyas links en este primer mensaje.",
   "followUpTemplate1": "Mensaje de seguimiento cortés 48h después si no respondieron. Máximo 2 líneas breves.",
-  "aiSystemPrompt": "Instrucciones de venta para el bot de WhatsApp cuando el prospecto responda. Incluye: Identidad como Kenneth de The Quant Partners, tono ejecutivo, 3 objeciones frecuentes de este nicho y cómo responderlas en 2 oraciones, y política de derivación a WhatsApp humano (+51902105668).",
   "suggestedQueries": ["query 1 para Google Maps", "query 2", "query 3"]
 }`;
 
@@ -765,7 +851,6 @@ Debes responder ÚNICAMENTE un JSON válido (sin bloques de código markdown, si
         serviceName: name || `Prospección ${niche}`,
         outreachTemplate: `Buenas tardes al equipo de {{name}}.\n\nLe escribe Kenneth de The Quant Partners.\n\nEstuvimos analizando el sector de ${cleanNiche} y desarrollamos una arquitectura para optimizar sus procesos comerciales y triplicar respuestas.\n\n¿Me permite compartirle un documento de 2 páginas con los detalles?`,
         followUpTemplate1: `Buenas tardes estimado equipo de {{name}}, ¿tuvieron oportunidad de revisar la nota que les compartí? Quedo a su disposición.`,
-        aiSystemPrompt: `Eres Kenneth de The Quant Partners. Hablas con directores y administradores de ${cleanNiche}. Mantén un tono respetuoso, ultra-consultivo y respuestas breves (máximo 2 oraciones). Si el prospecto muestra interés o pregunta por precios, confirma su interés y transfiere a Kenneth (+51902105668).`,
         suggestedQueries: [`${cleanNiche} lima`, `${cleanNiche} san isidro`, `${cleanNiche} miraflores`]
       };
     }
@@ -776,8 +861,8 @@ Debes responder ÚNICAMENTE un JSON válido (sin bloques de código markdown, si
   }
 });
 
-// Activar o pausar campaña
-app.patch('/api/client/services/:id/toggle', authenticateClientPin, async (req: Request, res: Response) => {
+// Activar o pausar campaña (Solo Dueño)
+app.patch('/api/client/services/:id/toggle', authenticateClientPin, requireOwnerRole, async (req: Request, res: Response) => {
   try {
     const { active } = req.body || {};
     const result = await OutreachRepo.toggleService(String(req.params.id), !!active);
@@ -788,8 +873,8 @@ app.patch('/api/client/services/:id/toggle', authenticateClientPin, async (req: 
   }
 });
 
-// Eliminar campaña
-app.delete('/api/client/services/:id', authenticateClientPin, async (req: Request, res: Response) => {
+// Eliminar campaña (Solo Dueño)
+app.delete('/api/client/services/:id', authenticateClientPin, requireOwnerRole, async (req: Request, res: Response) => {
   try {
     const deleteLeads = req.query.deleteLeads !== 'false';
     const result = await OutreachRepo.deleteService(String(req.params.id), deleteLeads);
@@ -916,8 +1001,8 @@ app.get('/api/client/leads/export', authenticateClientPin, async (req: Request, 
   }
 });
 
-// Toggle Piloto Automático
-app.post('/api/client/pipeline/toggle', authenticateClientPin, async (req: Request, res: Response) => {
+// Toggle Piloto Automático (Solo Dueño)
+app.post('/api/client/pipeline/toggle', authenticateClientPin, requireOwnerRole, async (req: Request, res: Response) => {
   try {
     const { active } = req.body || {};
     const isNowActive = !!active;
@@ -1032,7 +1117,7 @@ async function runNextBatchStep() {
   }
 }
 
-app.post('/api/client/campaign/batch-dispatch', authenticateClientPin, async (req: Request, res: Response) => {
+app.post('/api/client/campaign/batch-dispatch', authenticateClientPin, requireOwnerRole, async (req: Request, res: Response) => {
   try {
     const { serviceId, delaySeconds = 180 } = req.body || {};
     if (!serviceId) {
@@ -1139,8 +1224,8 @@ app.post('/api/client/leads/import', authenticateClientPin, async (req: Request,
   }
 });
 
-// Copiloto Autónomo de Prospección IA: Sugerir queries y fuentes enriquecidas
-app.post('/api/client/scrape/suggest', authenticateClientPin, async (req: Request, res: Response) => {
+// Copiloto Autónomo de Prospección IA: Sugerir queries y fuentes enriquecidas (Solo Dueño)
+app.post('/api/client/scrape/suggest', authenticateClientPin, requireOwnerRole, async (req: Request, res: Response) => {
   try {
     const { niche, location = 'Lima, Peru' } = req.body || {};
     if (!niche || !niche.trim()) {
@@ -1224,8 +1309,8 @@ app.post('/api/client/scrape/suggest', authenticateClientPin, async (req: Reques
   }
 });
 
-// Ejecutor de Scraping Multi-Fuente para Previsualización en Dashboard
-app.post('/api/client/scrape/execute', authenticateClientPin, async (req: Request, res: Response) => {
+// Ejecutor de Scraping Multi-Fuente para Previsualización en Dashboard (Solo Dueño)
+app.post('/api/client/scrape/execute', authenticateClientPin, requireOwnerRole, async (req: Request, res: Response) => {
   try {
     const { source = 'google_maps', query, location = 'Lima, Peru', maxResults = 15, countryCode = 'pe' } = req.body || {};
     if (!query || !String(query).trim()) {

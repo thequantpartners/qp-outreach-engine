@@ -273,6 +273,25 @@
         <span id="waStatusText">WhatsApp Conectado</span>
       </div>
 
+      <!-- Perfil / Rol Activo -->
+      <div 
+        id="userProfileBadge" 
+        class="hidden items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.08] text-xs font-sans"
+      >
+        <span class="w-2 h-2 rounded-full bg-gold"></span>
+        <span id="userProfileName" class="text-slate-200 font-medium">Kenneth</span>
+      </div>
+
+      <!-- Botón Cerrar Sesión -->
+      <button 
+        type="button"
+        onclick="handleLogout()" 
+        title="Cerrar sesión"
+        class="p-1.5 rounded-lg bg-surface hover:bg-rose-500/10 border border-white/[0.06] text-slate-400 hover:text-rose-400 transition"
+      >
+        <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+      </button>
+
       <!-- Botón Recargar Datos -->
       <button 
         onclick="fetchOverview()" 
@@ -351,7 +370,7 @@
   <main id="viewWorkspace" class="flex-1 flex overflow-hidden">
     
     <!-- COLUMNA 1: INBOX Y STREAM DE PROSPECTOS -->
-    <aside class="w-[300px] xl:w-[320px] border-r border-white/[0.06] bg-surface/50 flex flex-col flex-shrink-0">
+    <aside id="colLeadsList" class="w-full lg:w-[300px] xl:w-[320px] border-r border-white/[0.06] bg-surface/50 flex flex-col flex-shrink-0">
       
       <!-- Barra de Búsqueda y Filtros -->
       <div class="p-3 border-b border-white/[0.06] space-y-2.5">
@@ -447,12 +466,22 @@
       </div>
     </aside>
 
-    <!-- COLUMNA 2: CHAT DE WHATSAPP CENTRAL -->
-    <section class="flex-1 min-w-0 flex flex-col bg-obsidian border-r border-white/[0.06] relative overflow-hidden">
+    <!-- COLUMNA 2: CHAT DE WHATSAPP CENTRAL (RESPONSIVE) -->
+    <section id="colActiveChat" class="flex-1 min-w-0 flex flex-col bg-obsidian border-r border-white/[0.06] relative overflow-hidden hidden lg:flex">
       
       <!-- Header del Chat -->
-      <div id="leadDetailHeader" class="h-14 border-b border-white/[0.06] px-5 flex items-center justify-between bg-surface/40 flex-shrink-0">
-        <div class="flex items-center gap-3 min-w-0">
+      <div id="leadDetailHeader" class="h-14 border-b border-white/[0.06] px-4 sm:px-5 flex items-center justify-between bg-surface/40 flex-shrink-0">
+        <div class="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <!-- Botón Volver Móvil -->
+          <button 
+            type="button" 
+            onclick="closeMobileChat()" 
+            class="lg:hidden p-1.5 -ml-1 rounded-lg text-slate-400 hover:text-gold hover:bg-white/[0.05] transition flex items-center gap-1 text-xs font-sans"
+            title="Volver a los chats"
+          >
+            <i data-lucide="arrow-left" class="w-5 h-5 text-gold"></i>
+          </button>
+
           <div class="w-8 h-8 rounded-full bg-card border border-gold/30 flex items-center justify-center text-gold font-sans font-semibold text-xs flex-shrink-0 shadow-sm">
             <span id="detailLeadAvatar">WA</span>
           </div>
@@ -467,6 +496,16 @@
 
         <!-- Acciones Cabecera Chat -->
         <div id="leadDetailActions" class="flex items-center gap-2 hidden flex-shrink-0">
+          <!-- Botón Info Móvil (Abrir ficha Columna 3) -->
+          <button 
+            type="button" 
+            onclick="toggleMobileLeadInfo()" 
+            class="lg:hidden p-2 rounded-xl text-xs font-sans font-medium border border-white/[0.08] bg-card text-gold hover:border-gold/40 transition shadow-sm"
+            title="Ver ficha comercial y reasignación"
+          >
+            <i data-lucide="info" class="w-4 h-4"></i>
+          </button>
+
           <!-- Botón Takeover (Control Humano) -->
           <button 
             id="takeoverToggleBtn" 
@@ -558,7 +597,7 @@
     </section>
 
     <!-- COLUMNA 3: PANEL DE INTELIGENCIA COMERCIAL & FICHA DEL PROSPECTO -->
-    <aside class="w-[330px] xl:w-[360px] border-l border-white/[0.06] bg-surface/40 flex flex-col flex-shrink-0 overflow-y-auto custom-scroll">
+    <aside id="leadDetailIntelPanel" class="fixed inset-0 z-50 bg-obsidian/95 backdrop-blur-md lg:static lg:w-[330px] xl:w-[360px] lg:bg-surface/40 border-l border-white/[0.06] flex flex-col flex-shrink-0 overflow-y-auto custom-scroll hidden lg:flex">
       
       <!-- Cabecera Panel Inteligencia -->
       <div class="h-14 border-b border-white/[0.06] px-4 flex items-center justify-between flex-shrink-0 bg-surface/60">
@@ -568,9 +607,20 @@
           </div>
           <span class="font-serif text-xs font-medium text-white">Ficha del Prospecto</span>
         </div>
-        <span class="text-[10px] font-sans text-gold bg-gold/10 border border-gold/20 px-2.5 py-0.5 rounded-full font-semibold">
-          Lead Intel
-        </span>
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] font-sans text-gold bg-gold/10 border border-gold/20 px-2.5 py-0.5 rounded-full font-semibold">
+            Lead Intel
+          </span>
+          <!-- Botón cerrar en móvil -->
+          <button 
+            type="button" 
+            onclick="toggleMobileLeadInfo(false)" 
+            class="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.05] transition"
+            title="Cerrar panel"
+          >
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
       </div>
 
       <!-- Contenido del Panel Inteligencia (Activo cuando hay un lead seleccionado) -->
@@ -863,18 +913,13 @@
           </div>
         </div>
 
-        <!-- System Prompt del Bot -->
-        <div class="space-y-1.5">
-          <div class="flex items-center justify-between">
-            <label class="text-xs font-sans font-medium text-slate-300">Instrucciones del Bot de Ventas IA (Objeciones & Cierre)</label>
-            <span class="text-[10px] font-mono text-purple-400">System Prompt</span>
+        <!-- Política de Cierre Humano (Anti-Alucinación) -->
+        <div class="p-3.5 bg-emerald-500/5 rounded-xl border border-emerald-500/20 flex items-start gap-2.5">
+          <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5"></i>
+          <div class="text-xs font-sans">
+            <p class="text-slate-200 font-medium">Control Humano Inmediato (Human Takeover)</p>
+            <p class="text-slate-400 text-[11px] font-light mt-0.5">Al recibir respuesta del prospecto, la IA se silencia de inmediato y transfiere la conversación al asesor asignado para el cierre comercial humano.</p>
           </div>
-          <textarea 
-            id="activeCampPrompt" 
-            rows="3" 
-            class="w-full input-luxury p-3 text-xs text-slate-200 font-sans font-light leading-relaxed"
-            placeholder="Eres Kenneth de The Quant Partners. Asistes a prospectos de este sector..."
-          ></textarea>
         </div>
 
         <div id="activeCampAlertBox" class="p-3 rounded-xl text-xs hidden font-sans"></div>

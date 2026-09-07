@@ -79,6 +79,7 @@ export interface SalesRep {
   id: string;
   name: string;
   phone: string;
+  pin?: string;
   isActive: boolean;
   leadsAssignedCount: number;
   createdAt?: string;
@@ -286,6 +287,7 @@ export type ClosingMode = 'MEETING_LINK' | 'PHONE_HANDOFF' | 'HYBRID_SMART';
 export interface SalesRepConfig {
   name: string;
   phone: string;
+  pin?: string;
 }
 
 export interface NicheBlueprint {

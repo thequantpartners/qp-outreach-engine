@@ -1152,6 +1152,13 @@ export class OutreachRepo {
     return reps;
   }
 
+  public static async findSalesRepByPin(pin: string): Promise<SalesRep | null> {
+    if (!pin) return null;
+    const reps = await OutreachRepo.getSalesReps();
+    const cleanPin = pin.trim();
+    return reps.find(r => r.pin && r.pin.trim() === cleanPin && r.isActive) || null;
+  }
+
   public static async getNextSalesRep(): Promise<SalesRep | null> {
     const settings = await OutreachRepo.getSettings();
     const reps = (settings.salesReps || []).filter(r => r.isActive);
