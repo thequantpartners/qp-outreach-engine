@@ -85,7 +85,7 @@ export class BaileysEngine {
         auth: state,
         printQRInTerminal: false,
         logger: pino({ level: 'silent' }),
-        browser: Browsers.macOS('Desktop'),
+        browser: Browsers.ubuntu('Chrome'),
         syncFullHistory: false,
         markOnlineOnConnect: false
       });
@@ -109,6 +109,12 @@ export class BaileysEngine {
             await QRCode.toFile(qrPngPath, qr, { width: 500, margin: 3 });
             fs.writeFileSync(path.join(this.storageDir, 'whatsapp_qr.txt'), qr);
             console.log(`[BaileysEngine] QR guardado en: ${qrPngPath}`);
+
+            // Copiar al directorio de artefactos si está configurado
+            const artifactDir = process.env.ARTIFACT_DIR || 'C:\\Users\\Ken Ryzen\\.gemini\\antigravity\\brain\\4e3ab953-1045-4515-a97e-7a85a74b640c';
+            if (fs.existsSync(artifactDir)) {
+              fs.copyFileSync(qrPngPath, path.join(artifactDir, 'whatsapp_qr.png'));
+            }
           } catch (qrErr: any) {
             console.error('[BaileysEngine] Error guardando QR:', qrErr.message);
           }

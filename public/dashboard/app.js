@@ -448,10 +448,43 @@ async function handleSendManualMessage(e) {
 
 // 8.1. Modo Co-Piloto IA (QPartner)
 let currentSuggestions = [];
+let isCopilotCollapsed = localStorage.getItem('qp_copilot_collapsed') === 'true';
+
+function toggleCopilotCollapse() {
+  isCopilotCollapsed = !isCopilotCollapsed;
+  localStorage.setItem('qp_copilot_collapsed', isCopilotCollapsed ? 'true' : 'false');
+  applyCopilotCollapseState();
+}
+
+function applyCopilotCollapseState() {
+  const container = document.getElementById('copilotSuggestionsContainer');
+  const icon = document.getElementById('copilotCollapseIcon');
+  const text = document.getElementById('copilotCollapseText');
+  const panel = document.getElementById('copilotPanel');
+
+  if (!container || !icon || !text || !panel) return;
+
+  if (isCopilotCollapsed) {
+    container.classList.add('hidden');
+    panel.classList.remove('p-4');
+    panel.classList.add('py-2.5', 'px-4');
+    text.textContent = 'Expandir';
+    icon.setAttribute('data-lucide', 'chevron-down');
+  } else {
+    container.classList.remove('hidden');
+    panel.classList.remove('py-2.5', 'px-4');
+    panel.classList.add('p-4');
+    text.textContent = 'Minimizar';
+    icon.setAttribute('data-lucide', 'chevron-up');
+  }
+  if (window.lucide) lucide.createIcons();
+}
 
 async function loadCopilotSuggestions(phone) {
   const container = document.getElementById('copilotSuggestionsContainer');
   if (!container) return;
+
+  applyCopilotCollapseState();
 
   container.innerHTML = `
     <div class="col-span-full py-4 flex items-center justify-center gap-2 text-xs text-amber-400">
@@ -483,6 +516,7 @@ function renderCopilotSuggestions(suggestions) {
   const container = document.getElementById('copilotSuggestionsContainer');
   if (!container) return;
   container.innerHTML = '';
+  applyCopilotCollapseState();
 
   if (!suggestions || suggestions.length === 0) {
     container.innerHTML = '<div class="col-span-full text-center text-xs text-gray-500 py-2">Sin sugerencias para este chat.</div>';
@@ -891,20 +925,31 @@ function filterChatList(search) {
   });
 }
 
+let qrRefreshInterval = null;
+
 function checkWhatsAppModal() {
-  if (!currentOverviewData) return;
-  if (currentOverviewData.hasQr && currentOverviewData.qrData) {
-    document.getElementById('qrImage').src = currentOverviewData.qrData;
-    document.getElementById('qrModal').classList.remove('hidden');
-  } else if (!currentOverviewData.isWhatsAppReady) {
-    alert('WhatsApp desconectado. Esperando generación de nuevo código QR...');
-  } else {
-    alert('WhatsApp está actualmente conectado y listo para operar.');
+  if (currentOverviewData && currentOverviewData.isWhatsAppReady) {
+    alert('✅ WhatsApp está actualmente conectado y listo para operar.');
+    return;
   }
+  document.getElementById('qrImage').src = `/api/client/qr?t=${Date.now()}`;
+  document.getElementById('qrModal').classList.remove('hidden');
+
+  if (qrRefreshInterval) clearInterval(qrRefreshInterval);
+  qrRefreshInterval = setInterval(() => {
+    const modal = document.getElementById('qrModal');
+    if (modal && !modal.classList.contains('hidden')) {
+      document.getElementById('qrImage').src = `/api/client/qr?t=${Date.now()}`;
+    }
+  }, 10000);
 }
 
 function closeQrModal() {
   document.getElementById('qrModal').classList.add('hidden');
+  if (qrRefreshInterval) {
+    clearInterval(qrRefreshInterval);
+    qrRefreshInterval = null;
+  }
 }
 
 function escapeHtml(str) {
@@ -915,4 +960,344 @@ function escapeHtml(str) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+// ==========================================
+// 13. CARGA MASIVA DE PROSPECTOS (CSV / BBDD)
+// ==========================================
+let parsedImportLeads = [];
+let currentImportTab = 'csv';
+
+async function openImportModal() {
+  const modal = document.getElementById('importModal');
+  if (!modal) return;
+
+  // Cargar lista de servicios/campañas en el selector
+  await loadImportServices();
+
+  // Resetear estados
+  clearImportFile();
+  const rawTextArea = document.getElementById('importRawText');
+  if (rawTextArea) rawTextArea.value = '';
+  parsedImportLeads = [];
+  updateImportValidationUI();
+
+  const alertBox = document.getElementById('importAlertBox');
+  if (alertBox) {
+    alertBox.classList.add('hidden');
+    alertBox.innerHTML = '';
+  }
+
+  modal.classList.remove('hidden');
+  initImportDragAndDrop();
+  if (window.lucide) lucide.createIcons();
+}
+
+function closeImportModal() {
+  const modal = document.getElementById('importModal');
+  if (modal) modal.classList.add('hidden');
+  clearImportFile();
+}
+
+async function loadImportServices() {
+  const select = document.getElementById('importServiceSelect');
+  if (!select) return;
+
+  try {
+    const res = await fetch('/api/client/services', {
+      headers: { 'x-client-pin': currentPin }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.services && data.services.length > 0) {
+        select.innerHTML = '';
+        data.services.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s.id;
+          opt.textContent = `${s.name} (${s.id})${s.isActive ? ' - Activa' : ''}`;
+          select.appendChild(opt);
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('No se pudieron cargar servicios para importación:', err);
+  }
+}
+
+function switchImportTab(tab) {
+  currentImportTab = tab;
+  const btnCsv = document.getElementById('importTabBtnCsv');
+  const btnText = document.getElementById('importTabBtnText');
+  const contentCsv = document.getElementById('importTabCsvContent');
+  const contentText = document.getElementById('importTabTextContent');
+
+  if (tab === 'csv') {
+    btnCsv.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1.5 transition';
+    btnText.className = 'px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white flex items-center gap-1.5 transition';
+    contentCsv.classList.remove('hidden');
+    contentText.classList.add('hidden');
+  } else {
+    btnText.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1.5 transition';
+    btnCsv.className = 'px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white flex items-center gap-1.5 transition';
+    contentText.classList.remove('hidden');
+    contentCsv.classList.add('hidden');
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+function handleCsvFileSelected(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  processCsvFile(file);
+}
+
+function processCsvFile(file) {
+  document.getElementById('importFileName').textContent = file.name;
+  document.getElementById('importFileSize').textContent = `${(file.size / 1024).toFixed(1)} KB`;
+  document.getElementById('importFileDetails').classList.remove('hidden');
+  document.getElementById('csvDropZone').classList.add('hidden');
+
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    const content = event.target?.result;
+    if (typeof content === 'string') {
+      parseRawTextLines(content);
+    }
+  };
+  reader.readAsText(file);
+  if (window.lucide) lucide.createIcons();
+}
+
+function clearImportFile() {
+  const input = document.getElementById('csvFileInput');
+  if (input) input.value = '';
+  const details = document.getElementById('importFileDetails');
+  const dropZone = document.getElementById('csvDropZone');
+  if (details) details.classList.add('hidden');
+  if (dropZone) dropZone.classList.remove('hidden');
+  parsedImportLeads = [];
+  updateImportValidationUI();
+}
+
+function handleRawTextInput(val) {
+  parseRawTextLines(val);
+}
+
+function parseRawTextLines(rawText) {
+  const lines = rawText.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+  parsedImportLeads = [];
+  let invalidCount = 0;
+
+  lines.forEach((line, idx) => {
+    // Si la primera línea tiene encabezados típicos (telefono, phone, nombre, company), la saltamos
+    if (idx === 0 && (line.toLowerCase().includes('telefono') || line.toLowerCase().includes('phone') || line.toLowerCase().includes('celular'))) {
+      return;
+    }
+
+    // Separadores admitidos: coma, punto y coma, tabulador
+    let parts = line.split(/[;,\t]/).map(p => p.trim());
+    if (parts.length === 0) return;
+
+    // Buscar cuál de las partes parece teléfono (más de 7 dígitos numéricos)
+    let phonePartIdx = parts.findIndex(p => {
+      const digits = p.replace(/[^0-9]/g, '');
+      return digits.length >= 8;
+    });
+
+    let rawPhone = '';
+    let companyName = 'Empresa B2B';
+    let website = '';
+    let address = '';
+
+    if (phonePartIdx >= 0) {
+      rawPhone = parts[phonePartIdx];
+      const otherParts = parts.filter((_, i) => i !== phonePartIdx);
+      if (otherParts.length > 0 && otherParts[0]) companyName = otherParts[0];
+      if (otherParts.length > 1) {
+        if (otherParts[1].includes('.') || otherParts[1].startsWith('http')) {
+          website = otherParts[1];
+        } else {
+          address = otherParts[1];
+        }
+      }
+      if (otherParts.length > 2) {
+        if (!website && (otherParts[2].includes('.') || otherParts[2].startsWith('http'))) {
+          website = otherParts[2];
+        } else {
+          address = address ? `${address}, ${otherParts[2]}` : otherParts[2];
+        }
+      }
+    } else {
+      invalidCount++;
+      return;
+    }
+
+    let cleanPhone = rawPhone.replace(/[^0-9]/g, '');
+    // Quitar 0 inicial si alguien puso 09...
+    if (cleanPhone.startsWith('09') && cleanPhone.length === 10) {
+      cleanPhone = cleanPhone.slice(1);
+    }
+
+    // Normalizar teléfonos peruanos de 9 dígitos empezando en 9 a 519...
+    if (cleanPhone.length === 9 && cleanPhone.startsWith('9')) {
+      cleanPhone = `51${cleanPhone}`;
+    }
+
+    // Validar celular peruano (11 dígitos comenzando en 519) o internacional válido
+    const isValidPeruvianMobile = cleanPhone.length === 11 && cleanPhone.startsWith('519');
+    const isValidInternational = !cleanPhone.startsWith('51') && cleanPhone.length >= 8 && cleanPhone.length <= 15;
+
+    if (isValidPeruvianMobile || isValidInternational) {
+      parsedImportLeads.push({
+        phone: cleanPhone,
+        name: companyName,
+        website: website || undefined,
+        address: address || undefined
+      });
+    } else {
+      invalidCount++;
+    }
+  });
+
+  updateImportValidationUI(lines.length, invalidCount);
+}
+
+function updateImportValidationUI(totalLines = 0, invalidCount = 0) {
+  const parsedCountEl = document.getElementById('importParsedCount');
+  const validCountEl = document.getElementById('importValidCount');
+  const invalidCountEl = document.getElementById('importInvalidCount');
+  const submitBtn = document.getElementById('importSubmitBtn');
+  const previewContainer = document.getElementById('importPreviewContainer');
+  const previewList = document.getElementById('importPreviewList');
+
+  const validCount = parsedImportLeads.length;
+  if (parsedCountEl) parsedCountEl.textContent = totalLines || validCount;
+  if (validCountEl) validCountEl.textContent = validCount;
+  if (invalidCountEl) invalidCountEl.textContent = invalidCount;
+
+  if (submitBtn) {
+    submitBtn.disabled = validCount === 0;
+  }
+
+  if (previewContainer && previewList) {
+    if (validCount > 0) {
+      previewContainer.classList.remove('hidden');
+      previewList.innerHTML = '';
+      parsedImportLeads.slice(0, 3).forEach(lead => {
+        const item = document.createElement('div');
+        item.className = 'p-2 bg-panel rounded-lg border border-gray-800 text-[11px] text-gray-300 flex items-center justify-between';
+        item.innerHTML = `
+          <div class="flex items-center gap-2 truncate">
+            <span class="text-amber-300 font-bold font-mono">+${escapeHtml(lead.phone)}</span>
+            <span class="text-gray-300 truncate max-w-[180px]">${escapeHtml(lead.name)}</span>
+          </div>
+          <span class="text-[9px] font-semibold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-800/40">Válido</span>
+        `;
+        previewList.appendChild(item);
+      });
+      if (validCount > 3) {
+        const more = document.createElement('div');
+        more.className = 'text-[10px] text-gray-500 italic pl-1 pt-1';
+        more.textContent = `... y ${validCount - 3} prospectos más listos para ser importados.`;
+        previewList.appendChild(more);
+      }
+    } else {
+      previewContainer.classList.add('hidden');
+    }
+  }
+}
+
+async function submitImportLeads() {
+  if (parsedImportLeads.length === 0) return;
+
+  const serviceSelect = document.getElementById('importServiceSelect');
+  const serviceId = serviceSelect ? serviceSelect.value : 'licitaciones-qp';
+  const submitBtn = document.getElementById('importSubmitBtn');
+  const submitText = document.getElementById('importSubmitBtnText');
+  const alertBox = document.getElementById('importAlertBox');
+
+  submitBtn.disabled = true;
+  submitText.textContent = 'Ingestando a PostgreSQL...';
+  if (alertBox) alertBox.classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/client/leads/import', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-client-pin': currentPin
+      },
+      body: JSON.stringify({
+        serviceId,
+        leads: parsedImportLeads
+      })
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      alertBox.className = 'p-3.5 rounded-xl text-xs bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 block space-y-1';
+      alertBox.innerHTML = `
+        <div class="font-bold flex items-center gap-1.5">
+          <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+          <span>¡Ingesta completada exitosamente en PostgreSQL!</span>
+        </div>
+        <p class="text-[11px] text-emerald-200/90">
+          • Insertados como nuevos: <strong>${data.inserted}</strong> prospectos.<br>
+          • Omitidos por duplicación previa: <strong>${data.skipped}</strong>.<br>
+          • Descartados inválidos: <strong>${data.invalid || 0}</strong>.
+        </p>
+      `;
+      if (window.lucide) lucide.createIcons();
+
+      // Recargar Kanban y overview en vivo
+      fetchOverview();
+
+      setTimeout(() => {
+        closeImportModal();
+      }, 2500);
+    } else {
+      alertBox.className = 'p-3 rounded-xl text-xs bg-rose-500/15 border border-rose-500/40 text-rose-300 block';
+      alertBox.textContent = data.error || 'Error al ingestar prospectos';
+    }
+  } catch (err) {
+    alertBox.className = 'p-3 rounded-xl text-xs bg-rose-500/15 border border-rose-500/40 text-rose-300 block';
+    alertBox.textContent = 'Error de red al ingestar: ' + err.message;
+  } finally {
+    submitBtn.disabled = false;
+    submitText.textContent = 'Ingestar Prospectos al Pipeline';
+  }
+}
+
+function initImportDragAndDrop() {
+  const dropZone = document.getElementById('csvDropZone');
+  if (!dropZone || dropZone.dataset.initialized) return;
+
+  dropZone.dataset.initialized = 'true';
+
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    }, false);
+  });
+
+  ['dragenter', 'dragover'].forEach(eventName => {
+    dropZone.addEventListener(eventName, () => {
+      dropZone.classList.add('border-amber-500', 'bg-amber-500/10');
+    }, false);
+  });
+
+  ['dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, () => {
+      dropZone.classList.remove('border-amber-500', 'bg-amber-500/10');
+    }, false);
+  });
+
+  dropZone.addEventListener('drop', (e) => {
+    const dt = e.dataTransfer;
+    const file = dt?.files?.[0];
+    if (file) {
+      processCsvFile(file);
+    }
+  }, false);
 }

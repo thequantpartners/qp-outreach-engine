@@ -146,11 +146,19 @@ app.get('/api/client/overview', authenticateClientPin, async (_req: Request, res
     const overview = await OutreachRepo.getDashboardOverview();
     const salesReps = RoundRobinManager.getSalesReps();
 
+    let qrData: string | undefined;
+    const latestQr = whatsapp.getLatestQr();
+    if (latestQr && !waStatus.isReady) {
+      const QRCode = (await import('qrcode')).default;
+      qrData = await QRCode.toDataURL(latestQr, { width: 450, margin: 2 });
+    }
+
     res.json({
       companyName: process.env.COMPANY_NAME || 'The Quant Partners',
       serviceName: process.env.SERVICE_NAME || 'Departamento Comercial Autónomo',
       isWhatsAppReady: waStatus.isReady,
       hasQr: waStatus.hasQr,
+      qrData,
       salesReps,
       metrics: overview.metrics,
       kanban: overview.kanban,
@@ -159,6 +167,32 @@ app.get('/api/client/overview', authenticateClientPin, async (_req: Request, res
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// Endpoint público para ver y escanear el QR en vivo desde el navegador
+app.get('/api/client/qr', async (_req: Request, res: Response) => {
+  try {
+    const latestQr = whatsapp.getLatestQr();
+    if (!latestQr) {
+      if (whatsapp.getStatus().isReady) {
+        res.send('<div style="font-family:sans-serif;text-align:center;padding:50px;background:#0d1117;color:#10b981;min-height:100vh"><h2>✅ WhatsApp ya está vinculado y conectado exitosamente.</h2><p style="color:#94a3b8">Puedes cerrar esta ventana y regresar al dashboard.</p></div>');
+      } else {
+        res.send('<div style="font-family:sans-serif;text-align:center;padding:50px;background:#0d1117;color:#f59e0b;min-height:100vh"><h2>⏳ Generando nuevo código QR de WhatsApp...</h2><p style="color:#94a3b8">Espere 3 segundos.</p><meta http-equiv="refresh" content="3"></div>');
+      }
+      return;
+    }
+    const QRCode = (await import('qrcode')).default;
+    const buffer = await QRCode.toBuffer(latestQr, { width: 450, margin: 3 });
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.send(buffer);
+  } catch (err: any) {
+    res.status(500).send(err.message);
+  }
+});
+
+app.get('/qr', (_req: Request, res: Response) => {
+  res.redirect('/api/client/qr');
 });
 
 app.get('/api/client/chat/:phone', authenticateClientPin, async (req: Request, res: Response) => {
@@ -321,6 +355,49 @@ app.post('/api/client/leads/meeting-attendance', authenticateClientPin, async (r
     });
 
     res.json({ success: true, phone: clean, attendanceStatus });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/client/services', authenticateClientPin, async (_req: Request, res: Response) => {
+  try {
+    const services = await OutreachRepo.getServices();
+    res.json({
+      success: true,
+      services: services.map(s => ({
+        id: s.id,
+        name: s.name,
+        isActive: s.isActive,
+        targetLocations: s.targetLocations
+      }))
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/client/leads/import', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const { serviceId, leads } = req.body || {};
+    if (!serviceId || !Array.isArray(leads) || leads.length === 0) {
+      res.status(400).json({ error: 'serviceId y un array de leads no vacío son requeridos' });
+      return;
+    }
+
+    const result = await OutreachRepo.importLeads(serviceId, leads);
+
+    broadcastDashboardEvent({
+      type: 'lead_updated',
+      serviceId,
+      importedCount: result.inserted
+    });
+
+    res.json({
+      success: true,
+      serviceId,
+      ...result
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
