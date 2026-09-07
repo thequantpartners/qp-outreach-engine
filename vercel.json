@@ -1,0 +1,41 @@
+{
+  "buildCommand": null,
+  "outputDirectory": "public",
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/dashboard/index.html"
+    },
+    {
+      "source": "/dashboard",
+      "destination": "/dashboard/index.html"
+    },
+    {
+      "source": "/api/:match*",
+      "destination": "https://gateway-production-2264.up.railway.app/api/:match*"
+    },
+    {
+      "source": "/events",
+      "destination": "https://gateway-production-2264.up.railway.app/events"
+    },
+    {
+      "source": "/sse",
+      "destination": "https://gateway-production-2264.up.railway.app/sse"
+    },
+    {
+      "source": "/messages",
+      "destination": "https://gateway-production-2264.up.railway.app/messages"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+        { "key": "X-XSS-Protection", "value": "1; mode=block" }
+      ]
+    }
+  ]
+}

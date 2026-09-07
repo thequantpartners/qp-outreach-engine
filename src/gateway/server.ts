@@ -31,13 +31,28 @@ dotenv.config();
 const app = express();
 app.use(express.json());
 
+// Middleware de CORS para Vercel y clientes autorizados
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const origin = req.headers.origin;
+  res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key, x-client-pin, Cache-Control');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(204);
+    return;
+  }
+  next();
+});
+
 // Montar Dashboard Web estático
 const publicDashboardDir = fs.existsSync(path.resolve('public/dashboard'))
   ? path.resolve('public/dashboard')
   : path.resolve(__dirname, '../../public/dashboard');
 
 app.use('/dashboard', express.static(publicDashboardDir));
-app.get('/dashboard', (_req: Request, res: Response) => {
+app.get(['/', '/dashboard'], (_req: Request, res: Response) => {
   res.sendFile(path.join(publicDashboardDir, 'index.html'));
 });
 
