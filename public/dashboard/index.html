@@ -128,7 +128,7 @@
         </div>
         <p class="text-[10px] uppercase font-mono tracking-widest text-gold mb-1">The Quant Partners</p>
         <h2 id="modalCompanyTitle" class="font-serif text-2xl font-medium tracking-tight text-white">Centro Comercial</h2>
-        <p class="text-xs text-slate-400 font-light mt-1">Ingrese el PIN de acceso autorizado</p>
+        <p class="text-xs text-slate-400 font-light mt-1">Ingrese la clave maestra de acceso</p>
       </div>
 
       <form id="pinForm" onsubmit="handlePinSubmit(event)" class="space-y-4">
@@ -136,16 +136,16 @@
           <input 
             type="password" 
             id="pinInput" 
-            maxlength="8" 
-            placeholder="••••" 
+            maxlength="64" 
+            placeholder="••••••••••••" 
             autocomplete="current-password"
-            class="w-full text-center tracking-[0.5em] text-2xl py-3 bg-obsidian border border-white/[0.08] rounded-xl focus:border-gold focus:outline-none text-white font-mono placeholder:tracking-normal placeholder:text-sm placeholder:text-slate-600"
+            class="w-full text-center text-lg py-3 px-4 bg-obsidian border border-white/[0.08] rounded-xl focus:border-gold focus:outline-none text-white font-mono placeholder:text-sm placeholder:text-slate-600"
             required 
             autofocus
           />
         </div>
-        <div id="pinError" class="text-xs text-rose-400 text-center hidden font-mono">
-          PIN incorrecto. Consulte con su consultor QP.
+        <div id="pinError" class="text-xs text-rose-400 text-center hidden font-sans">
+          Clave incorrecta.
         </div>
         <button 
           type="submit" 

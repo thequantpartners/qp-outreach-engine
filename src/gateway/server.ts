@@ -102,12 +102,19 @@ function authenticate(req: Request, res: Response, next: NextFunction): void {
   next();
 }
 
+// In-memory rate limiting anti-fuerza bruta para el PIN de acceso
+interface AuthAttemptRecord {
+  count: number;
+  blockedUntil: number;
+}
+const authAttemptsByIp = new Map<string, AuthAttemptRecord>();
+
 // Middleware de autenticación por PIN para el Dashboard del Cliente
 function authenticateClientPin(req: Request, res: Response, next: NextFunction): void {
-  const configuredPin = process.env.CLIENT_PIN || '1234';
+  const configuredPin = process.env.CLIENT_PIN || 'KennethQP#2026';
   const providedPin = (req.headers['x-client-pin'] as string) || (req.query.pin as string);
   if (!providedPin || providedPin !== configuredPin) {
-    res.status(401).json({ error: 'PIN de acceso no autorizado o inválido.' });
+    res.status(401).json({ error: 'PIN o contraseña de acceso no autorizado o inválido.' });
     return;
   }
   next();
@@ -148,16 +155,44 @@ app.get('/', (_req: Request, res: Response) => {
 
 // --- CLIENT DASHBOARD API ---
 app.post('/api/client/auth', (req: Request, res: Response) => {
-  const configuredPin = process.env.CLIENT_PIN || '1234';
+  const rawIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+  const ip = rawIp.replace(/^.*:/, ''); // Sanitizar IPv6 localhost
+  const now = Date.now();
+  const attempt = authAttemptsByIp.get(ip);
+
+  // Verificar si la IP está temporalmente bloqueada
+  if (attempt && attempt.blockedUntil > now) {
+    const remainingMinutes = Math.ceil((attempt.blockedUntil - now) / 60000);
+    res.status(429).json({
+      success: false,
+      error: `Demasiados intentos fallidos. Acceso bloqueado temporalmente por ${remainingMinutes} minuto(s).`
+    });
+    return;
+  }
+
+  const configuredPin = process.env.CLIENT_PIN || 'KennethQP#2026';
   const { pin } = req.body || {};
+
   if (pin && String(pin).trim() === configuredPin) {
+    authAttemptsByIp.delete(ip); // Restablecer intentos al acertar
     res.json({
       success: true,
       companyName: process.env.COMPANY_NAME || 'Centro Comercial B2B',
       serviceName: process.env.SERVICE_NAME || 'Departamento Comercial Autónomo'
     });
   } else {
-    res.status(401).json({ success: false, error: 'PIN incorrecto' });
+    const current = attempt || { count: 0, blockedUntil: 0 };
+    current.count += 1;
+    if (current.count >= 5) {
+      current.blockedUntil = now + 15 * 60 * 1000; // Bloqueo de 15 min tras 5 fallos
+    }
+    authAttemptsByIp.set(ip, current);
+
+    const remaining = Math.max(0, 5 - current.count);
+    const errorMsg = current.count >= 5 
+      ? 'Demasiados intentos fallidos. Bloqueado por 15 minutos.' 
+      : `Contraseña incorrecta. Te quedan ${remaining} intento(s).`;
+    res.status(401).json({ success: false, error: errorMsg });
   }
 });
 

@@ -3,7 +3,7 @@
 // =================================================================
 
 // State Management
-let currentPin = sessionStorage.getItem('qp_client_pin') || '';
+let currentPin = localStorage.getItem('qp_client_pin') || sessionStorage.getItem('qp_client_pin') || '';
 let currentOverviewData = null;
 let activeLeadPhone = null;
 let currentStreamFilter = 'ALL';
@@ -54,12 +54,13 @@ async function handlePinSubmit(e) {
     const data = await res.json();
     if (res.ok && data.success) {
       currentPin = pin;
+      localStorage.setItem('qp_client_pin', pin);
       sessionStorage.setItem('qp_client_pin', pin);
       document.getElementById('pinModal').classList.add('hidden');
       fetchOverview();
       initSSE();
     } else {
-      errorEl.textContent = data.error || 'PIN incorrecto.';
+      errorEl.textContent = data.error || 'Clave incorrecta.';
       errorEl.classList.remove('hidden');
     }
   } catch (err) {
