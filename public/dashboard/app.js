@@ -12,6 +12,7 @@ let currentRepFilter = 'ALL';
 let currentCampaignFilter = 'ALL';
 let currentTeamReps = [];
 let currentServicesList = [];
+let activeCampaignId = null;
 let createCampaignTargetSelectId = null;
 let batchCountdownInterval = null;
 let currentMainView = 'workspace'; // 'workspace' | 'discovery' | 'metrics'
@@ -194,7 +195,16 @@ async function loadAllCampaigns() {
     if (res.ok) {
       const data = await res.json();
       currentServicesList = data.services || [];
+      if (currentServicesList.length > 0) {
+        if (!activeCampaignId || !currentServicesList.find(s => s.id === activeCampaignId)) {
+          const firstActive = currentServicesList.find(s => s.isActive) || currentServicesList[0];
+          activeCampaignId = firstActive.id;
+        }
+      } else {
+        activeCampaignId = null;
+      }
       populateAllCampaignDropdowns();
+      renderActiveCampaignDetails(activeCampaignId);
     }
   } catch (err) {
     console.warn('Error cargando campañas:', err);
@@ -202,6 +212,22 @@ async function loadAllCampaigns() {
 }
 
 function populateAllCampaignDropdowns() {
+  // 0. Selector Principal de Campaña Activa en Vista 2 (#activeCampaignSelect)
+  const activeCampSelect = document.getElementById('activeCampaignSelect');
+  if (activeCampSelect) {
+    let html = '';
+    if (currentServicesList.length === 0) {
+      html = '<option value="">No hay campañas registradas</option>';
+    } else {
+      currentServicesList.forEach(s => {
+        const isSel = s.id === activeCampaignId ? 'selected' : '';
+        html += `<option value="${escapeHtml(s.id)}" ${isSel}>🏷️ ${escapeHtml(s.name)} (${escapeHtml(s.id)})${s.isActive ? '' : ' [Pausada]'}</option>`;
+      });
+    }
+    activeCampSelect.innerHTML = html;
+    if (activeCampaignId) activeCampSelect.value = activeCampaignId;
+  }
+
   // 1. Selector de filtro en Columna 1 (#streamCampaignFilter)
   const streamFilter = document.getElementById('streamCampaignFilter');
   if (streamFilter) {
@@ -228,9 +254,11 @@ function populateAllCampaignDropdowns() {
   if (previewSelect) {
     let html = '';
     currentServicesList.forEach(s => {
-      html += `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`;
+      const isSel = s.id === activeCampaignId ? 'selected' : '';
+      html += `<option value="${escapeHtml(s.id)}" ${isSel}>${escapeHtml(s.name)}</option>`;
     });
     previewSelect.innerHTML = html;
+    if (activeCampaignId) previewSelect.value = activeCampaignId;
   }
 
   // 4. Selector en Consola de Despacho en Lote (#batchServiceSelect)
@@ -238,9 +266,11 @@ function populateAllCampaignDropdowns() {
   if (batchSelect) {
     let html = '';
     currentServicesList.forEach(s => {
-      html += `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`;
+      const isSel = s.id === activeCampaignId ? 'selected' : '';
+      html += `<option value="${escapeHtml(s.id)}" ${isSel}>${escapeHtml(s.name)}</option>`;
     });
     batchSelect.innerHTML = html;
+    if (activeCampaignId) batchSelect.value = activeCampaignId;
   }
 
   // 5. Selector en Modal de Nuevo Chat (#directChatServiceSelect)
@@ -270,6 +300,178 @@ function populateAllCampaignDropdowns() {
 function handleCampaignFilterChange(campaignId) {
   currentCampaignFilter = campaignId;
   renderLeadsStream();
+}
+
+// Control Integral de Campaña Activa en Vista 2
+function renderActiveCampaignDetails(serviceId) {
+  const service = currentServicesList.find(s => s.id === serviceId);
+  const descEl = document.getElementById('activeCampDescription');
+  const statusSwitch = document.getElementById('activeCampToggleSwitch');
+  const statusText = document.getElementById('activeCampStatusText');
+  const totalLeadsEl = document.getElementById('activeCampTotalLeads');
+  const sentLeadsEl = document.getElementById('activeCampSentLeads');
+  const repliedLeadsEl = document.getElementById('activeCampRepliedLeads');
+  const qualifiedLeadsEl = document.getElementById('activeCampQualifiedLeads');
+
+  const tmplEl = document.getElementById('activeCampTemplate');
+  const followEl = document.getElementById('activeCampFollowUp');
+  const promptEl = document.getElementById('activeCampPrompt');
+  const alertBox = document.getElementById('activeCampAlertBox');
+  if (alertBox) alertBox.classList.add('hidden');
+
+  if (!service) {
+    if (descEl) descEl.textContent = 'Selecciona o crea una campaña para comenzar.';
+    if (statusSwitch) statusSwitch.checked = false;
+    if (statusText) statusText.textContent = 'Sin campaña';
+    if (totalLeadsEl) totalLeadsEl.textContent = '0';
+    if (sentLeadsEl) sentLeadsEl.textContent = '0';
+    if (repliedLeadsEl) repliedLeadsEl.textContent = '0';
+    if (qualifiedLeadsEl) qualifiedLeadsEl.textContent = '0';
+    if (tmplEl) tmplEl.value = '';
+    if (followEl) followEl.value = '';
+    if (promptEl) promptEl.value = '';
+    return;
+  }
+
+  if (descEl) {
+    const queries = service.searchQueries && service.searchQueries.length > 0 
+      ? `Queries: ${service.searchQueries.join(', ')}` 
+      : 'Sin queries configuradas';
+    const loc = service.targetLocations && service.targetLocations.length > 0 
+      ? ` • ${service.targetLocations.join(', ')}` 
+      : '';
+    descEl.textContent = `${queries}${loc}`;
+  }
+
+  if (statusSwitch) statusSwitch.checked = !!service.isActive;
+  if (statusText) {
+    statusText.textContent = service.isActive ? 'Campaña Activa' : 'Campaña Pausada';
+    statusText.className = `text-[11px] font-sans font-medium ${service.isActive ? 'text-emerald-400' : 'text-slate-400'}`;
+  }
+  if (totalLeadsEl) totalLeadsEl.textContent = service.totalLeads ?? 0;
+  if (sentLeadsEl) sentLeadsEl.textContent = service.sentLeads ?? 0;
+  if (repliedLeadsEl) repliedLeadsEl.textContent = service.repliedLeads ?? 0;
+  if (qualifiedLeadsEl) qualifiedLeadsEl.textContent = service.qualifiedLeads ?? 0;
+
+  if (tmplEl) tmplEl.value = service.outreachTemplate || '';
+  if (followEl) followEl.value = service.followUpTemplate1 || service.followUpTemplate || '';
+  if (promptEl) promptEl.value = service.aiSystemPrompt || service.aiInstructions || '';
+
+  // Pre-cargar búsquedas sugeridas en el panel de scraping si está vacío
+  const scrapeQueryInput = document.getElementById('scrapeQueryInput');
+  if (scrapeQueryInput && service.searchQueries && service.searchQueries.length > 0) {
+    if (!scrapeQueryInput.value.trim()) {
+      scrapeQueryInput.value = service.searchQueries[0];
+    }
+  }
+
+  // Pre-cargar ubicación sugerida si está vacía
+  const scrapeLocInput = document.getElementById('scrapeLocationInput');
+  if (scrapeLocInput && service.targetLocations && service.targetLocations.length > 0) {
+    if (!scrapeLocInput.value.trim()) {
+      scrapeLocInput.value = service.targetLocations[0];
+    }
+  }
+
+  // Sincronizar selectores de previsualización y lote
+  const previewSelect = document.getElementById('previewServiceSelect');
+  if (previewSelect && previewSelect.value !== service.id) previewSelect.value = service.id;
+  const batchSelect = document.getElementById('batchServiceSelect');
+  if (batchSelect && batchSelect.value !== service.id) batchSelect.value = service.id;
+}
+
+function handleActiveCampaignChange(serviceId) {
+  activeCampaignId = serviceId;
+  renderActiveCampaignDetails(serviceId);
+  const activeCampSelect = document.getElementById('activeCampaignSelect');
+  if (activeCampSelect && activeCampSelect.value !== serviceId) {
+    activeCampSelect.value = serviceId;
+  }
+}
+
+async function handleActiveCampaignToggle(active) {
+  if (!activeCampaignId) return;
+  await handleToggleCampaign(activeCampaignId, active);
+  const service = currentServicesList.find(s => s.id === activeCampaignId);
+  if (service) service.isActive = active;
+  const statusText = document.getElementById('activeCampStatusText');
+  if (statusText) {
+    statusText.textContent = active ? 'Campaña Activa' : 'Campaña Pausada';
+    statusText.className = `text-[11px] font-sans font-medium ${active ? 'text-emerald-400' : 'text-slate-400'}`;
+  }
+}
+
+async function handleSaveActiveCampaignStrategy() {
+  if (!activeCampaignId) {
+    alert('No hay una campaña activa seleccionada.');
+    return;
+  }
+
+  const tmplEl = document.getElementById('activeCampTemplate');
+  const followEl = document.getElementById('activeCampFollowUp');
+  const promptEl = document.getElementById('activeCampPrompt');
+  const alertBox = document.getElementById('activeCampAlertBox');
+  const btn = document.getElementById('btnSaveActiveCampStrategy');
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader" class="w-3.5 h-3.5 animate-spin"></i><span>Guardando...</span>';
+    if (window.lucide) lucide.createIcons();
+  }
+
+  try {
+    const res = await fetch(`/api/client/services/${activeCampaignId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-client-pin': currentPin
+      },
+      body: JSON.stringify({
+        outreachTemplate: tmplEl ? tmplEl.value.trim() : undefined,
+        followUpTemplate: followEl ? followEl.value.trim() : undefined,
+        aiInstructions: promptEl ? promptEl.value.trim() : undefined
+      })
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      const s = currentServicesList.find(x => x.id === activeCampaignId);
+      if (s) {
+        if (tmplEl) s.outreachTemplate = tmplEl.value.trim();
+        if (followEl) s.followUpTemplate1 = followEl.value.trim();
+        if (promptEl) s.aiSystemPrompt = promptEl.value.trim();
+      }
+      if (alertBox) {
+        alertBox.className = 'p-3 rounded-xl text-xs font-sans bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 block';
+        alertBox.textContent = '✅ Estrategia y mensajes guardados con éxito en la campaña.';
+        setTimeout(() => { alertBox.classList.add('hidden'); }, 4000);
+      }
+    } else {
+      if (alertBox) {
+        alertBox.className = 'p-3 rounded-xl text-xs font-sans bg-rose-500/10 border border-rose-500/20 text-rose-400 block';
+        alertBox.textContent = data.error || 'Error al guardar la estrategia de la campaña.';
+      }
+    }
+  } catch (err) {
+    if (alertBox) {
+      alertBox.className = 'p-3 rounded-xl text-xs font-sans bg-rose-500/10 border border-rose-500/20 text-rose-400 block';
+      alertBox.textContent = 'Error de conexión al guardar cambios.';
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="save" class="w-3.5 h-3.5"></i><span>Guardar Mensajes</span>';
+      if (window.lucide) lucide.createIcons();
+    }
+  }
+}
+
+async function handleDeleteActiveCampaign() {
+  if (!activeCampaignId) {
+    alert('No hay una campaña seleccionada para eliminar.');
+    return;
+  }
+  await handleDeleteCampaign(activeCampaignId);
 }
 
 // 6. Render Stream de Prospectos (Panel Izquierdo estilo Linear)
@@ -1147,6 +1349,9 @@ function switchMainView(view) {
     if (discoveryView) discoveryView.classList.remove('hidden');
     if (btnDiscovery) btnDiscovery.className = activeClass;
     loadDiscoveryServices();
+    if (activeCampaignId) {
+      renderActiveCampaignDetails(activeCampaignId);
+    }
   } else if (view === 'metrics') {
     if (metricsView) metricsView.classList.remove('hidden');
     if (btnMetrics) btnMetrics.className = activeClass;
@@ -1977,6 +2182,11 @@ function initSSE() {
         fetchOverview();
       }
 
+      if (event.type === 'campaign_updated') {
+        loadAllCampaigns();
+        fetchOverview();
+      }
+
       if (event.type === 'batch_dispatch_update') {
         updateBatchUI(event.job);
       }
@@ -2750,6 +2960,9 @@ async function handleDeleteCampaign(serviceId) {
       headers: { 'x-client-pin': currentPin }
     });
     if (res.ok) {
+      if (activeCampaignId === serviceId) {
+        activeCampaignId = null;
+      }
       await loadAllCampaigns();
       await renderCampaignsModalList();
       await fetchOverview();
@@ -2898,6 +3111,9 @@ async function handleSaveNewCampaign() {
     const data = await res.json();
     if (res.ok && data.success) {
       closeCreateCampaignModal();
+      if (data.service?.id) {
+        activeCampaignId = data.service.id;
+      }
       await loadAllCampaigns();
       if (createCampaignTargetSelectId) {
         const targetSel = document.getElementById(createCampaignTargetSelectId);

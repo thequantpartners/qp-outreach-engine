@@ -659,6 +659,32 @@ app.post('/api/client/services', authenticateClientPin, async (req: Request, res
   }
 });
 
+// Actualizar campos específicos de una campaña (estrategia, plantillas, prompt, etc.)
+app.patch('/api/client/services/:id', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const serviceId = String(req.params.id);
+    const service = await OutreachRepo.getServiceById(serviceId);
+    if (!service) {
+      res.status(404).json({ error: 'Campaña no encontrada.' });
+      return;
+    }
+    const { name, outreachTemplate, followUpTemplate, aiInstructions, searchQueries, targetLocations, active } = req.body || {};
+    if (name) service.name = String(name).trim();
+    if (outreachTemplate !== undefined) service.outreachTemplate = outreachTemplate;
+    if (followUpTemplate !== undefined) service.followUpTemplate1 = followUpTemplate;
+    if (aiInstructions !== undefined) service.aiSystemPrompt = aiInstructions;
+    if (searchQueries !== undefined) service.apifyQueries = searchQueries;
+    if (targetLocations !== undefined) service.targetLocations = targetLocations;
+    if (active !== undefined) service.isActive = !!active;
+
+    await OutreachRepo.saveService(service);
+    broadcastDashboardEvent({ type: 'campaign_updated', serviceId });
+    res.json({ success: true, service });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Asistente IA para formular campaña completa en 1 clic
 app.post('/api/client/services/ai-generate', authenticateClientPin, async (req: Request, res: Response) => {
   try {

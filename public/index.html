@@ -197,7 +197,7 @@
           class="px-3.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-white flex items-center gap-2 transition"
         >
           <i data-lucide="compass" class="w-3.5 h-3.5 text-gold"></i>
-          <span>Prospección IA</span>
+          <span>Campañas & Prospección</span>
         </button>
         <button 
           onclick="switchMainView('metrics')" 
@@ -208,17 +208,6 @@
           <span>Métricas SaaR</span>
         </button>
       </div>
-
-      <!-- Botón de Gestión de Campañas -->
-      <button 
-        onclick="openCampaignsModal()" 
-        id="btnOpenCampaigns"
-        class="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-surface hover:bg-white/[0.05] border border-white/[0.08] hover:border-gold/40 flex items-center gap-1.5 transition"
-        title="Administrar campañas y formular nuevas con IA"
-      >
-        <i data-lucide="tag" class="w-3.5 h-3.5 text-gold"></i>
-        <span>Campañas</span>
-      </button>
 
       <!-- Botón de Carga Masiva (CSV / BBDD) -->
       <button 
@@ -710,17 +699,164 @@
   <section id="viewDiscovery" class="flex-1 overflow-y-auto custom-scroll p-8 hidden">
     <div class="max-w-5xl mx-auto space-y-8">
 
-      <!-- Encabezado Editorial -->
+      <!-- Encabezado Editorial Unificado -->
       <div class="border-b border-white/[0.06] pb-6 flex items-center justify-between">
         <div>
           <p class="text-[10px] uppercase font-mono tracking-widest text-gold mb-1">The Quant Partners &bull; Motor de Adquisición B2B</p>
-          <h2 class="font-serif text-3xl font-medium tracking-tight text-white">Descubrimiento & Prospección Enriquecida</h2>
-          <p class="text-xs text-slate-400 font-light mt-1">Scraping multicanal (Google Maps, Meta Ads Library e Instagram) con warmup anti-ban y copiloto táctico.</p>
+          <h2 class="font-serif text-3xl font-medium tracking-tight text-white">Campañas & Prospección B2B</h2>
+          <p class="text-xs text-slate-400 font-light mt-1">Gestión integral de nichos, formulación de mensajes con IA, captación en Google Maps y despacho anti-ban.</p>
         </div>
         <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gold/10 border border-gold/20 text-gold text-xs font-mono">
           <i data-lucide="shield-check" class="w-4 h-4"></i>
           <span>Warmup Anti-Ban Activo</span>
         </div>
+      </div>
+
+      <!-- SECCIÓN MAESTRA: CONTROL DE CAMPAÑA ACTIVA & MÉTRICAS -->
+      <div class="card-luxury rounded-2xl p-6 border border-white/[0.08] space-y-5">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gold/15 text-gold flex items-center justify-center border border-gold/30">
+              <i data-lucide="tag" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-sans text-slate-400 font-medium">Campaña Activa:</span>
+                <select 
+                  id="activeCampaignSelect" 
+                  onchange="handleActiveCampaignChange(this.value)" 
+                  class="input-luxury px-3.5 py-1.5 text-xs text-gold font-sans font-semibold cursor-pointer max-w-[280px] truncate"
+                >
+                  <!-- Poblado dinámicamente -->
+                </select>
+              </div>
+              <p id="activeCampDescription" class="text-[11px] text-slate-400 font-light mt-0.5 font-sans">
+                Cargando detalles de campaña...
+              </p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <!-- Switch Activa / Pausada -->
+            <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-obsidian border border-white/[0.06]">
+              <span id="activeCampStatusText" class="text-xs font-sans text-slate-300">Activa</span>
+              <label class="relative inline-flex items-center cursor-pointer" title="Activar o pausar esta campaña">
+                <input type="checkbox" id="activeCampToggleSwitch" onchange="handleActiveCampaignToggle(this.checked)" class="sr-only peer">
+                <div class="w-8 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3.5 after:transition-all peer-checked:bg-gold"></div>
+              </label>
+            </div>
+
+            <!-- Botón + Nueva Campaña con IA -->
+            <button 
+              type="button" 
+              onclick="openCreateCampaignModal()" 
+              class="px-4 py-2 btn-gold rounded-xl text-xs font-sans font-semibold flex items-center gap-1.5 shadow-md shadow-gold/10"
+            >
+              <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+              <span>+ Nueva Campaña con IA</span>
+            </button>
+
+            <!-- Botón Eliminar Campaña -->
+            <button 
+              type="button" 
+              onclick="handleDeleteActiveCampaign()" 
+              class="p-2 rounded-xl bg-card hover:bg-rose-500/10 border border-white/[0.08] hover:border-rose-500/30 text-slate-400 hover:text-rose-400 transition"
+              title="Eliminar esta campaña"
+            >
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Mini-Dashboard de Métricas de la Campaña -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-white/[0.04] text-center font-mono text-xs">
+          <div class="p-3 rounded-xl bg-obsidian border border-white/[0.04]">
+            <span class="text-[10px] text-slate-500 block uppercase font-sans">Total Prospectos</span>
+            <span id="activeCampTotalLeads" class="text-white font-bold text-sm">0</span>
+          </div>
+          <div class="p-3 rounded-xl bg-obsidian border border-white/[0.04]">
+            <span class="text-[10px] text-slate-500 block uppercase font-sans">Contactados</span>
+            <span id="activeCampSentLeads" class="text-sky-400 font-bold text-sm">0</span>
+          </div>
+          <div class="p-3 rounded-xl bg-obsidian border border-white/[0.04]">
+            <span class="text-[10px] text-slate-500 block uppercase font-sans">Respondieron</span>
+            <span id="activeCampRepliedLeads" class="text-gold font-bold text-sm">0</span>
+          </div>
+          <div class="p-3 rounded-xl bg-obsidian border border-white/[0.04]">
+            <span class="text-[10px] text-slate-500 block uppercase font-sans">Citas / Calificados</span>
+            <span id="activeCampQualifiedLeads" class="text-emerald-400 font-bold text-sm">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECCIÓN ESTRATÉGICA: MENSAJES Y PROMPT DEL BOT DE LA CAMPAÑA -->
+      <div id="activeCampStrategyCard" class="card-luxury rounded-2xl p-6 border border-white/[0.08] space-y-4">
+        <div class="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+          <div class="flex items-center gap-2.5">
+            <span class="w-8 h-8 rounded-xl bg-gold/15 text-gold flex items-center justify-center border border-gold/30">
+              <i data-lucide="message-square" class="w-4 h-4"></i>
+            </span>
+            <div>
+              <h3 class="font-serif text-base font-medium text-white">Estrategia Comercial & Mensajes de la Campaña</h3>
+              <p class="text-[11px] text-slate-400 font-light">Plantillas y prompt formulados por IA para esta campaña específica (editables en vivo).</p>
+            </div>
+          </div>
+          <button 
+            type="button" 
+            onclick="handleSaveActiveCampaignStrategy()" 
+            id="btnSaveActiveCampStrategy"
+            class="px-4 py-2 btn-gold rounded-xl text-xs font-sans font-semibold flex items-center gap-1.5 shadow-sm"
+          >
+            <i data-lucide="save" class="w-3.5 h-3.5"></i>
+            <span>Guardar Mensajes</span>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <!-- Plantilla Primer Contacto -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-sans font-medium text-slate-300">Primer Mensaje en Frío (Permiso en 2 pasos)</label>
+              <span class="text-[10px] font-mono text-gold">Sin links &bull; Usa {{name}}</span>
+            </div>
+            <textarea 
+              id="activeCampTemplate" 
+              rows="4" 
+              class="w-full input-luxury p-3 text-xs text-slate-200 font-sans leading-relaxed"
+              placeholder="Buenas tardes al equipo de {{name}}..."
+            ></textarea>
+          </div>
+
+          <!-- Mensaje de Seguimiento -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-sans font-medium text-slate-300">Mensaje de Seguimiento (48h después)</label>
+              <span class="text-[10px] font-mono text-slate-500">Cortés y breve</span>
+            </div>
+            <textarea 
+              id="activeCampFollowUp" 
+              rows="4" 
+              class="w-full input-luxury p-3 text-xs text-slate-200 font-sans leading-relaxed"
+              placeholder="Estimado equipo de {{name}}, ¿pudieron evaluar la propuesta anterior?..."
+            ></textarea>
+          </div>
+        </div>
+
+        <!-- System Prompt del Bot -->
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-sans font-medium text-slate-300">Instrucciones del Bot de Ventas IA (Objeciones & Cierre)</label>
+            <span class="text-[10px] font-mono text-purple-400">System Prompt</span>
+          </div>
+          <textarea 
+            id="activeCampPrompt" 
+            rows="3" 
+            class="w-full input-luxury p-3 text-xs text-slate-200 font-sans font-light leading-relaxed"
+            placeholder="Eres Kenneth de The Quant Partners. Asistes a prospectos de este sector..."
+          ></textarea>
+        </div>
+
+        <div id="activeCampAlertBox" class="p-3 rounded-xl text-xs hidden font-sans"></div>
       </div>
 
       <!-- TARJETA 1: COPILOTO AUTÓNOMO DE NICHO (PASO 1 Y 2) -->
