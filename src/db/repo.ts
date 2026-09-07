@@ -1043,7 +1043,12 @@ export class OutreachRepo {
     const clean = leadPhone.replace(/[^0-9]/g, '');
     if (DbConnection.isPg()) {
       const res = await DbConnection.getPool().query(
-        `SELECT * FROM chat_messages WHERE lead_phone = $1 ORDER BY created_at ASC LIMIT $2`,
+        `SELECT * FROM (
+           SELECT * FROM chat_messages 
+           WHERE lead_phone = $1 
+           ORDER BY created_at DESC 
+           LIMIT $2
+         ) sub ORDER BY created_at ASC`,
         [clean, limit]
       );
       return res.rows.map(r => ({

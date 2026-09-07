@@ -579,24 +579,24 @@ function renderLeadsStream() {
 
     item.innerHTML = `
       <div class="flex items-center justify-between gap-2 mb-1">
-        <h3 class="font-medium text-xs text-slate-100 truncate">${escapeHtml(lead.companyName)}</h3>
-        <span class="text-[10px] font-mono text-slate-500 flex-shrink-0">${timeFormatted}</span>
+        <h3 class="font-medium text-xs text-slate-100 truncate flex-1">${escapeHtml(lead.companyName)}</h3>
+        <span class="text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full border flex-shrink-0 font-medium ${badge.class}">
+          ${badge.label}
+        </span>
       </div>
-      <div class="flex items-center justify-between gap-2 mb-1">
-        <span class="font-mono text-[11px] text-gold/90">+${escapeHtml(lead.phone)}</span>
-        <div class="flex items-center gap-1.5 flex-shrink-0">
-          <span class="text-[9px] font-mono text-gold/80 bg-gold/5 px-1.5 py-0.5 rounded border border-gold/20 flex items-center gap-1 max-w-[90px] truncate" title="Campaña: ${escapeHtml(campLabel)}">
-            <i data-lucide="tag" class="w-2.5 h-2.5 text-gold flex-shrink-0"></i>
-            <span class="truncate">${escapeHtml(campLabel)}</span>
-          </span>
-          <span class="text-[9px] font-mono text-slate-400 bg-white/[0.03] px-1.5 py-0.5 rounded border border-white/[0.06] flex items-center gap-1" title="Asesor Asignado: ${escapeHtml(repLabel)}">
-            <i data-lucide="user" class="w-2.5 h-2.5 text-gold flex-shrink-0"></i>
-            <span class="max-w-[60px] truncate">${escapeHtml(repLabel)}</span>
-          </span>
-          <span class="text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border ${badge.class}">
-            ${badge.label}
-          </span>
-        </div>
+      <div class="flex items-center justify-between gap-2 mb-1.5 text-[11px] font-mono">
+        <span class="text-gold font-medium">+${escapeHtml(lead.phone)}</span>
+        <span class="text-[10px] text-slate-500 font-mono">${timeFormatted}</span>
+      </div>
+      <div class="flex items-center gap-1.5 flex-wrap mb-1.5">
+        <span class="text-[9px] font-mono text-gold/90 bg-gold/5 px-2 py-0.5 rounded border border-gold/20 flex items-center gap-1 max-w-[150px]" title="Campaña: ${escapeHtml(campLabel)}">
+          <i data-lucide="tag" class="w-2.5 h-2.5 text-gold flex-shrink-0"></i>
+          <span class="truncate">${escapeHtml(campLabel)}</span>
+        </span>
+        <span class="text-[9px] font-mono text-slate-300 bg-white/[0.04] px-2 py-0.5 rounded border border-white/[0.08] flex items-center gap-1 max-w-[120px]" title="Asesor Asignado: ${escapeHtml(repLabel)}">
+          <i data-lucide="user" class="w-2.5 h-2.5 text-gold/80 flex-shrink-0"></i>
+          <span class="truncate">${escapeHtml(repLabel)}</span>
+        </span>
       </div>
       <p class="text-[11px] text-slate-400 font-light truncate">
         ${escapeHtml(lead.lastMessageSnippet || '')}
@@ -639,9 +639,9 @@ function setStreamFilter(filter) {
     const pill = document.getElementById(`pillFilter_${f}`);
     if (pill) {
       if (f === filter) {
-        pill.className = 'stream-filter-pill px-2.5 py-1 rounded-md text-[11px] font-mono tracking-tight transition bg-white/[0.08] text-gold border border-gold/30';
+        pill.className = 'stream-filter-pill px-2.5 py-1 rounded-md text-[11px] font-mono tracking-tight transition bg-gold/15 text-gold font-semibold border border-gold/40 shadow-sm';
       } else {
-        pill.className = 'stream-filter-pill px-2.5 py-1 rounded-md text-[11px] font-mono tracking-tight transition text-slate-400 hover:text-white border border-transparent hover:border-white/[0.06]';
+        pill.className = 'stream-filter-pill px-2.5 py-1 rounded-md text-[11px] font-mono tracking-tight transition text-slate-300 hover:text-white bg-card/60 hover:bg-white/[0.05] border border-white/[0.06] hover:border-white/[0.14]';
       }
     }
   });

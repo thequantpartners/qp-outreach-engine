@@ -444,6 +444,29 @@ app.post('/api/client/chat/send', authenticateClientPin, async (req: Request, re
   }
 });
 
+// Registrar o sincronizar un mensaje en la conversación de un prospecto
+app.post('/api/client/chat/:phone/message', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const clean = String(req.params.phone).replace(/[^0-9]/g, '');
+    const { role, content } = req.body || {};
+    if (!content) {
+      res.status(400).json({ error: 'content es requerido' });
+      return;
+    }
+    await OutreachRepo.addChatMessage(clean, role || 'human_agent', content);
+    broadcastDashboardEvent({
+      type: 'new_message',
+      phone: clean,
+      role: role || 'human_agent',
+      content,
+      createdAt: new Date().toISOString()
+    });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/client/chat/:phone/suggest', authenticateClientPin, async (req: Request, res: Response) => {
   try {
     const clean = String(req.params.phone).replace(/[^0-9]/g, '');

@@ -113,6 +113,38 @@
       background: linear-gradient(90deg, rgba(212, 175, 55, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%) !important;
       border-left: 2px solid #D4AF37 !important;
     }
+
+    /* Contraste absoluto para menús desplegables nativos en Windows/Chrome/Firefox */
+    select {
+      background-color: #0E1322 !important;
+      color: #F8FAFC !important;
+    }
+    select option {
+      background-color: #0E1322 !important;
+      color: #F8FAFC !important;
+      padding: 8px 12px !important;
+      font-size: 12px !important;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    }
+    select option:checked, select option:hover {
+      background-color: #1E293B !important;
+      color: #D4AF37 !important;
+      font-weight: 600 !important;
+    }
+    select optgroup {
+      background-color: #0B0F19 !important;
+      color: #94A3B8 !important;
+      font-weight: 600 !important;
+    }
+
+    #streamCampaignFilter, #streamRepFilter {
+      background-color: transparent !important;
+      color: #F1F5F9 !important;
+    }
+    #streamCampaignFilter option, #streamRepFilter option {
+      background-color: #0E1322 !important;
+      color: #F8FAFC !important;
+    }
   </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden bg-obsidian text-slate-200">
@@ -357,24 +389,24 @@
         </div>
 
         <!-- Filtros Combinados: Por Campaña y Por Asesor -->
-        <div class="grid grid-cols-2 gap-1.5">
-          <div class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-card border border-white/[0.06]">
-            <i data-lucide="tag" class="w-3 h-3 text-gold flex-shrink-0"></i>
+        <div class="grid grid-cols-2 gap-2">
+          <div class="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-card border border-white/[0.08] hover:border-white/[0.18] transition">
+            <i data-lucide="tag" class="w-3.5 h-3.5 text-gold flex-shrink-0"></i>
             <select 
               id="streamCampaignFilter" 
               onchange="handleCampaignFilterChange(this.value)"
-              class="w-full bg-transparent text-[11px] font-sans text-slate-300 focus:outline-none cursor-pointer truncate"
+              class="w-full bg-transparent text-xs font-sans text-slate-100 font-medium focus:outline-none cursor-pointer truncate"
             >
               <option value="ALL">Todas las campañas</option>
             </select>
           </div>
 
-          <div class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-card border border-white/[0.06]">
-            <i data-lucide="users" class="w-3 h-3 text-gold flex-shrink-0"></i>
+          <div class="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-card border border-white/[0.08] hover:border-white/[0.18] transition">
+            <i data-lucide="users" class="w-3.5 h-3.5 text-gold flex-shrink-0"></i>
             <select 
               id="streamRepFilter" 
               onchange="handleRepFilterChange(this.value)"
-              class="w-full bg-transparent text-[11px] font-sans text-slate-300 focus:outline-none cursor-pointer truncate"
+              class="w-full bg-transparent text-xs font-sans text-slate-100 font-medium focus:outline-none cursor-pointer truncate"
             >
               <option value="ALL">Todos los asesores</option>
             </select>

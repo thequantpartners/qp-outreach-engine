@@ -173,7 +173,8 @@ export class BaileysEngine {
     if (!this.sock) return;
 
     this.sock.ev.on('messages.upsert', async ({ messages, type }) => {
-      if (type !== 'notify') return;
+      // En Baileys, 'notify' son mensajes nuevos entrantes y 'append' son mensajes enviados desde el teléfono principal u otros clientes sincronizados
+      if (type !== 'notify' && type !== 'append') return;
 
       for (const m of messages) {
         if (!m.message) continue;
@@ -192,11 +193,18 @@ export class BaileysEngine {
         const senderPhone = remoteJid.replace(/@s\.whatsapp\.net/, '').replace(/[^0-9]/g, '');
         if (!senderPhone) continue;
 
-        // Extraer texto del mensaje
+        // Extraer texto del mensaje soportando mensajes efímeros y multimedia
+        const content = 
+          m.message.ephemeralMessage?.message || 
+          m.message.viewOnceMessage?.message || 
+          m.message.documentWithCaptionMessage?.message || 
+          m.message;
+
         const incomingText =
-          m.message.conversation ||
-          m.message.extendedTextMessage?.text ||
-          m.message.imageMessage?.caption ||
+          content?.conversation ||
+          content?.extendedTextMessage?.text ||
+          content?.imageMessage?.caption ||
+          content?.videoMessage?.caption ||
           '';
 
         if (!incomingText.trim()) continue;
@@ -205,14 +213,41 @@ export class BaileysEngine {
 
         // 1. Mensaje saliente manual enviado desde el teléfono del dueño (fromMe)
         if (m.key.fromMe) {
-          // Si Kenneth escribe manualmente a un prospecto desde su teléfono, activar Human Takeover
-          const existingLead = await OutreachRepo.getLeadByPhone(senderPhone);
-          if (existingLead && senderPhone !== settings.adminWhatsAppPhone) {
-            console.log(`[BaileysEngine] Intervención humana detectada en chat con ${senderPhone}. Activando Human Takeover.`);
+          const adminClean = settings.adminWhatsAppPhone ? settings.adminWhatsAppPhone.replace(/[^0-9]/g, '') : '';
+          if (senderPhone && senderPhone !== adminClean) {
+            console.log(`[BaileysEngine] Mensaje saliente manual detectado en chat con ${senderPhone}. Registrando como human_agent.`);
+            
+            let existingLead = await OutreachRepo.getLeadByPhone(senderPhone);
+            if (!existingLead) {
+              const activeService = await OutreachRepo.getActiveService();
+              existingLead = await OutreachRepo.createDirectLead({
+                phone: senderPhone,
+                companyName: m.pushName || `Contacto +${senderPhone}`,
+                serviceId: activeService?.id || 'licitaciones-qp'
+              });
+            }
+
+            // Activar Human Takeover si Kenneth responde directamente desde su WhatsApp
             await OutreachRepo.updateLeadStatus(senderPhone, 'HUMAN_TAKEOVER', {
               humanTakeoverAt: new Date().toISOString()
             });
             await OutreachRepo.addChatMessage(senderPhone, 'human_agent', incomingText);
+
+            // Transmitir al Dashboard en tiempo real vía SSE
+            try {
+              const { broadcastDashboardEvent } = await import('../gateway/server.js');
+              broadcastDashboardEvent({
+                type: 'new_message',
+                phone: senderPhone,
+                role: 'human_agent',
+                content: incomingText,
+                createdAt: new Date().toISOString()
+              });
+              broadcastDashboardEvent({
+                type: 'lead_updated',
+                phone: senderPhone
+              });
+            } catch {}
           }
           continue;
         }
@@ -312,6 +347,39 @@ export class BaileysEngine {
           await this.notifyPhone(targetPhone, alertMsg);
         } else {
           await this.notifyAdmin(alertMsg);
+        }
+      }
+    });
+
+    // Sincronización de historial de mensajes recientes cuando Baileys se reconecta
+    this.sock.ev.on('messaging-history.set', async ({ messages }: any) => {
+      if (!messages || !Array.isArray(messages)) return;
+      for (const m of messages) {
+        if (!m.message) continue;
+        const remoteJid = m.key.remoteJid || '';
+        if (remoteJid.endsWith('@g.us') || remoteJid.includes('broadcast')) continue;
+        const phone = remoteJid.replace(/@s\.whatsapp\.net/, '').replace(/[^0-9]/g, '');
+        if (!phone) continue;
+
+        const content = 
+          m.message.ephemeralMessage?.message || 
+          m.message.viewOnceMessage?.message || 
+          m.message.documentWithCaptionMessage?.message || 
+          m.message;
+
+        const text =
+          content?.conversation ||
+          content?.extendedTextMessage?.text ||
+          content?.imageMessage?.caption ||
+          content?.videoMessage?.caption ||
+          '';
+
+        if (!text.trim()) continue;
+
+        const lead = await OutreachRepo.getLeadByPhone(phone);
+        if (lead) {
+          const role = m.key.fromMe ? 'human_agent' : 'user';
+          await OutreachRepo.addChatMessage(phone, role, text.trim());
         }
       }
     });
