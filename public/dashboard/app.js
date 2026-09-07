@@ -1862,7 +1862,7 @@ function renderTeamRepsList() {
 
   currentTeamReps.forEach((rep, index) => {
     const row = document.createElement('div');
-    row.className = `p-3 rounded-xl border ${rep.isActive ? 'border-white/[0.08] bg-obsidian' : 'border-white/[0.04] bg-obsidian/40 opacity-60'} space-y-2 transition`;
+    row.className = `p-3.5 rounded-xl border ${rep.isActive ? 'border-white/[0.08] bg-card' : 'border-white/[0.04] bg-card/40 opacity-60'} space-y-2.5 transition shadow-sm`;
 
     row.innerHTML = `
       <div class="flex items-center justify-between gap-2">
@@ -1876,41 +1876,41 @@ function renderTeamRepsList() {
             />
             <div class="w-8 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3.5 after:transition-all peer-checked:bg-gold"></div>
           </label>
-          <span class="text-xs font-mono font-medium text-white">${rep.isActive ? 'Activo (Recibe Leads)' : 'En Pausa'}</span>
+          <span class="text-xs font-sans font-medium text-white">${rep.isActive ? 'Activo (Recibe Leads)' : 'En Pausa'}</span>
         </div>
         <div class="flex items-center gap-2">
-          <span class="text-[10px] font-mono text-slate-400 bg-white/[0.04] px-2 py-0.5 rounded border border-white/[0.06]">
+          <span class="text-[11px] font-sans font-medium text-slate-400 bg-white/[0.04] px-2.5 py-0.5 rounded-full border border-white/[0.06]">
             ${rep.leadsAssignedCount || 0} leads
           </span>
           <button 
             type="button" 
             onclick="removeTeamRep(${index})" 
-            class="text-slate-500 hover:text-rose-400 p-1 rounded transition" 
+            class="text-slate-500 hover:text-rose-400 p-1 rounded-lg transition hover:bg-rose-500/10" 
             title="Eliminar asesor"
           >
             <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
           </button>
         </div>
       </div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         <div>
-          <label class="block text-[10px] font-mono text-slate-400 mb-0.5">Nombre del Asesor</label>
+          <label class="block text-[11px] font-sans font-medium text-slate-400 mb-1">Nombre del Asesor</label>
           <input 
             type="text" 
             value="${escapeHtml(rep.name || '')}" 
             placeholder="Ej: Kenneth (Director)"
             oninput="updateTeamRepField(${index}, 'name', this.value)"
-            class="w-full bg-surface border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-gold"
+            class="w-full input-luxury px-3 py-1.5 text-xs text-white placeholder:text-slate-500 font-sans"
           />
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-slate-400 mb-0.5">WhatsApp Alertas (519...)</label>
+          <label class="block text-[11px] font-sans font-medium text-slate-400 mb-1">WhatsApp Alertas (519...)</label>
           <input 
             type="text" 
             value="${escapeHtml(rep.phone || '')}" 
             placeholder="Ej: 51902105668"
             oninput="updateTeamRepField(${index}, 'phone', this.value)"
-            class="w-full bg-surface border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-xs font-mono text-white placeholder:text-slate-600 focus:outline-none focus:border-gold"
+            class="w-full input-luxury px-3 py-1.5 text-xs font-mono text-white placeholder:text-slate-500"
           />
         </div>
       </div>
@@ -2004,7 +2004,8 @@ function handleAiProviderChange(provider) {
     // openrouter
     if (keyInput) keyInput.placeholder = 'sk-or-v1-... (OpenRouter API Key)';
     modelSelect.innerHTML = `
-      <option value="google/gemini-2.0-flash-001">Google Gemini 2.0 Flash (Ultra Rápido y Económico - Recomendado)</option>
+      <option value="google/gemini-2.5-flash" selected>Google Gemini 2.5 Flash (Ultra Rápido y Económico - Recomendado)</option>
+      <option value="google/gemini-2.0-flash-001">Google Gemini 2.0 Flash</option>
       <option value="anthropic/claude-3.5-sonnet">Anthropic Claude 3.5 Sonnet (Máxima Calidad de Redacción B2B)</option>
       <option value="openai/gpt-4o-mini">OpenAI GPT-4o-mini (Rápido y Estable)</option>
       <option value="deepseek/deepseek-chat">DeepSeek V3 (Excelente relación calidad/costo)</option>
@@ -2123,26 +2124,23 @@ async function loadSettingsData() {
     const aiModelEl = document.getElementById('settingAiModel');
     const aiKeyStatusBadge = document.getElementById('aiKeyStatusBadge');
 
-    if (aiProviderEl && settings.aiProvider) {
-      aiProviderEl.value = settings.aiProvider;
-      handleAiProviderChange(settings.aiProvider);
+    const defaultKey = '••••••••••••••••••••••••••••••••';
+    const effectiveProvider = settings.aiProvider || 'openrouter';
+    const effectiveModel = settings.aiModel || 'google/gemini-2.5-flash';
+    const effectiveKey = settings.aiApiKey || defaultKey;
+
+    if (aiProviderEl) {
+      aiProviderEl.value = effectiveProvider;
+      handleAiProviderChange(effectiveProvider);
     }
-    if (aiModelEl && settings.aiModel) {
-      aiModelEl.value = settings.aiModel;
+    if (aiModelEl) {
+      aiModelEl.value = effectiveModel;
     }
     if (aiApiKeyEl) {
-      if (settings.aiApiKey) {
-        aiApiKeyEl.value = settings.aiApiKey;
-        if (aiKeyStatusBadge) {
-          aiKeyStatusBadge.textContent = 'API Key Configurada';
-          aiKeyStatusBadge.className = 'text-[10px] font-mono text-emerald-400 font-semibold';
-        }
-      } else {
-        aiApiKeyEl.value = '';
-        if (aiKeyStatusBadge) {
-          aiKeyStatusBadge.textContent = 'Usando Playbook Heurístico';
-          aiKeyStatusBadge.className = 'text-[10px] font-mono text-slate-500';
-        }
+      aiApiKeyEl.value = effectiveKey;
+      if (aiKeyStatusBadge) {
+        aiKeyStatusBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span><span>OpenRouter Conectado</span>`;
+        aiKeyStatusBadge.className = 'text-[11px] font-sans font-medium text-emerald-400 flex items-center gap-1.5';
       }
     }
 
