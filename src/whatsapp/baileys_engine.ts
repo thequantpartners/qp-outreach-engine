@@ -517,15 +517,46 @@ export class BaileysEngine {
     return currentHour >= start && currentHour < end;
   }
 
-  public getStatus(): { isReady: boolean; hasQr: boolean } {
+  public getStatus(): { isReady: boolean; hasQr: boolean; connectedPhone?: string } {
+    const rawId = this.sock?.user?.id || '';
+    const cleanPhone = rawId ? rawId.split(':')[0].replace(/[^0-9]/g, '') : undefined;
     return {
       isReady: this.isReady,
-      hasQr: !!this.latestQr
+      hasQr: !!this.latestQr,
+      connectedPhone: cleanPhone
     };
   }
 
   public getLatestQr(): string | null {
     return this.latestQr;
+  }
+
+  public async disconnectAndClearSession(): Promise<void> {
+    console.log('⚠️ [BaileysEngine] Desvinculando sesión de WhatsApp y limpiando credenciales...');
+    if (this.sock) {
+      try {
+        await this.sock.logout();
+      } catch {}
+      try {
+        this.sock.ev.removeAllListeners('connection.update');
+        this.sock.ev.removeAllListeners('creds.update');
+        this.sock.ev.removeAllListeners('messages.upsert');
+        (this.sock as any).ws?.close();
+      } catch {}
+      this.sock = null;
+    }
+    this.isReady = false;
+    this.latestQr = null;
+
+    if (fs.existsSync(this.authDir)) {
+      try {
+        fs.rmSync(this.authDir, { recursive: true, force: true });
+      } catch {}
+    }
+
+    setTimeout(() => {
+      this.init().catch(err => console.error('[BaileysEngine] Error reiniciando tras desvinculación:', err));
+    }, 1500);
   }
 }
 

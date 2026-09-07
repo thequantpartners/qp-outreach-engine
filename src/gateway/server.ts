@@ -216,6 +216,71 @@ app.get('/qr', (_req: Request, res: Response) => {
   res.redirect('/api/client/qr');
 });
 
+// Obtener configuración comercial y estado de WhatsApp
+app.get('/api/client/settings', authenticateClientPin, async (_req: Request, res: Response) => {
+  try {
+    const settings = await OutreachRepo.getSettings();
+    const waStatus = whatsapp.getStatus();
+    res.json({
+      success: true,
+      settings: {
+        startHour: settings.startHour ?? 9,
+        endHour: settings.endHour ?? 19,
+        minDelaySeconds: settings.minDelaySeconds ?? 180,
+        maxDelaySeconds: settings.maxDelaySeconds ?? 300,
+        dailyLimit: settings.dailyLimit ?? 15,
+        adminWhatsAppPhone: settings.adminWhatsAppPhone || '',
+        isAutonomousActive: settings.isAutonomousActive ?? false
+      },
+      whatsapp: waStatus
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Guardar configuración comercial
+app.post('/api/client/settings', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const { startHour, endHour, minDelaySeconds, maxDelaySeconds, dailyLimit, adminWhatsAppPhone } = req.body || {};
+    
+    await OutreachRepo.updateSettings({
+      ...(startHour !== undefined ? { startHour: parseInt(startHour, 10) } : {}),
+      ...(endHour !== undefined ? { endHour: parseInt(endHour, 10) } : {}),
+      ...(minDelaySeconds !== undefined ? { minDelaySeconds: parseInt(minDelaySeconds, 10) } : {}),
+      ...(maxDelaySeconds !== undefined ? { maxDelaySeconds: parseInt(maxDelaySeconds, 10) } : {}),
+      ...(dailyLimit !== undefined ? { dailyLimit: parseInt(dailyLimit, 10) } : {}),
+      ...(adminWhatsAppPhone !== undefined ? { adminWhatsAppPhone: String(adminWhatsAppPhone).replace(/[^0-9]/g, '') } : {})
+    });
+
+    const updated = await OutreachRepo.getSettings();
+    broadcastDashboardEvent({
+      type: 'settings_updated',
+      settings: updated
+    });
+
+    res.json({ success: true, settings: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Desconectar y limpiar sesión de WhatsApp para nuevo número
+app.post('/api/client/whatsapp/disconnect', authenticateClientPin, async (_req: Request, res: Response) => {
+  try {
+    await whatsapp.disconnectAndClearSession();
+    broadcastDashboardEvent({
+      type: 'whatsapp_disconnected'
+    });
+    res.json({
+      success: true,
+      message: 'Sesión de WhatsApp desvinculada exitosamente. Se ha iniciado el proceso para un nuevo código QR.'
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/client/chat/:phone', authenticateClientPin, async (req: Request, res: Response) => {
   try {
     const clean = String(req.params.phone).replace(/[^0-9]/g, '');

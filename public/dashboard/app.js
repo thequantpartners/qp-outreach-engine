@@ -92,6 +92,7 @@ async function fetchOverview() {
     renderHeader(data);
     renderLeadsStream();
     renderMetrics(data);
+    updateOnboardingBanner(data);
 
     // Si hay un lead activo, refrescar su detalle; si no, seleccionar el primero disponible
     if (activeLeadPhone) {
@@ -1530,7 +1531,7 @@ function initSSE() {
         }
       }
 
-      if (event.type === 'lead_updated' || event.type === 'appointment_booked' || event.type === 'meeting_attendance_updated') {
+      if (event.type === 'lead_updated' || event.type === 'appointment_booked' || event.type === 'meeting_attendance_updated' || event.type === 'settings_updated' || event.type === 'whatsapp_disconnected') {
         fetchOverview();
       }
     } catch (err) {
@@ -1541,6 +1542,291 @@ function initSSE() {
   eventSource.onerror = () => {
     console.warn('⚠️ [SSE] Reconectando en 5 segundos...');
   };
+}
+
+// =================================================================
+// 16. ONBOARDING & ACTIVACIÓN RÁPIDA (LINEAR STYLE)
+// =================================================================
+function toggleOnboardingBanner(show) {
+  const banner = document.getElementById('onboardingBanner');
+  if (!banner) return;
+  if (show === false) {
+    banner.classList.add('hidden');
+    localStorage.setItem('qp_hide_onboarding', 'true');
+  } else {
+    banner.classList.remove('hidden');
+    localStorage.removeItem('qp_hide_onboarding');
+  }
+}
+
+function updateOnboardingBanner(data) {
+  const banner = document.getElementById('onboardingBanner');
+  if (!banner) return;
+
+  if (localStorage.getItem('qp_hide_onboarding') === 'true') {
+    banner.classList.add('hidden');
+    return;
+  }
+  banner.classList.remove('hidden');
+
+  const step1Done = Boolean(data?.isWhatsAppReady);
+  const step2Done = Boolean(data?.serviceName && data.serviceName.length > 0);
+  const step3Done = Boolean(data?.metrics?.totalLeads && data.metrics.totalLeads > 0);
+  const step4Done = Boolean(
+    (data?.activeChats && data.activeChats.length > 0) ||
+    (data?.metrics && (data.metrics.replied > 0 || data.metrics.outreachSent > 0))
+  );
+
+  const steps = [
+    { elId: 'stepWhatsApp', iconId: 'stepWhatsAppIcon', num: 1, done: step1Done },
+    { elId: 'stepService', iconId: 'stepServiceIcon', num: 2, done: step2Done },
+    { elId: 'stepLeads', iconId: 'stepLeadsIcon', num: 3, done: step3Done },
+    { elId: 'stepChat', iconId: 'stepChatIcon', num: 4, done: step4Done }
+  ];
+
+  let completedCount = 0;
+
+  steps.forEach(s => {
+    const el = document.getElementById(s.elId);
+    const iconEl = document.getElementById(s.iconId);
+    if (!el || !iconEl) return;
+
+    if (s.done) {
+      completedCount++;
+      el.className = 'flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 font-medium cursor-pointer transition hover:bg-emerald-500/15';
+      iconEl.className = 'w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-[10px] font-bold';
+      iconEl.innerHTML = '<i data-lucide="check" class="w-3 h-3"></i>';
+    } else {
+      el.className = 'flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-white/[0.06] bg-obsidian/60 text-slate-400 cursor-pointer hover:border-gold/30 transition';
+      iconEl.className = 'w-4 h-4 rounded-full border border-slate-600 flex items-center justify-center text-[9px] font-mono text-slate-400';
+      iconEl.innerHTML = `<span>${s.num}</span>`;
+    }
+  });
+
+  const pct = Math.round((completedCount / 4) * 100);
+  const badge = document.getElementById('onboardingProgressBadge');
+  if (badge) {
+    badge.textContent = `${completedCount}/4 (${pct}%)`;
+    if (completedCount === 4) {
+      badge.className = 'text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold';
+    } else {
+      badge.className = 'text-[10px] font-mono px-2 py-0.5 rounded-full bg-gold/15 text-gold border border-gold/30 font-semibold';
+    }
+  }
+
+  if (window.lucide) lucide.createIcons();
+}
+
+// =================================================================
+// 17. MODAL CENTRAL DE CONFIGURACIÓN & ANTI-BANEO
+// =================================================================
+let settingsQrRefreshInterval = null;
+
+async function openSettingsModal(initialTab = 'whatsapp') {
+  const modal = document.getElementById('settingsModal');
+  if (!modal) return;
+
+  switchSettingsTab(initialTab);
+  modal.classList.remove('hidden');
+  if (window.lucide) lucide.createIcons();
+
+  await loadSettingsData();
+}
+
+function closeSettingsModal() {
+  const modal = document.getElementById('settingsModal');
+  if (modal) modal.classList.add('hidden');
+  if (settingsQrRefreshInterval) {
+    clearInterval(settingsQrRefreshInterval);
+    settingsQrRefreshInterval = null;
+  }
+}
+
+function switchSettingsTab(tabName) {
+  const tabs = ['whatsapp', 'antiban', 'advisor'];
+  tabs.forEach(t => {
+    const btn = document.getElementById(`settingsTabBtn${t.charAt(0).toUpperCase() + t.slice(1)}`);
+    const content = document.getElementById(`settingsTabContent${t.charAt(0).toUpperCase() + t.slice(1)}`);
+
+    if (t === tabName) {
+      if (btn) {
+        btn.className = 'px-4 py-2.5 text-xs font-mono border-b-2 border-gold text-gold font-medium flex items-center gap-2 transition';
+      }
+      if (content) content.classList.remove('hidden');
+    } else {
+      if (btn) {
+        btn.className = 'px-4 py-2.5 text-xs font-mono border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-2 transition';
+      }
+      if (content) content.classList.add('hidden');
+    }
+  });
+
+  if (tabName === 'whatsapp') {
+    refreshSettingsQr();
+    if (!settingsQrRefreshInterval) {
+      settingsQrRefreshInterval = setInterval(() => {
+        const modal = document.getElementById('settingsModal');
+        if (modal && !modal.classList.contains('hidden')) {
+          refreshSettingsQr();
+        }
+      }, 10000);
+    }
+  } else {
+    if (settingsQrRefreshInterval) {
+      clearInterval(settingsQrRefreshInterval);
+      settingsQrRefreshInterval = null;
+    }
+  }
+
+  if (window.lucide) lucide.createIcons();
+}
+
+function refreshSettingsQr() {
+  const img = document.getElementById('settingsQrImage');
+  if (img) {
+    img.src = `/api/client/qr?t=${Date.now()}`;
+  }
+}
+
+async function loadSettingsData() {
+  if (!currentPin) return;
+
+  try {
+    const res = await fetch('/api/client/settings', {
+      headers: { 'x-client-pin': currentPin }
+    });
+    if (!res.ok) return;
+
+    const data = await res.json();
+    const settings = data.settings || {};
+    const wa = data.whatsapp || {};
+
+    // Poblado Anti-Baneo
+    const startHourEl = document.getElementById('settingStartHour');
+    const endHourEl = document.getElementById('settingEndHour');
+    const minDelayEl = document.getElementById('settingMinDelay');
+    const maxDelayEl = document.getElementById('settingMaxDelay');
+    const dailyLimitEl = document.getElementById('settingDailyLimit');
+    const adminPhoneEl = document.getElementById('settingAdminPhone');
+
+    if (startHourEl) startHourEl.value = settings.startHour ?? 9;
+    if (endHourEl) endHourEl.value = settings.endHour ?? 19;
+    if (minDelayEl) minDelayEl.value = settings.minDelaySeconds ?? 180;
+    if (maxDelayEl) maxDelayEl.value = settings.maxDelaySeconds ?? 300;
+    if (dailyLimitEl) dailyLimitEl.value = settings.dailyLimit ?? 15;
+    if (adminPhoneEl) adminPhoneEl.value = settings.adminWhatsAppPhone || '';
+
+    // Estado WhatsApp
+    const cardConnected = document.getElementById('settingsWaCardConnected');
+    const cardDisconnected = document.getElementById('settingsWaCardDisconnected');
+    const phoneEl = document.getElementById('settingsWaConnectedPhone');
+
+    if (wa.isReady) {
+      if (cardConnected) cardConnected.classList.remove('hidden');
+      if (cardDisconnected) cardDisconnected.classList.add('hidden');
+      if (phoneEl) {
+        phoneEl.textContent = wa.connectedPhone ? `+${wa.connectedPhone}` : 'Conexión Activa';
+      }
+    } else {
+      if (cardConnected) cardConnected.classList.add('hidden');
+      if (cardDisconnected) cardDisconnected.classList.remove('hidden');
+      refreshSettingsQr();
+    }
+  } catch (err) {
+    console.error('Error cargando configuración:', err);
+  }
+}
+
+async function handleSaveSettings() {
+  if (!currentPin) return;
+
+  const btn = document.getElementById('saveSettingsBtn');
+  const btnText = document.getElementById('saveSettingsBtnText');
+  const alertBox = document.getElementById('settingsAlertBox');
+
+  const startHour = parseInt(document.getElementById('settingStartHour')?.value || '9', 10);
+  const endHour = parseInt(document.getElementById('settingEndHour')?.value || '19', 10);
+  const minDelaySeconds = parseInt(document.getElementById('settingMinDelay')?.value || '180', 10);
+  const maxDelaySeconds = parseInt(document.getElementById('settingMaxDelay')?.value || '300', 10);
+  const dailyLimit = parseInt(document.getElementById('settingDailyLimit')?.value || '15', 10);
+  const adminWhatsAppPhone = document.getElementById('settingAdminPhone')?.value || '';
+
+  if (minDelaySeconds < 60) {
+    alert('Por seguridad anti-baneo, el delay mínimo no puede ser menor a 60 segundos.');
+    return;
+  }
+
+  if (btn) btn.disabled = true;
+  if (btnText) btnText.textContent = 'Guardando...';
+  if (alertBox) alertBox.classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/client/settings', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-client-pin': currentPin
+      },
+      body: JSON.stringify({
+        startHour,
+        endHour,
+        minDelaySeconds,
+        maxDelaySeconds,
+        dailyLimit,
+        adminWhatsAppPhone
+      })
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      if (alertBox) {
+        alertBox.className = 'p-3 rounded-xl text-xs font-mono bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 block';
+        alertBox.textContent = '✅ Configuración guardada y sincronizada en PostgreSQL correctamente.';
+      }
+      setTimeout(() => {
+        if (alertBox) alertBox.classList.add('hidden');
+      }, 3500);
+      fetchOverview();
+    } else {
+      if (alertBox) {
+        alertBox.className = 'p-3 rounded-xl text-xs font-mono bg-rose-500/10 border border-rose-500/20 text-rose-400 block';
+        alertBox.textContent = data.error || 'Error al guardar configuración.';
+      }
+    }
+  } catch (err) {
+    if (alertBox) {
+      alertBox.className = 'p-3 rounded-xl text-xs font-mono bg-rose-500/10 border border-rose-500/20 text-rose-400 block';
+      alertBox.textContent = 'Error de comunicación con el servidor.';
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+    if (btnText) btnText.textContent = 'Guardar Configuración';
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
+async function handleDisconnectWhatsApp() {
+  if (!confirm('⚠️ ¿Estás seguro de desvincular el WhatsApp actual?\n\nLa sesión satélite activa se cerrará y se generará inmediatamente un nuevo código QR para vincular otra línea.')) {
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/client/whatsapp/disconnect', {
+      method: 'POST',
+      headers: { 'x-client-pin': currentPin }
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      alert('✅ Sesión de WhatsApp desvinculada. Puedes escanear un nuevo número a continuación.');
+      await loadSettingsData();
+      fetchOverview();
+    } else {
+      alert('Error: ' + (data.error || 'No se pudo desvincular WhatsApp.'));
+    }
+  } catch (err) {
+    alert('Error al comunicar la desvinculación con el servidor.');
+  }
 }
 
 // Utilitario Sanitización XSS

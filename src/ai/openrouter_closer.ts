@@ -446,6 +446,25 @@ Devuelve ÚNICAMENTE un JSON array con 3 elementos:
     const lastMsg = [...history].reverse().find(m => m.role === 'user')?.content || '';
     const lower = lastMsg.toLowerCase().trim();
 
+    const serviceName = service?.name || 'The Quant Partners';
+    const isLicitaciones = service?.id === 'licitaciones-qp' || serviceName.toLowerCase().includes('licitacion');
+    const isClinicas = service?.id?.includes('clinica') || serviceName.toLowerCase().includes('clinica');
+    const isInmobiliarias = service?.id?.includes('inmobiliari') || serviceName.toLowerCase().includes('inmobiliari');
+
+    let deliverableName = 'diagnóstico preliminar y resumen ejecutivo';
+    let deliverableActionText = `Buenos días. Tal como acordamos, le comparto la información preparada por el equipo de ${serviceName}. Quedo atento a cualquier consulta puntual.`;
+
+    if (isLicitaciones) {
+      deliverableName = 'dictamen técnico de 3 páginas (EsSalud Piura CP-03)';
+      deliverableActionText = `Buenos días. Tal como acordamos, le adjunto el dictamen técnico de 3 páginas preparado por Licitaciones QP con las 2 observaciones clave del pliego de EsSalud Piura (CP-03). Quedo atento a cualquier duda de su equipo técnico.`;
+    } else if (isClinicas) {
+      deliverableName = 'video de 3 minutos con la arquitectura de agendamiento';
+      deliverableActionText = `Buenos días. Con todo gusto le comparto el video demostrativo de 3 minutos donde explicamos cómo el agente de IA en WhatsApp califica y agenda pacientes 24/7: https://thequantpartners.com/demo. ¿Me confirma si pudo visualizarlo?`;
+    } else if (isInmobiliarias) {
+      deliverableName = 'resumen del sistema de calificación y filtro crediticio';
+      deliverableActionText = `Buenos días. Tal como conversamos, le comparto la ficha técnica de cómo el agente filtra el presupuesto de los prospectos antes de pasarlos a su equipo de ventas. Quedo a su disposición.`;
+    }
+
     // Caso 1: El cliente fue escueto ("ok", "gracias", "ok gracias", "entendido", "dale")
     if (
       lower.includes('ok') ||
@@ -453,26 +472,27 @@ Devuelve ÚNICAMENTE un JSON array con 3 elementos:
       lower.includes('dale') ||
       lower.includes('de acuerdo') ||
       lower.includes('entendido') ||
-      lower === 'gracias'
+      lower === 'gracias' ||
+      lower === 'ok'
     ) {
       return [
         {
-          label: '📄 Entrega de Dictamen / Documento',
+          label: '📄 Entrega de Valor / Entregable',
           badgeColor: 'sky',
-          text: `Buenos días. Tal como acordamos, le adjunto el dictamen técnico de 3 páginas preparado por Licitaciones QP con las 2 observaciones clave del pliego de EsSalud Piura (CP-03). Quedo atento a cualquier duda de su equipo técnico.`,
-          explanation: 'Entrega directa de valor acordado sin rodeos, genera confianza inmediata.'
+          text: deliverableActionText,
+          explanation: 'Entrega directa del valor o documento prometido sin rodeos, generando credibilidad inmediata.'
         },
         {
           label: '🎯 Agendamiento de Revisión (10 min)',
           badgeColor: 'amber',
-          text: `Buenos días. ¿Le parecería bien coordinar una llamada de 10 minutos hoy a las 11:00 AM o a las 3:00 PM para revisar los puntos críticos del pliego antes de formular las observaciones en el SEACE?`,
+          text: `Buenos días. ¿Le parecería bien coordinar una breve llamada de 10 minutos hoy a las 11:00 AM o a las 3:30 PM para revisar los puntos clave con nuestro socio consultor?`,
           explanation: 'Técnica de doble opción horaria para cerrar una llamada ejecutiva.'
         },
         {
           label: '🤝 Seguimiento Cortés (Bajo Compromiso)',
           badgeColor: 'emerald',
-          text: `Un gusto saludarlos. Quedamos a su disposición en caso requieran soporte técnico o legal para la postulación. ¡Que tengan una excelente jornada!`,
-          explanation: 'Respuesta cordial y sin presión, mantiene la puerta abierta.'
+          text: `Un gusto saludarlos al equipo de ${lead.companyName}. Quedamos a su disposición en caso requieran profundizar en la propuesta. ¡Que tengan una excelente jornada!`,
+          explanation: 'Respuesta cordial y sin presión que mantiene abierta la relación comercial.'
         }
       ];
     }
@@ -481,22 +501,22 @@ Devuelve ÚNICAMENTE un JSON array con 3 elementos:
     if (lower.includes('cuanto') || lower.includes('precio') || lower.includes('costo') || lower.includes('cotiz')) {
       return [
         {
-          label: '🎯 Calificación y Propuesta a la Medida',
+          label: '🎯 Calificación y Alcance a la Medida',
           badgeColor: 'amber',
-          text: `Con todo gusto le comparto la cotización formal. Para dimensionar el alcance exacto a la medida de su empresa, ¿cuántos procesos o sedes gestionan habitualmente?`,
+          text: `Con todo gusto le comparto la estructura de costos de ${serviceName}. Para dimensionar el alcance exacto a la medida de su empresa, ¿cuántos procesos o sedes gestionan habitualmente?`,
           explanation: 'Califica el tamaño del cliente antes de anclar una cifra.'
         },
         {
-          label: '📄 Alcance del Servicio',
+          label: '📄 Propuesta de Retainer + Éxito',
           badgeColor: 'sky',
-          text: `El servicio incluye diagnóstico preventivo de bases del SEACE, absolución de observaciones y preparación del pliego técnico para asegurar que no descalifiquen la oferta. Si le parece, le preparo una propuesta preliminar hoy mismo.`,
-          explanation: 'Ancla el valor tangible antes de discutir honorarios.'
+          text: `Trabajamos bajo un modelo SaaR (Software as a Result) con una base accesible y un componente variable ligado 100% a resultados medibles. Si le parece, le preparo una propuesta preliminar hoy mismo.`,
+          explanation: 'Ancla el modelo de resultados comerciales antes de discutir números finales.'
         },
         {
-          label: '🤝 Reunión de Diagnóstico Gratuita',
+          label: '🤝 Sesión de Diagnóstico Sin Costo',
           badgeColor: 'emerald',
-          text: `Podemos revisar su pliego actual sin costo en una sesión de 15 minutos para que evalúen el dictamen antes de cualquier compromiso. ¿Tienen disponibilidad hoy?`,
-          explanation: 'Elimina el riesgo financiero invitando a una sesión de diagnóstico sin costo.'
+          text: `Podemos revisar su caso puntual sin costo en una llamada de 15 minutos para que evalúen la solución antes de cualquier compromiso comercial. ¿Tienen disponibilidad hoy?`,
+          explanation: 'Elimina el riesgo financiero invitando a una sesión de diagnóstico.'
         }
       ];
     }
@@ -506,19 +526,19 @@ Devuelve ÚNICAMENTE un JSON array con 3 elementos:
       {
         label: '🎯 Cierre Consultivo',
         badgeColor: 'amber',
-        text: `Hola, un gusto saludarle al equipo de ${lead.companyName}. ¿Pudieron evaluar la información preliminar que les compartimos? Quedo atento si desean revisar un caso puntual.`,
+        text: `Hola, un gusto saludarle al equipo de ${lead.companyName}. Le escribe Kenneth de ${serviceName}. ¿Pudieron revisar la información preliminar que les compartimos? Quedo atento si desean evaluar un caso puntual.`,
         explanation: 'Reactiva la conversación preguntando por la revisión previa.'
       },
       {
         label: '📄 Entrega de Caso de Estudio',
         badgeColor: 'sky',
-        text: `Le comparto un breve resumen técnico de cómo estructuramos la defensa técnica de ofertas ante el OSCE para evitar descalificaciones arbitrarias. ¿A qué correo o por aquí prefiere recibirlo?`,
-        explanation: 'Ofrece evidencia y credibilidad para despertar interés.'
+        text: deliverableActionText,
+        explanation: 'Ofrece evidencia y credibilidad tangible para despertar interés.'
       },
       {
         label: '🤝 Saludo y Disponibilidad',
         badgeColor: 'emerald',
-        text: `Quedamos atentos a cualquier consulta de su área de proyectos. Saludos cordiales de parte del equipo de The Quant Partners.`,
+        text: `Quedamos atentos a cualquier consulta de su área comercial o de proyectos. Saludos cordiales de parte del equipo de The Quant Partners.`,
         explanation: 'Mantiene una presencia educada y no invasiva.'
       }
     ];
