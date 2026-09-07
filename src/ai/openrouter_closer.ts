@@ -303,8 +303,8 @@ RESPONDE ESTRICTAMENTE EN FORMATO JSON VÁLIDO:
   }
 
   /**
-   * MODO CO-PILOTO (PAODING):
-   * Genera 3 sugerencias tácticas en tiempo real para que el asesor humano
+   * MODO CO-PILOTO (QPARTNER):
+   * Genera 3 sugerencias tácticas en tiempo real para que el asesor humano (Kenneth)
    * pueda elegir y enviar en 1 solo clic o editar desde el dashboard.
    */
   public static async generateCopilotSuggestions(
@@ -327,7 +327,7 @@ RESPONDE ESTRICTAMENTE EN FORMATO JSON VÁLIDO:
       const lastClientMsg = [...history].reverse().find(m => m.role === 'user')?.content || '';
 
       const systemPrompt = `
-Eres Paoding / Co-Piloto de Asistencia Comercial en Vivo para Kenneth de The Quant Partners.
+Eres QPartner, el Co-Piloto de Asistencia Comercial en Vivo para Kenneth de The Quant Partners.
 Kenneth está chateando por WhatsApp con un decisor B2B.
 
 DATOS DEL PROSPECTO:
@@ -395,7 +395,7 @@ Devuelve ÚNICAMENTE un JSON array con 3 elementos:
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
           'HTTP-Referer': 'https://quantpartners.pe',
-          'X-Title': 'QP Outreach Engine - Paoding Co-Pilot'
+          'X-Title': 'QP Outreach Engine - QPartner Co-Pilot'
         },
         body: JSON.stringify({
           model,
@@ -430,13 +430,13 @@ Devuelve ÚNICAMENTE un JSON array con 3 elementos:
 
       return OpenRouterCloser.heuristicCopilotSuggestions(lead, history, service);
     } catch (err: any) {
-      console.warn('[OpenRouterCloser] Error en Paoding Co-Pilot:', err.message);
+      console.warn('[OpenRouterCloser] Error en QPartner Co-Pilot:', err.message);
       return OpenRouterCloser.heuristicCopilotSuggestions(lead, history, service);
     }
   }
 
   /**
-   * Fallback heurístico para Paoding Co-Pilot si OpenRouter está offline
+   * Fallback heurístico para QPartner Co-Pilot si OpenRouter está offline
    */
   private static heuristicCopilotSuggestions(
     lead: Lead,

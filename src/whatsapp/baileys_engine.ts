@@ -234,58 +234,58 @@ export class BaileysEngine {
 
         if (!lead) continue;
 
-        // Registrar mensaje del usuario en la base de datos
+        // 4. Registrar mensaje del usuario en la base de datos y activar Human Takeover (El bot se silencia)
         await OutreachRepo.addChatMessage(senderPhone, 'user', incomingText);
+        await OutreachRepo.updateLeadStatus(senderPhone, 'REPLIED', {
+          humanTakeoverAt: new Date().toISOString()
+        });
 
-        // 4. Obtener servicio correspondiente
-        const service = (await OutreachRepo.getServiceById(lead.serviceId)) || (await OutreachRepo.getActiveService());
-        if (!service) continue;
+        // Transmitir al Dashboard en tiempo real
+        try {
+          const { broadcastDashboardEvent } = await import('../gateway/server.js');
+          broadcastDashboardEvent({
+            type: 'new_message',
+            phone: senderPhone,
+            role: 'user',
+            content: incomingText,
+            createdAt: new Date().toISOString()
+          });
+        } catch {}
 
-        // 5. Procesar respuesta con OpenRouter AI Closer
-        const closerResult = await OpenRouterCloser.processInbound(lead, incomingText, service);
+        // 5. Comprobar si está fuera de horario comercial
+        const isWorkingHours = this.isWithinWorkingHours(settings);
+        if (!isWorkingHours) {
+          // Validar que no hayamos enviado el aviso fuera de hora recientemente (últimas 12h)
+          const history = await OutreachRepo.getChatHistory(senderPhone, 5);
+          const hasRecentOutOfHours = history.some(
+            m => m.role === 'assistant' && 
+            m.content.includes('horario de atención') && 
+            (Date.now() - new Date(m.createdAt).getTime()) < 12 * 60 * 60 * 1000
+          );
 
-        // Notificar al admin si corresponde
-        if (closerResult.adminAlertText) {
-          await this.notifyAdmin(closerResult.adminAlertText);
-        }
-
-        // 6. Enviar respuesta si la IA debe responder
-        if (closerResult.shouldRespond && closerResult.replyText) {
-          try {
+          if (!hasRecentOutOfHours) {
+            const outOfHoursNotice = 'Buenas noches. Le saluda el equipo de The Quant Partners. Gracias por comunicarse con nosotros. Nuestro horario de atención comercial es de Lunes a Viernes de 8:30 AM a 6:30 PM (Sábados de 9:00 AM a 1:00 PM). Un asesor atenderá su mensaje a primera hora de la jornada. ¡Muchas gracias por escribirnos!';
             const jid = `${senderPhone}@s.whatsapp.net`;
-
-            // Simulación de digitación humana (typing indicator)
-            await this.sock?.sendPresenceUpdate('composing', jid);
-            const typingTimeMs = Math.min(Math.max(closerResult.replyText.length * 35, 1800), 4500);
-            await new Promise((r) => setTimeout(r, typingTimeMs));
-            await this.sock?.sendPresenceUpdate('paused', jid);
-
-            // Enviar mensaje
-            await this.sock?.sendMessage(jid, { text: closerResult.replyText });
-            console.log(`🤖 [BaileysEngine] Respuesta IA enviada a ${senderPhone} (${closerResult.intent})`);
-
-            // Registrar mensaje en DB
-            await OutreachRepo.addChatMessage(senderPhone, 'assistant', closerResult.replyText);
-
-            // Si el servicio tiene configurado un archivo asset (PDF) y el prospecto respondió afirmativamente
-            if (service.assetFilePath && service.assetFileName) {
-              const lowerInbound = incomingText.toLowerCase();
-              const isAffirmative = /(^|\W)(si|sí|claro|dale|de acuerdo|pásalo|pasamelo|compartir|comparte|mándamelo|mandalo|envialo|envíalo)(\W|$)/i.test(lowerInbound);
-              if (isAffirmative || closerResult.intent === 'CLOSING_DELIVERED') {
-                const assetPath = path.isAbsolute(service.assetFilePath)
-                  ? service.assetFilePath
-                  : path.resolve(service.assetFilePath);
-                if (fs.existsSync(assetPath)) {
-                  console.log(`📎 [BaileysEngine] Despachando activo prometido (${service.assetFileName}) a ${senderPhone}...`);
-                  await this.sendDocument(senderPhone, assetPath, service.assetFileName, `Aquí tiene el archivo prometido: ${service.assetFileName}`);
-                  await OutreachRepo.addChatMessage(senderPhone, 'assistant', `[DOCUMENTO ENVIADO: ${service.assetFileName}]`);
-                }
-              }
+            try {
+              await this.sock?.sendMessage(jid, { text: outOfHoursNotice });
+              await OutreachRepo.addChatMessage(senderPhone, 'assistant', `[AVISO AUTOMÁTICO - FUERA DE HORARIO]: ${outOfHoursNotice}`);
+              console.log(`🌙 [BaileysEngine] Mensaje fuera de horario enviado a ${senderPhone}`);
+            } catch (err: any) {
+              console.error(`[BaileysEngine] Error enviando mensaje fuera de horario a ${senderPhone}:`, err.message);
             }
-          } catch (err: any) {
-            console.error(`[BaileysEngine] Error enviando respuesta a ${senderPhone}:`, err.message);
           }
         }
+
+        // 6. Notificar inmediatamente a Kenneth a su WhatsApp con sugerencias de QPartner
+        const alertMsg = 
+          `🚨 *NUEVO MENSAJE DE PROSPECTO (Atención en Dashboard)*\n\n` +
+          `🏢 Empresa: *${lead.companyName || 'Contacto WhatsApp'}*\n` +
+          `📱 Teléfono: *+${senderPhone}*\n` +
+          `💬 Mensaje: "${incomingText}"\n\n` +
+          `💡 *QPartner Co-Pilot* ha generado 3 sugerencias tácticas en tu Dashboard para responder con 1 clic:\n` +
+          `👉 http://localhost:3100/dashboard`;
+
+        await this.notifyAdmin(alertMsg);
       }
     });
   }
@@ -488,6 +488,27 @@ export class BaileysEngine {
         console.warn('[BaileysEngine] Fallo al despachar webhook:', webhookErr.message);
       }
     }
+  }
+
+  /**
+   * Comprueba si el mensaje entrante está dentro del horario comercial (Perú UTC-5)
+   */
+  private isWithinWorkingHours(settings: { startHour?: number; endHour?: number }): boolean {
+    const now = new Date();
+    // Convertir a hora de Lima, Perú (UTC-5)
+    const limaDateStr = now.toLocaleString('en-US', { timeZone: 'America/Lima' });
+    const limaDate = new Date(limaDateStr);
+    const dayOfWeek = limaDate.getDay(); // 0 = Domingo, 6 = Sábado
+    const currentHour = limaDate.getHours();
+
+    // Domingo cerrado todo el día
+    if (dayOfWeek === 0) return false;
+    // Sábado atención comercial hasta la 1:00 PM (13:00)
+    if (dayOfWeek === 6 && currentHour >= 13) return false;
+
+    const start = settings.startHour ?? 9;
+    const end = settings.endHour ?? 19;
+    return currentHour >= start && currentHour < end;
   }
 
   public getStatus(): { isReady: boolean; hasQr: boolean } {

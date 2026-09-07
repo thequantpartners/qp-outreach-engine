@@ -319,7 +319,7 @@ async function openChatWithLead(phone) {
     document.getElementById('chatComposer').classList.remove('hidden');
     updateTakeoverUI(lead.status === 'HUMAN_TAKEOVER' || !!lead.humanTakeoverAt);
 
-    // Activar Modo Co-Piloto (Paoding)
+    // Activar Modo Co-Piloto (QPartner)
     const copilotPanel = document.getElementById('copilotPanel');
     if (copilotPanel) {
       copilotPanel.classList.remove('hidden');
@@ -446,7 +446,7 @@ async function handleSendManualMessage(e) {
   }
 }
 
-// 8.1. Modo Co-Piloto IA (Paoding)
+// 8.1. Modo Co-Piloto IA (QPartner)
 let currentSuggestions = [];
 
 async function loadCopilotSuggestions(phone) {
@@ -456,7 +456,7 @@ async function loadCopilotSuggestions(phone) {
   container.innerHTML = `
     <div class="col-span-full py-4 flex items-center justify-center gap-2 text-xs text-amber-400">
       <i data-lucide="loader" class="w-4 h-4 animate-spin"></i>
-      <span>Paoding analizando contexto e historial comercial...</span>
+      <span>QPartner analizando contexto e historial comercial...</span>
     </div>
   `;
   if (window.lucide) lucide.createIcons();

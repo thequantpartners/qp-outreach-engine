@@ -1008,7 +1008,7 @@ export class OutreachRepo {
           startHour: 9,
           endHour: 19,
           adminWhatsAppPhone: process.env.ADMIN_WHATSAPP_PHONE || '',
-          isAutonomousActive: true
+          isAutonomousActive: false
         };
       }
       const r = res.rows[0];
@@ -1021,7 +1021,7 @@ export class OutreachRepo {
         adminWhatsAppPhone: r.admin_whatsapp_phone,
         webhookUrl: r.webhook_url,
         alertWebhookUrl: r.alert_webhook_url,
-        isAutonomousActive: r.is_autonomous_active
+        isAutonomousActive: r.is_autonomous_active ?? false
       };
     } else {
       const data = DbConnection.getFallbackData();
@@ -1032,7 +1032,7 @@ export class OutreachRepo {
         startHour: 9,
         endHour: 19,
         adminWhatsAppPhone: process.env.ADMIN_WHATSAPP_PHONE || '',
-        isAutonomousActive: true
+        isAutonomousActive: false
       };
     }
   }
