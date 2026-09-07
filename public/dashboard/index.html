@@ -400,9 +400,58 @@
         </div>
       </div>
 
-      <!-- Composer de Envíos Manuales -->
+      <!-- PANEL CO-PILOTO IA (QPARTNER) DENTRO DEL CHAT -->
+      <div id="copilotPanel" class="border-t border-white/[0.06] bg-surface/90 flex-shrink-0 hidden">
+        <!-- Cabecera QPartner -->
+        <div class="px-5 py-2 flex items-center justify-between border-b border-white/[0.04] bg-obsidian/40">
+          <div class="flex items-center gap-2">
+            <span class="w-5 h-5 rounded-md bg-gold/15 text-gold flex items-center justify-center">
+              <i data-lucide="sparkles" class="w-3 h-3"></i>
+            </span>
+            <span class="font-serif text-xs font-medium text-white">QPartner Co-Pilot</span>
+            <span class="text-[9px] font-mono text-slate-500 tracking-wider hidden sm:inline">RESPUESTA TÁCTICA ASISTIDA</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button 
+              onclick="refreshCopilotSuggestions()" 
+              id="copilotRefreshBtn"
+              class="text-[10px] font-mono text-slate-400 hover:text-gold flex items-center gap-1 transition px-2 py-0.5 rounded bg-obsidian border border-white/[0.06]"
+              title="Regenerar sugerencias con IA"
+            >
+              <i data-lucide="refresh-cw" class="w-2.5 h-2.5"></i>
+              <span>Regenerar</span>
+            </button>
+            <button 
+              onclick="toggleCopilotCollapse()" 
+              id="copilotCollapseBtn"
+              class="text-[10px] font-mono text-slate-400 hover:text-gold flex items-center gap-1 transition px-2 py-0.5 rounded bg-obsidian border border-white/[0.06]"
+            >
+              <i id="copilotCollapseIcon" data-lucide="chevron-up" class="w-2.5 h-2.5"></i>
+              <span id="copilotCollapseText">Minimizar</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Contenedor de Sugerencias Horizontales (3 Columnas) -->
+        <div id="copilotSuggestionsContainer" class="p-3 grid grid-cols-1 md:grid-cols-3 gap-3 max-h-56 overflow-y-auto custom-scroll">
+          <!-- Renderizado dinámicamente desde app.js -->
+        </div>
+      </div>
+
+      <!-- Composer de Envíos Manuales y Dictámenes -->
       <div id="chatComposer" class="p-3 border-t border-white/[0.06] bg-surface/40 flex-shrink-0 hidden">
         <form onsubmit="handleSendManualMessage(event)" class="flex items-center gap-2">
+          <!-- Botón Despacho Dictamen PDF Rápido -->
+          <button
+            type="button"
+            onclick="handleQuickSendDictamen()"
+            id="chatSendDocBtn"
+            title="Despachar Dictamen Técnico EsSalud Piura (PDF)"
+            class="px-3 py-2 bg-obsidian border border-gold/30 hover:border-gold/60 text-gold rounded-xl text-xs flex items-center gap-1.5 transition flex-shrink-0"
+          >
+            <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+            <span class="hidden sm:inline font-mono text-[11px]">Dictamen</span>
+          </button>
           <input 
             type="text" 
             id="chatManualInput" 
@@ -412,7 +461,7 @@
           <button 
             type="submit" 
             id="chatSendBtn"
-            class="px-4 py-2 btn-gold rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-gold/10"
+            class="px-4 py-2 btn-gold rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-gold/10 flex-shrink-0"
           >
             <span>Enviar</span>
             <i data-lucide="send" class="w-3 h-3"></i>
@@ -422,19 +471,19 @@
 
     </section>
 
-    <!-- COLUMNA 3: PANEL DE INTELIGENCIA COMERCIAL & QPARTNER CO-PILOT -->
+    <!-- COLUMNA 3: PANEL DE INTELIGENCIA COMERCIAL & FICHA DEL PROSPECTO -->
     <aside class="w-[330px] xl:w-[360px] border-l border-white/[0.06] bg-surface/40 flex flex-col flex-shrink-0 overflow-y-auto custom-scroll">
       
       <!-- Cabecera Panel Inteligencia -->
       <div class="h-14 border-b border-white/[0.06] px-4 flex items-center justify-between flex-shrink-0 bg-surface/60">
         <div class="flex items-center gap-2">
           <div class="w-6 h-6 rounded-md bg-gold/15 text-gold flex items-center justify-center">
-            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+            <i data-lucide="building-2" class="w-3.5 h-3.5"></i>
           </div>
-          <span class="font-serif text-xs font-medium text-white">Inteligencia Comercial</span>
+          <span class="font-serif text-xs font-medium text-white">Ficha del Prospecto</span>
         </div>
         <span class="text-[9px] font-mono text-gold bg-gold/10 border border-gold/20 px-2 py-0.5 rounded font-semibold">
-          QPartner
+          Lead Intel
         </span>
       </div>
 
@@ -443,7 +492,7 @@
         
         <!-- Estado Placeholder si no hay lead seleccionado -->
         <div id="intelPlaceholder" class="text-center py-12 text-slate-500 text-xs font-light">
-          Selecciona un prospecto para ver su ficha y sugerencias tácticas
+          Selecciona un prospecto para ver su ficha técnica y datos comerciales
         </div>
 
         <!-- Ficha Ejecutiva del Prospecto -->
@@ -486,10 +535,31 @@
             </select>
           </div>
 
+          <!-- Datos Enriquecidos de la Empresa -->
+          <div class="p-3 bg-obsidian rounded-xl border border-white/[0.06] space-y-2 text-xs">
+            <label class="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">
+              Datos de Empresa:
+            </label>
+            <div class="space-y-1.5">
+              <div id="intelWebsiteRow" class="flex items-center justify-between text-[11px]">
+                <span class="text-slate-400 font-mono">Web:</span>
+                <a id="intelWebsite" href="#" target="_blank" class="text-gold hover:underline truncate max-w-[170px] font-mono">---</a>
+              </div>
+              <div class="flex items-center justify-between text-[11px]">
+                <span class="text-slate-400 font-mono">Ubicación:</span>
+                <span id="intelAddress" class="text-slate-300 font-light truncate max-w-[170px]">---</span>
+              </div>
+              <div class="flex items-center justify-between text-[11px]">
+                <span class="text-slate-400 font-mono">Fuente:</span>
+                <span id="intelCategory" class="text-slate-400 font-mono text-[10px]">---</span>
+              </div>
+            </div>
+          </div>
+
           <!-- Acciones Rápidas de Cierre -->
           <div class="p-3 bg-obsidian rounded-xl border border-white/[0.06] space-y-2">
             <label class="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">
-              Herramientas de Cierre Rápido:
+              Herramientas de Cierre:
             </label>
             <div class="space-y-1.5">
               <button 
@@ -501,32 +571,6 @@
                 <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
                 <span>Despachar Dictamen (PDF)</span>
               </button>
-            </div>
-          </div>
-
-          <!-- Bloque QPartner Co-Pilot: 3 Sugerencias Tácticas -->
-          <div class="pt-2 border-t border-white/[0.06] space-y-2.5">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-1.5 text-xs font-serif text-white font-medium">
-                <i data-lucide="message-square" class="w-3.5 h-3.5 text-gold"></i>
-                <span>Sugerencias Tácticas</span>
-              </div>
-              <button 
-                onclick="refreshCopilotSuggestions()" 
-                id="copilotRefreshBtn"
-                class="text-[10px] font-mono text-slate-400 hover:text-gold flex items-center gap-1 px-2 py-0.5 rounded bg-obsidian border border-white/[0.06] transition"
-                title="Regenerar con IA"
-              >
-                <i data-lucide="refresh-cw" class="w-2.5 h-2.5"></i>
-                <span>Regenerar</span>
-              </button>
-            </div>
-
-            <!-- Contenedor Vertical de Sugerencias -->
-            <div id="copilotSuggestionsContainer" class="space-y-2.5">
-              <div class="p-3 text-center text-xs text-slate-500 font-light">
-                Generando opciones tácticas para esta conversación...
-              </div>
             </div>
           </div>
 

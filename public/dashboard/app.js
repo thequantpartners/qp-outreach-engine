@@ -405,6 +405,23 @@ async function selectLeadForDetail(phone) {
     intelStatusSelect.value = lead.status;
   }
 
+  // Ficha de la Empresa en Columna 3
+  const webEl = document.getElementById('intelWebsite');
+  const webRow = document.getElementById('intelWebsiteRow');
+  const addrEl = document.getElementById('intelAddress');
+  const catEl = document.getElementById('intelCategory');
+  if (webEl && webRow) {
+    if (lead.website) {
+      webEl.href = lead.website.startsWith('http') ? lead.website : `https://${lead.website}`;
+      webEl.textContent = lead.website.replace(/^https?:\/\//, '');
+      webRow.classList.remove('hidden');
+    } else {
+      webRow.classList.add('hidden');
+    }
+  }
+  if (addrEl) addrEl.textContent = lead.address || 'Lima, Perú';
+  if (catEl) catEl.textContent = lead.category || lead.source || 'Prospección B2B';
+
   // Cargar Mensajes de Chat
   const messagesContainer = document.getElementById('chatMessagesContainer');
   messagesContainer.innerHTML = `
@@ -425,8 +442,12 @@ async function selectLeadForDetail(phone) {
     messagesContainer.innerHTML = `<div class="p-6 text-center text-xs text-rose-400 font-mono">Error cargando chat: ${escapeHtml(err.message)}</div>`;
   }
 
-  // Cargar Sugerencias Tácticas Co-Piloto en Columna 3
-  loadCopilotSuggestions(phone);
+  // Activar Panel Co-Piloto IA dentro del Chat
+  const copilotPanel = document.getElementById('copilotPanel');
+  if (copilotPanel) {
+    copilotPanel.classList.remove('hidden');
+    loadCopilotSuggestions(phone);
+  }
 }
 
 function updateActiveLeadHeader() {
@@ -736,7 +757,7 @@ async function loadCopilotSuggestions(phone) {
   applyCopilotCollapseState();
 
   container.innerHTML = `
-    <div class="py-4 flex items-center justify-center gap-2 text-xs text-gold font-mono">
+    <div class="col-span-full py-4 flex items-center justify-center gap-2 text-xs text-gold font-mono">
       <i data-lucide="loader" class="w-4 h-4 animate-spin"></i>
       <span>QPartner analizando contexto e historial comercial...</span>
     </div>
@@ -754,7 +775,7 @@ async function loadCopilotSuggestions(phone) {
     renderCopilotSuggestions(currentSuggestions);
   } catch (err) {
     container.innerHTML = `
-      <div class="py-2 text-center text-xs text-rose-400 font-mono">
+      <div class="col-span-full py-2 text-center text-xs text-rose-400 font-mono">
         No se pudieron generar sugerencias: ${escapeHtml(err.message)}
       </div>
     `;
@@ -768,13 +789,13 @@ function renderCopilotSuggestions(suggestions) {
   applyCopilotCollapseState();
 
   if (!suggestions || suggestions.length === 0) {
-    container.innerHTML = '<div class="text-center text-xs text-slate-500 font-mono py-4">Sin sugerencias tácticas para esta etapa.</div>';
+    container.innerHTML = '<div class="col-span-full text-center text-xs text-slate-500 font-mono py-2">Sin sugerencias para este chat.</div>';
     return;
   }
 
   suggestions.forEach((s, idx) => {
     const card = document.createElement('div');
-    card.className = 'bg-obsidian border border-white/[0.06] hover:border-gold/30 rounded-xl p-3 flex flex-col justify-between transition group shadow-sm space-y-2';
+    card.className = 'bg-surface/80 border border-white/[0.06] hover:border-gold/30 rounded-xl p-3 flex flex-col justify-between transition group shadow-sm space-y-2';
 
     card.innerHTML = `
       <div>
@@ -784,7 +805,7 @@ function renderCopilotSuggestions(suggestions) {
           </span>
           <span class="text-[9px] font-mono text-slate-500">Opción ${idx + 1}</span>
         </div>
-        <p class="text-xs text-slate-200 leading-relaxed font-light mb-1.5 bg-surface/40 p-2.5 rounded-lg border border-white/[0.03]">
+        <p class="text-xs text-slate-200 leading-relaxed font-light mb-1.5 bg-obsidian/60 p-2.5 rounded-lg border border-white/[0.03]">
           "${escapeHtml(s.text)}"
         </p>
         <p class="text-[10px] text-slate-400 italic font-light">
@@ -794,7 +815,7 @@ function renderCopilotSuggestions(suggestions) {
       <div class="flex items-center gap-1.5 pt-1.5 border-t border-white/[0.04]">
         <button 
           onclick="useCopilotSuggestion(${idx})"
-          class="flex-1 py-1 px-2 bg-surface hover:bg-white/[0.05] text-slate-300 hover:text-white rounded-lg text-[10px] font-mono transition border border-white/[0.06]"
+          class="flex-1 py-1 px-2 bg-obsidian hover:bg-white/[0.05] text-slate-300 hover:text-white rounded-lg text-[10px] font-mono transition border border-white/[0.06]"
         >
           Usar / Editar
         </button>
