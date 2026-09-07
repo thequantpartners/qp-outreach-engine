@@ -424,6 +424,162 @@ app.post('/api/client/leads/import', authenticateClientPin, async (req: Request,
   }
 });
 
+// Copiloto Autónomo de Prospección IA: Sugerir queries y fuentes enriquecidas
+app.post('/api/client/scrape/suggest', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const { niche, location = 'Lima, Peru' } = req.body || {};
+    if (!niche || !niche.trim()) {
+      res.status(400).json({ error: 'El campo "nicho" es requerido' });
+      return;
+    }
+
+    const cleanNiche = niche.trim().toLowerCase();
+    const cleanLocation = location.trim() || 'Lima, Peru';
+
+    let recommendedSource: 'google_maps' | 'meta_ads' | 'instagram' | 'multi_source' = 'google_maps';
+    let sourceExplanation = 'Google Maps es óptimo para negocios con ubicación física y números directos de atención.';
+    let suggestedQueries: string[] = [];
+    let commercialAngle = 'Consultoría de optimización operativa y captación de clientes.';
+    let recommendedMaxLeads = 15;
+
+    if (cleanNiche.includes('abogad') || cleanNiche.includes('legal') || cleanNiche.includes('juridic') || cleanNiche.includes('tributari') || cleanNiche.includes('penal')) {
+      recommendedSource = 'google_maps';
+      sourceExplanation = 'Google Maps concentra estudios jurídicos y bufetes corporativos con teléfonos de mesa directos y WhatsApp institucional verificado.';
+      suggestedQueries = [
+        `estudios de abogados corporativos ${cleanLocation}`,
+        `asesoria legal tributaria ${cleanLocation}`,
+        `estudio juridico laboral y compliance ${cleanLocation}`,
+        `abogados especialistas en licitaciones ${cleanLocation}`
+      ];
+      commercialAngle = 'Dictámenes periciales y salvaguarda preventiva frente a penalidades contractuales.';
+    } else if (cleanNiche.includes('clinic') || cleanNiche.includes('estetic') || cleanNiche.includes('odontolog') || cleanNiche.includes('dental') || cleanNiche.includes('salud') || cleanNiche.includes('med')) {
+      recommendedSource = 'meta_ads';
+      sourceExplanation = 'Meta Ads Library es superior para clínicas porque filtra negocios con inversión activa en pauta y conversión a WhatsApp.';
+      suggestedQueries = [
+        `clinica estetica ${cleanLocation}`,
+        `centro odontologico y diseño de sonrisa ${cleanLocation}`,
+        `dermatologia y rejuvenecimiento facial ${cleanLocation}`,
+        `implantes dentales ${cleanLocation}`
+      ];
+      commercialAngle = 'Agente IA de atención y agendamiento 24/7 en WhatsApp para triplicar la conversión de pacientes.';
+    } else if (cleanNiche.includes('inmobiliari') || cleanNiche.includes('construct') || cleanNiche.includes('inmueble') || cleanNiche.includes('arquitect') || cleanNiche.includes('propiedad')) {
+      recommendedSource = 'multi_source';
+      sourceExplanation = 'Multi-Fuente (Google Maps + Meta Ads) captura tanto las constructoras con sede física como los proyectos inmobiliarios con pauta activa.';
+      suggestedQueries = [
+        `inmobiliarias y proyectos residenciales ${cleanLocation}`,
+        `empresas constructoras y contratistas generales ${cleanLocation}`,
+        `venta de departamentos y departamentos en planos ${cleanLocation}`,
+        `gerencia de proyectos inmobiliarios ${cleanLocation}`
+      ];
+      commercialAngle = 'Calificación automática de prospectos interesados con filtro de presupuesto antes de la llamada.';
+    } else if (cleanNiche.includes('moda') || cleanNiche.includes('ropa') || cleanNiche.includes('joy') || cleanNiche.includes('marca') || cleanNiche.includes('fit') || cleanNiche.includes('gimnasio')) {
+      recommendedSource = 'instagram';
+      sourceExplanation = 'Instagram Business es la fuente con mayor densidad de decisores directos y enlaces wa.me para marcas visuales y fitness.';
+      suggestedQueries = [
+        `marca de ropa deportiva ${cleanLocation}`,
+        `boutique de moda y calzado ${cleanLocation}`,
+        `joyeria fina y accesorios ${cleanLocation}`,
+        `gimnasios y centros de entrenamiento ${cleanLocation}`
+      ];
+      commercialAngle = 'Recuperación de pedidos y ventas directas asistidas por WhatsApp.';
+    } else {
+      recommendedSource = 'google_maps';
+      sourceExplanation = 'Google Maps permite prospectar directamente a los decisores y oficinas comerciales de este sector en la zona objetivo.';
+      suggestedQueries = [
+        `${cleanNiche} ${cleanLocation}`,
+        `empresas de ${cleanNiche} ${cleanLocation}`,
+        `proveedores de ${cleanNiche} ${cleanLocation}`,
+        `distribuidora de ${cleanNiche} ${cleanLocation}`
+      ];
+      commercialAngle = 'Automatización comercial y prospección B2B de alta retención.';
+    }
+
+    res.json({
+      success: true,
+      niche,
+      location: cleanLocation,
+      recommendedSource,
+      sourceExplanation,
+      suggestedQueries,
+      recommendedMaxLeads,
+      commercialAngle
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Ejecutor de Scraping Multi-Fuente para Previsualización en Dashboard
+app.post('/api/client/scrape/execute', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const { source = 'google_maps', query, location = 'Lima, Peru', maxResults = 15, countryCode = 'pe' } = req.body || {};
+    if (!query || !String(query).trim()) {
+      res.status(400).json({ error: 'El término de búsqueda (query) es requerido' });
+      return;
+    }
+
+    const safeMax = Math.min(Math.max(1, parseInt(String(maxResults), 10) || 15), 30);
+    const cleanQuery = String(query).trim();
+    const cleanLocation = String(location).trim() || 'Lima, Peru';
+
+    let rawLeads: any[] = [];
+    if (source === 'meta_ads') {
+      rawLeads = await ApifyScraper.scrapeMetaAds({ query: cleanQuery, maxResults: safeMax, countryCode });
+    } else if (source === 'instagram') {
+      rawLeads = await ApifyScraper.scrapeInstagram({ query: cleanQuery, maxResults: safeMax });
+    } else if (source === 'multi_source') {
+      rawLeads = await ApifyScraper.scrapeMultiSource({ source: 'google_maps', query: cleanQuery, location: cleanLocation, maxResults: safeMax, countryCode });
+    } else {
+      rawLeads = await ApifyScraper.scrapeGoogleMaps({ query: cleanQuery, location: cleanLocation, maxResults: safeMax, countryCode });
+    }
+
+    // Identificar prospectos que ya están en PostgreSQL para advertir duplicados
+    const cleanPhones = rawLeads
+      .map(l => l.phoneClean || (l.phone ? l.phone.replace(/[^0-9]/g, '') : ''))
+      .filter(p => p && p.length >= 8);
+    
+    const existingPhonesSet = new Set<string>();
+
+    if (cleanPhones.length > 0 && DbConnection.isPg()) {
+      const checkRes = await DbConnection.getPool().query(
+        `SELECT phone FROM leads WHERE phone = ANY($1)`,
+        [cleanPhones]
+      );
+      checkRes.rows.forEach(r => existingPhonesSet.add(r.phone));
+    }
+
+    const processedLeads = rawLeads.map(l => {
+      const phoneClean = l.phoneClean || (l.phone ? l.phone.replace(/[^0-9]/g, '') : '');
+      const isAlreadyInDb = existingPhonesSet.has(phoneClean);
+      return {
+        title: l.title || 'Empresa B2B',
+        phone: l.phone || (phoneClean ? `+${phoneClean}` : 'No disponible'),
+        phoneClean,
+        website: l.website || '',
+        address: l.address || cleanLocation,
+        source: l.source || source,
+        categoryName: l.categoryName || '',
+        alreadyInDatabase: isAlreadyInDb,
+        selected: !isAlreadyInDb && !!phoneClean
+      };
+    });
+
+    res.json({
+      success: true,
+      source,
+      query: cleanQuery,
+      location: cleanLocation,
+      totalFound: processedLeads.length,
+      newLeadsCount: processedLeads.filter(l => !l.alreadyInDatabase && !!l.phoneClean).length,
+      alreadyInDbCount: processedLeads.filter(l => l.alreadyInDatabase).length,
+      leads: processedLeads
+    });
+  } catch (err: any) {
+    console.error('Error ejecutando scraping en cliente:', err);
+    res.status(500).json({ error: 'Error ejecutando scraping en Apify', details: err.message });
+  }
+});
+
 app.get('/api/client/stream', (req: Request, res: Response) => {
   const configuredPin = process.env.CLIENT_PIN || '1234';
   const queryPin = req.query.pin as string;

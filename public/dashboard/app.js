@@ -722,27 +722,393 @@ async function sendCopilotSuggestionDirectly(idx) {
 }
 
 // =================================================================
-// 12. VISTA DE MÉTRICAS Y LIQUIDACIÓN SAAR
+// 12. VISTAS Y NAVEGACIÓN PRINCIPAL
 // =================================================================
 function switchMainView(view) {
   currentMainView = view;
   const workspaceView = document.getElementById('viewWorkspace');
+  const discoveryView = document.getElementById('viewDiscovery');
   const metricsView = document.getElementById('viewMetrics');
   const btnWorkspace = document.getElementById('tabBtnWorkspace');
+  const btnDiscovery = document.getElementById('tabBtnDiscovery');
   const btnMetrics = document.getElementById('tabBtnMetrics');
 
+  const activeClass = 'px-3.5 py-1 rounded-md text-xs font-medium flex items-center gap-2 transition bg-white/[0.05] text-gold border border-gold/20';
+  const inactiveClass = 'px-3.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-white flex items-center gap-2 transition';
+
+  if (workspaceView) workspaceView.classList.add('hidden');
+  if (discoveryView) discoveryView.classList.add('hidden');
+  if (metricsView) metricsView.classList.add('hidden');
+
+  if (btnWorkspace) btnWorkspace.className = inactiveClass;
+  if (btnDiscovery) btnDiscovery.className = inactiveClass;
+  if (btnMetrics) btnMetrics.className = inactiveClass;
+
   if (view === 'workspace') {
-    workspaceView.classList.remove('hidden');
-    metricsView.classList.add('hidden');
-    btnWorkspace.className = 'px-3.5 py-1 rounded-md text-xs font-medium flex items-center gap-2 transition bg-white/[0.05] text-gold border border-gold/20';
-    btnMetrics.className = 'px-3.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-white flex items-center gap-2 transition';
-  } else {
-    workspaceView.classList.add('hidden');
-    metricsView.classList.remove('hidden');
-    btnMetrics.className = 'px-3.5 py-1 rounded-md text-xs font-medium flex items-center gap-2 transition bg-white/[0.05] text-gold border border-gold/20';
-    btnWorkspace.className = 'px-3.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-white flex items-center gap-2 transition';
+    if (workspaceView) workspaceView.classList.remove('hidden');
+    if (btnWorkspace) btnWorkspace.className = activeClass;
+  } else if (view === 'discovery') {
+    if (discoveryView) discoveryView.classList.remove('hidden');
+    if (btnDiscovery) btnDiscovery.className = activeClass;
+    loadDiscoveryServices();
+  } else if (view === 'metrics') {
+    if (metricsView) metricsView.classList.remove('hidden');
+    if (btnMetrics) btnMetrics.className = activeClass;
   }
+
   if (window.lucide) lucide.createIcons();
+}
+
+// =================================================================
+// 12b. DESCUBRIMIENTO & PROSPECCIÓN IA MULTI-FUENTE
+// =================================================================
+let currentDiscoveredLeads = [];
+let scrapeTimerInterval = null;
+
+async function loadDiscoveryServices() {
+  const select = document.getElementById('previewServiceSelect');
+  if (!select) return;
+
+  try {
+    const res = await fetch('/api/client/services', {
+      headers: { 'x-client-pin': currentPin }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.services && data.services.length > 0) {
+        select.innerHTML = '';
+        data.services.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s.id;
+          opt.textContent = `${s.name} (${s.id})${s.isActive ? ' - Activa' : ''}`;
+          select.appendChild(opt);
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('Error cargando servicios de prospección:', err);
+  }
+}
+
+async function handleGenerateScrapeStrategy() {
+  const nicheInput = document.getElementById('discoveryNicheInput');
+  const locationInput = document.getElementById('discoveryLocationInput');
+  const btn = document.getElementById('btnGenerateStrategy');
+  const resultBox = document.getElementById('strategyResultBox');
+
+  const niche = nicheInput ? nicheInput.value.trim() : '';
+  const location = locationInput ? locationInput.value.trim() : 'Lima, Peru';
+
+  if (!niche) {
+    alert('Por favor ingresa un nicho o sector objetivo (ej: Estudios de abogados corporativos).');
+    if (nicheInput) nicheInput.focus();
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i><span>Diseñando Estrategia...</span>';
+    if (window.lucide) lucide.createIcons();
+  }
+
+  try {
+    const res = await fetch('/api/client/scrape/suggest', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-client-pin': currentPin
+      },
+      body: JSON.stringify({ niche, location })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al generar sugerencia');
+
+    const badge = document.getElementById('strategySourceBadge');
+    const maxLeadsEl = document.getElementById('strategyMaxLeadsText');
+    const explanationEl = document.getElementById('strategyExplanationText');
+    const angleEl = document.getElementById('strategyAngleText');
+    const queriesContainer = document.getElementById('strategyQueriesContainer');
+
+    const sourceLabels = {
+      google_maps: '🗺️ Google Maps (Locales)',
+      meta_ads: '📢 Meta Ads Library (Con Pauta)',
+      instagram: '📸 Instagram Business',
+      multi_source: '🎯 Multi-Fuente (Maps + Ads)'
+    };
+
+    if (badge) {
+      badge.textContent = sourceLabels[data.recommendedSource] || data.recommendedSource;
+    }
+    if (maxLeadsEl) maxLeadsEl.textContent = `${data.recommendedMaxLeads} prospectos`;
+    if (explanationEl) explanationEl.textContent = data.sourceExplanation;
+    if (angleEl) angleEl.textContent = data.commercialAngle;
+
+    const sourceSelect = document.getElementById('scrapeSourceSelect');
+    if (sourceSelect) sourceSelect.value = data.recommendedSource;
+
+    const maxResultsSelect = document.getElementById('scrapeMaxResultsSelect');
+    if (maxResultsSelect) maxResultsSelect.value = String(data.recommendedMaxLeads);
+
+    if (queriesContainer) {
+      queriesContainer.innerHTML = '';
+      (data.suggestedQueries || []).forEach(q => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'px-3 py-1.5 rounded-lg text-xs font-mono transition bg-white/[0.04] hover:bg-gold/15 text-slate-200 hover:text-gold border border-white/[0.08] hover:border-gold/30 flex items-center gap-1.5 cursor-pointer';
+        chip.innerHTML = `<i data-lucide="arrow-right" class="w-3 h-3 text-gold"></i><span>${escapeHtml(q)}</span>`;
+        chip.onclick = () => {
+          const queryInput = document.getElementById('scrapeQueryInput');
+          if (queryInput) {
+            queryInput.value = q;
+            queryInput.classList.add('border-gold');
+            setTimeout(() => queryInput.classList.remove('border-gold'), 1200);
+            queryInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        };
+        queriesContainer.appendChild(chip);
+      });
+    }
+
+    if (data.suggestedQueries && data.suggestedQueries.length > 0) {
+      const queryInput = document.getElementById('scrapeQueryInput');
+      if (queryInput && !queryInput.value.trim()) {
+        queryInput.value = data.suggestedQueries[0];
+      }
+    }
+
+    if (resultBox) resultBox.classList.remove('hidden');
+    if (window.lucide) lucide.createIcons();
+
+  } catch (err) {
+    alert('Error al diseñar estrategia con IA: ' + err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="brain-circuit" class="w-4 h-4"></i><span>Diseñar Estrategia con IA</span>';
+      if (window.lucide) lucide.createIcons();
+    }
+  }
+}
+
+async function handleExecuteScraping() {
+  const queryInput = document.getElementById('scrapeQueryInput');
+  const sourceSelect = document.getElementById('scrapeSourceSelect');
+  const maxResultsSelect = document.getElementById('scrapeMaxResultsSelect');
+  const locationInput = document.getElementById('discoveryLocationInput');
+  const btn = document.getElementById('btnExecuteScrape');
+  const progressBox = document.getElementById('scrapeProgressBox');
+  const progressTimer = document.getElementById('scrapeProgressTimer');
+  const previewCard = document.getElementById('scrapePreviewCard');
+
+  const query = queryInput ? queryInput.value.trim() : '';
+  const source = sourceSelect ? sourceSelect.value : 'google_maps';
+  const maxResults = maxResultsSelect ? parseInt(maxResultsSelect.value, 10) : 15;
+  const location = locationInput ? locationInput.value.trim() : 'Lima, Peru';
+
+  if (!query) {
+    alert('Por favor ingresa un término de búsqueda (ej: clinicas odontologicas surco).');
+    if (queryInput) queryInput.focus();
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add('opacity-50');
+  }
+
+  if (progressBox) progressBox.classList.remove('hidden');
+  if (previewCard) previewCard.classList.add('hidden');
+
+  let seconds = 0;
+  if (progressTimer) progressTimer.textContent = '0s';
+  if (scrapeTimerInterval) clearInterval(scrapeTimerInterval);
+  scrapeTimerInterval = setInterval(() => {
+    seconds++;
+    if (progressTimer) progressTimer.textContent = `${seconds}s`;
+  }, 1000);
+
+  try {
+    const res = await fetch('/api/client/scrape/execute', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-client-pin': currentPin
+      },
+      body: JSON.stringify({ source, query, location, maxResults, countryCode: 'pe' })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al ejecutar scraping');
+
+    currentDiscoveredLeads = data.leads || [];
+    renderScrapedLeadsPreview(currentDiscoveredLeads);
+
+    if (previewCard) {
+      previewCard.classList.remove('hidden');
+      previewCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+  } catch (err) {
+    alert('Error al ejecutar scraping en Apify: ' + err.message);
+  } finally {
+    if (scrapeTimerInterval) {
+      clearInterval(scrapeTimerInterval);
+      scrapeTimerInterval = null;
+    }
+    if (progressBox) progressBox.classList.add('hidden');
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove('opacity-50');
+    }
+  }
+}
+
+function renderScrapedLeadsPreview(leads) {
+  const tbody = document.getElementById('scrapePreviewTableBody');
+  const countBadge = document.getElementById('previewCountBadge');
+  const selectAll = document.getElementById('previewSelectAllCheckbox');
+  if (!tbody) return;
+
+  tbody.innerHTML = '';
+  if (selectAll) selectAll.checked = true;
+
+  if (countBadge) {
+    const newCount = leads.filter(l => !l.alreadyInDatabase && !!l.phoneClean).length;
+    countBadge.textContent = `${leads.length} encontrados (${newCount} nuevos para importar)`;
+  }
+
+  if (leads.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" class="p-8 text-center text-slate-500 font-mono">
+          No se obtuvieron registros para esta búsqueda. Prueba modificando el término o la fuente.
+        </td>
+      </tr>
+    `;
+    updateInjectButtonCount();
+    return;
+  }
+
+  leads.forEach((l, idx) => {
+    const tr = document.createElement('tr');
+    tr.className = `hover:bg-white/[0.02] transition ${l.alreadyInDatabase ? 'opacity-50' : ''}`;
+
+    const isSelectable = !l.alreadyInDatabase && !!l.phoneClean;
+    const isChecked = isSelectable && l.selected !== false;
+
+    const webHtml = l.website 
+      ? `<a href="${escapeHtml(l.website)}" target="_blank" class="text-gold hover:underline font-mono text-[11px] truncate max-w-[180px] inline-block">${escapeHtml(l.website.replace(/^https?:\/\/(www\.)?/, ''))}</a>`
+      : '<span class="text-slate-600 font-mono">---</span>';
+
+    const statusBadge = l.alreadyInDatabase
+      ? '<span class="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-400 border border-white/[0.06]">Ya Registrado</span>'
+      : (l.phoneClean ? '<span class="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Listo</span>' : '<span class="px-2 py-0.5 rounded text-[10px] font-mono bg-rose-500/10 text-rose-400">Sin Celular</span>');
+
+    tr.innerHTML = `
+      <td class="p-3">
+        <input 
+          type="checkbox" 
+          ${isChecked ? 'checked' : ''} 
+          ${!isSelectable ? 'disabled' : ''} 
+          onchange="toggleLeadSelection(${idx}, this.checked)"
+          class="rounded bg-obsidian border-white/[0.2] text-gold focus:ring-0 cursor-pointer"
+        >
+      </td>
+      <td class="p-3 font-medium text-slate-200">${escapeHtml(l.title)}</td>
+      <td class="p-3 font-mono text-xs ${l.phoneClean ? 'text-gold' : 'text-slate-500'}">${escapeHtml(l.phone || 'No detectado')}</td>
+      <td class="p-3">${webHtml}</td>
+      <td class="p-3 text-slate-400 truncate max-w-[200px]">${escapeHtml(l.address || l.categoryName || '---')}</td>
+      <td class="p-3 text-right">${statusBadge}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  updateInjectButtonCount();
+  if (window.lucide) lucide.createIcons();
+}
+
+function toggleLeadSelection(idx, isChecked) {
+  if (currentDiscoveredLeads[idx]) {
+    currentDiscoveredLeads[idx].selected = isChecked;
+  }
+  updateInjectButtonCount();
+}
+
+function toggleSelectAllPreview(isChecked) {
+  currentDiscoveredLeads.forEach(l => {
+    if (!l.alreadyInDatabase && !!l.phoneClean) {
+      l.selected = isChecked;
+    }
+  });
+  renderScrapedLeadsPreview(currentDiscoveredLeads);
+}
+
+function updateInjectButtonCount() {
+  const selectedCount = currentDiscoveredLeads.filter(l => l.selected && !l.alreadyInDatabase && !!l.phoneClean).length;
+  const btnCount = document.getElementById('btnInjectCount');
+  const btn = document.getElementById('btnInjectApproved');
+  if (btnCount) btnCount.textContent = selectedCount;
+  if (btn) btn.disabled = selectedCount === 0;
+}
+
+async function handleInjectApprovedLeads() {
+  const selected = currentDiscoveredLeads.filter(l => l.selected && !l.alreadyInDatabase && !!l.phoneClean);
+  if (selected.length === 0) {
+    alert('No hay prospectos válidos seleccionados para importar.');
+    return;
+  }
+
+  const serviceSelect = document.getElementById('previewServiceSelect');
+  const serviceId = serviceSelect ? serviceSelect.value : 'licitaciones-qp';
+
+  const btn = document.getElementById('btnInjectApproved');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i><span>Inyectando al Pipeline...</span>';
+    if (window.lucide) lucide.createIcons();
+  }
+
+  try {
+    const leadsPayload = selected.map(l => ({
+      name: l.title,
+      phone: l.phoneClean,
+      website: l.website,
+      address: l.address
+    }));
+
+    const res = await fetch('/api/client/leads/import', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-client-pin': currentPin
+      },
+      body: JSON.stringify({ serviceId, leads: leadsPayload })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error importando leads');
+
+    alert(`✅ ${data.inserted} prospectos inyectados exitosamente a la campaña "${serviceId}".\n\nQuedan listos en estado "Por Contactar" para su prospección escalonada.`);
+
+    selected.forEach(l => {
+      l.alreadyInDatabase = true;
+      l.selected = false;
+    });
+    renderScrapedLeadsPreview(currentDiscoveredLeads);
+
+    fetchOverview();
+
+  } catch (err) {
+    alert('Error inyectando prospectos: ' + err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="user-plus" class="w-4 h-4"></i><span>Inyectar al Pipeline (<span id="btnInjectCount">0</span>)</span>';
+      updateInjectButtonCount();
+      if (window.lucide) lucide.createIcons();
+    }
+  }
 }
 
 function renderMetrics(data) {

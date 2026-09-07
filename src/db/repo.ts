@@ -955,19 +955,41 @@ export class OutreachRepo {
   // --- CHAT MESSAGES ---
   public static async addChatMessage(leadPhone: string, role: 'assistant' | 'user' | 'human_agent' | 'system', content: string): Promise<void> {
     const clean = leadPhone.replace(/[^0-9]/g, '');
+    const trimmedContent = (content || '').trim();
+    if (!trimmedContent) return;
+
     if (DbConnection.isPg()) {
+      // Prevención de duplicados: ignorar si el mensaje idéntico ya se guardó en los últimos 60 segundos
+      const existing = await DbConnection.getPool().query(
+        `SELECT id FROM chat_messages 
+         WHERE lead_phone = $1 AND role = $2 AND content = $3 
+           AND created_at > NOW() - INTERVAL '60 seconds'
+         LIMIT 1`,
+        [clean, role, trimmedContent]
+      );
+      if (existing.rows.length > 0) {
+        console.log(`⚠️ [repo] Mensaje duplicado omitido para ${clean} (ya registrado recientemente).`);
+        return;
+      }
+
       await DbConnection.getPool().query(
         `INSERT INTO chat_messages (lead_phone, role, content, created_at)
          VALUES ($1, $2, $3, NOW())`,
-        [clean, role, content]
+        [clean, role, trimmedContent]
       );
     } else {
       const data = DbConnection.getFallbackData();
       data.messages = data.messages || [];
+      const isDuplicate = data.messages.some((m: any) => 
+        m.leadPhone === clean && m.role === role && m.content === trimmedContent &&
+        (Date.now() - new Date(m.createdAt).getTime() < 60000)
+      );
+      if (isDuplicate) return;
+
       data.messages.push({
         leadPhone: clean,
         role,
-        content,
+        content: trimmedContent,
         createdAt: new Date().toISOString()
       });
       DbConnection.saveFallbackData(data);

@@ -151,7 +151,7 @@
 
     <!-- NAVEGACIÓN Y VISTAS -->
     <div class="flex items-center gap-2">
-      <!-- Selector de Vista: Master-Detail Workspace vs Métricas -->
+      <!-- Selector de Vista: Master-Detail Workspace vs Prospección vs Métricas -->
       <div class="flex items-center bg-obsidian p-1 rounded-lg border border-white/[0.06]">
         <button 
           onclick="switchMainView('workspace')" 
@@ -160,6 +160,14 @@
         >
           <i data-lucide="layout" class="w-3.5 h-3.5"></i>
           <span>Pipeline & Chat</span>
+        </button>
+        <button 
+          onclick="switchMainView('discovery')" 
+          id="tabBtnDiscovery" 
+          class="px-3.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-white flex items-center gap-2 transition"
+        >
+          <i data-lucide="compass" class="w-3.5 h-3.5 text-gold"></i>
+          <span>Prospección IA</span>
         </button>
         <button 
           onclick="switchMainView('metrics')" 
@@ -402,7 +410,258 @@
   </main>
 
   <!-- ============================================== -->
-  <!-- VISTA 2: MÉTRICAS Y LIQUIDACIÓN SAAR (EDITORIAL) -->
+  <!-- VISTA 2: DESCUBRIMIENTO & PROSPECCIÓN IA MULTI-FUENTE -->
+  <!-- ============================================== -->
+  <section id="viewDiscovery" class="flex-1 overflow-y-auto custom-scroll p-8 hidden">
+    <div class="max-w-5xl mx-auto space-y-8">
+
+      <!-- Encabezado Editorial -->
+      <div class="border-b border-white/[0.06] pb-6 flex items-center justify-between">
+        <div>
+          <p class="text-[10px] uppercase font-mono tracking-widest text-gold mb-1">The Quant Partners &bull; Motor de Adquisición B2B</p>
+          <h2 class="font-serif text-3xl font-medium tracking-tight text-white">Descubrimiento & Prospección Enriquecida</h2>
+          <p class="text-xs text-slate-400 font-light mt-1">Scraping multicanal (Google Maps, Meta Ads Library e Instagram) con warmup anti-ban y copiloto táctico.</p>
+        </div>
+        <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gold/10 border border-gold/20 text-gold text-xs font-mono">
+          <i data-lucide="shield-check" class="w-4 h-4"></i>
+          <span>Warmup Anti-Ban Activo</span>
+        </div>
+      </div>
+
+      <!-- TARJETA 1: COPILOTO AUTÓNOMO DE NICHO (PASO 1 Y 2) -->
+      <div class="card-luxury rounded-2xl p-6 border border-white/[0.08] relative overflow-hidden">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2">
+            <span class="w-7 h-7 rounded-xl bg-gold/15 text-gold flex items-center justify-center border border-gold/30">
+              <i data-lucide="sparkles" class="w-4 h-4"></i>
+            </span>
+            <div>
+              <h3 class="font-serif text-base font-medium text-white">Copiloto Estratégico de Nicho</h3>
+              <p class="text-[11px] text-slate-400 font-light">Indica el mercado objetivo y la IA diseñará las queries y seleccionará la mejor fuente enriquecida.</p>
+            </div>
+          </div>
+          <span class="text-[10px] font-mono text-gold/80 uppercase tracking-wider bg-gold/10 px-2.5 py-0.5 rounded border border-gold/20">
+            Paso 1 de 2
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div class="md:col-span-2">
+            <label class="block text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-1.5">Nicho / Sector Objetivo</label>
+            <input 
+              type="text" 
+              id="discoveryNicheInput" 
+              placeholder="Ej: Estudios de abogados corporativos, Clínicas estéticas, Constructoras..." 
+              class="w-full bg-obsidian border border-white/[0.08] focus:border-gold rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 font-light"
+            />
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-1.5">Ubicación / Ciudad</label>
+            <input 
+              type="text" 
+              id="discoveryLocationInput" 
+              value="Lima, Peru" 
+              class="w-full bg-obsidian border border-white/[0.08] focus:border-gold rounded-xl px-4 py-2.5 text-xs text-white font-mono"
+            />
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end">
+          <button 
+            type="button" 
+            onclick="handleGenerateScrapeStrategy()" 
+            id="btnGenerateStrategy"
+            class="px-5 py-2.5 btn-gold rounded-xl text-xs font-semibold flex items-center gap-2 shadow-md shadow-gold/10"
+          >
+            <i data-lucide="brain-circuit" class="w-4 h-4"></i>
+            <span>Diseñar Estrategia con IA</span>
+          </button>
+        </div>
+
+        <!-- RESULTADO DE ESTRATEGIA GENERADA -->
+        <div id="strategyResultBox" class="mt-6 pt-6 border-t border-white/[0.06] hidden">
+          <div class="p-4 rounded-xl bg-obsidian/70 border border-gold/20 space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-400 font-mono">Fuente Recomendada:</span>
+                <span id="strategySourceBadge" class="text-xs font-mono font-semibold px-2.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 uppercase">
+                  Google Maps
+                </span>
+              </div>
+              <div class="flex items-center gap-2 text-[11px] font-mono text-slate-400">
+                <i data-lucide="shield" class="w-3.5 h-3.5 text-gold"></i>
+                <span>Lote seguro: <strong id="strategyMaxLeadsText" class="text-gold">15 prospectos</strong></span>
+              </div>
+            </div>
+
+            <p id="strategyExplanationText" class="text-xs text-slate-300 font-light leading-relaxed"></p>
+
+            <div>
+              <p class="text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-2">Términos Tácticos Sugeridos (Haz clic para usar):</p>
+              <div id="strategyQueriesContainer" class="flex flex-wrap gap-2"></div>
+            </div>
+
+            <div class="p-3 rounded-lg bg-surface/80 border border-white/[0.04] flex items-start gap-2.5">
+              <i data-lucide="sparkles" class="w-4 h-4 text-gold flex-shrink-0 mt-0.5"></i>
+              <div class="text-xs font-light">
+                <span class="text-gold font-mono text-[11px]">Ángulo Comercial Recomendado:</span>
+                <p id="strategyAngleText" class="text-slate-300 mt-0.5"></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TARJETA 2: CONSOLA DE DISPARO DE SCRAPING -->
+      <div class="card-luxury rounded-2xl p-6 border border-white/[0.08]">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2">
+            <span class="w-7 h-7 rounded-xl bg-white/[0.05] text-slate-300 flex items-center justify-center border border-white/[0.08]">
+              <i data-lucide="search" class="w-4 h-4"></i>
+            </span>
+            <div>
+              <h3 class="font-serif text-base font-medium text-white">Consola de Scraping en Apify</h3>
+              <p class="text-[11px] text-slate-400 font-light">Configura los parámetros o utiliza los datos sugeridos por el copiloto.</p>
+            </div>
+          </div>
+          <span class="text-[10px] font-mono text-slate-500 uppercase tracking-wider bg-white/[0.03] px-2.5 py-0.5 rounded border border-white/[0.06]">
+            Paso 2 de 2
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+          <!-- Selector de Fuente -->
+          <div>
+            <label class="block text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-1.5">Fuente Enriquecida</label>
+            <select 
+              id="scrapeSourceSelect" 
+              class="w-full bg-obsidian border border-white/[0.08] focus:border-gold rounded-xl px-3 py-2.5 text-xs text-white font-mono"
+            >
+              <option value="google_maps">🗺️ Google Maps (Locales)</option>
+              <option value="meta_ads">📢 Meta Ads Library (Con Pauta)</option>
+              <option value="instagram">📸 Instagram Business</option>
+              <option value="multi_source">🎯 Multi-Fuente (Maps + Ads)</option>
+            </select>
+          </div>
+
+          <!-- Query de Búsqueda -->
+          <div class="md:col-span-2">
+            <label class="block text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-1.5">Término de Búsqueda (Query)</label>
+            <input 
+              type="text" 
+              id="scrapeQueryInput" 
+              placeholder="Ej: clinicas odontologicas surco" 
+              class="w-full bg-obsidian border border-white/[0.08] focus:border-gold rounded-xl px-4 py-2.5 text-xs text-white font-mono"
+            />
+          </div>
+
+          <!-- Límite Seguro Anti-Ban -->
+          <div>
+            <label class="block text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-1.5">Límite de Leads (Anti-Ban)</label>
+            <select 
+              id="scrapeMaxResultsSelect" 
+              class="w-full bg-obsidian border border-white/[0.08] focus:border-gold rounded-xl px-3 py-2.5 text-xs text-gold font-mono font-semibold"
+            >
+              <option value="5">5 prospectos (Test Ultrarápido)</option>
+              <option value="10">10 prospectos (Recomendado Warmup)</option>
+              <option value="15" selected>15 prospectos (Balance Óptimo)</option>
+              <option value="25">25 prospectos (Máximo Seguro)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-2">
+          <div class="flex items-center gap-2 text-[11px] font-mono text-slate-500">
+            <i data-lucide="clock" class="w-3.5 h-3.5 text-slate-400"></i>
+            <span>Demora estimada: 30 a 60 segundos por consulta</span>
+          </div>
+
+          <button 
+            type="button" 
+            onclick="handleExecuteScraping()" 
+            id="btnExecuteScrape"
+            class="px-6 py-2.5 btn-gold rounded-xl text-xs font-semibold flex items-center gap-2 shadow-lg shadow-gold/10"
+          >
+            <i data-lucide="play" class="w-4 h-4 fill-current"></i>
+            <span>Iniciar Prospección en Apify</span>
+          </button>
+        </div>
+
+        <!-- BARRA DE ESTADO Y PROGRESO DE SCRAPING -->
+        <div id="scrapeProgressBox" class="mt-4 p-4 rounded-xl bg-obsidian border border-white/[0.06] flex items-center justify-between hidden">
+          <div class="flex items-center gap-3">
+            <i data-lucide="loader" class="w-5 h-5 text-gold animate-spin"></i>
+            <div>
+              <p id="scrapeProgressTitle" class="text-xs font-medium text-white">Extrayendo prospectos en vivo desde Apify...</p>
+              <p id="scrapeProgressSubtitle" class="text-[10px] font-mono text-slate-400 mt-0.5">Consultando registros y sanitizando teléfonos celulares</p>
+            </div>
+          </div>
+          <span id="scrapeProgressTimer" class="font-mono text-xs text-gold">0s</span>
+        </div>
+      </div>
+
+      <!-- TARJETA 3: TABLA DE PREVISUALIZACIÓN & INYECCIÓN AL PIPELINE -->
+      <div id="scrapePreviewCard" class="card-luxury rounded-2xl p-6 border border-white/[0.08] hidden">
+        <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-white/[0.06] mb-6">
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="font-serif text-lg font-medium text-white">Prospectos Descubiertos</h3>
+              <span id="previewCountBadge" class="px-2.5 py-0.5 text-xs font-mono rounded bg-gold/15 text-gold border border-gold/30">
+                0 leads
+              </span>
+            </div>
+            <p class="text-xs text-slate-400 font-light mt-1">Revisa y selecciona los prospectos que deseas ingresar al embudo comercial.</p>
+          </div>
+
+          <!-- Acciones de Inyección -->
+          <div class="flex items-center gap-3">
+            <div class="flex items-center gap-1.5 text-xs text-slate-400 font-mono">
+              <span>Campaña:</span>
+              <select 
+                id="previewServiceSelect" 
+                class="bg-obsidian border border-white/[0.08] text-xs rounded-lg px-3 py-1.5 text-slate-200 focus:outline-none focus:border-gold"
+              ></select>
+            </div>
+
+            <button 
+              type="button" 
+              onclick="handleInjectApprovedLeads()" 
+              id="btnInjectApproved"
+              class="px-5 py-2 btn-gold rounded-xl text-xs font-semibold flex items-center gap-2 shadow-md shadow-gold/10"
+            >
+              <i data-lucide="user-plus" class="w-4 h-4"></i>
+              <span>Inyectar al Pipeline (<span id="btnInjectCount">0</span>)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Tabla Editorial de Previsualización -->
+        <div class="overflow-x-auto custom-scroll">
+          <table class="w-full text-left text-xs text-slate-300">
+            <thead class="text-[10px] uppercase font-mono text-slate-500 border-b border-white/[0.06] bg-obsidian/40">
+              <tr>
+                <th class="p-3 w-10">
+                  <input type="checkbox" id="previewSelectAllCheckbox" onchange="toggleSelectAllPreview(this.checked)" checked class="rounded bg-obsidian border-white/[0.2] text-gold focus:ring-0 cursor-pointer">
+                </th>
+                <th class="p-3">Empresa / Negocio</th>
+                <th class="p-3">WhatsApp / Teléfono</th>
+                <th class="p-3">Sitio Web / Perfil</th>
+                <th class="p-3">Ubicación / Categoría</th>
+                <th class="p-3 text-right">Estado</th>
+              </tr>
+            </thead>
+            <tbody id="scrapePreviewTableBody" class="divide-y divide-white/[0.03] font-light">
+              <!-- Renderizado dinámicamente desde app.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============================================== -->
+  <!-- VISTA 3: MÉTRICAS Y LIQUIDACIÓN SAAR (EDITORIAL) -->
   <!-- ============================================== -->
   <section id="viewMetrics" class="flex-1 overflow-y-auto custom-scroll p-8 hidden">
     <div class="max-w-5xl mx-auto space-y-8">
