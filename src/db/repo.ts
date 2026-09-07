@@ -139,6 +139,12 @@ export class OutreachRepo {
       ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS currency VARCHAR(10) DEFAULT 'S/.';
       ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS monthly_retainer_fee NUMERIC DEFAULT 2800;
       ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS success_fee_per_meeting NUMERIC DEFAULT 200;
+      ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS whatsapp_provider VARCHAR(50) DEFAULT 'direct_qr';
+      ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS meta_phone_number_id VARCHAR(100);
+      ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS meta_waba_id VARCHAR(100);
+      ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS meta_access_token TEXT;
+      ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS meta_webhook_verify_token VARCHAR(100);
+      ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_customer_message_at TIMESTAMP WITH TIME ZONE;
     `);
 
     // Comprobar si no hay servicios registrados
@@ -536,6 +542,8 @@ export class OutreachRepo {
       assignedRepPhone?: string;
       handoffNotes?: string;
       closingMode?: string;
+      lastCustomerMessageAt?: string | null;
+      lastMessageAt?: string;
     }
   ): Promise<void> {
     const clean = phone.replace(/[^0-9]/g, '');
@@ -573,6 +581,11 @@ export class OutreachRepo {
         params.push(extra.closingMode);
       }
 
+      if (extra?.lastCustomerMessageAt !== undefined) {
+        query += `, last_customer_message_at = $${pIndex++}`;
+        params.push(extra.lastCustomerMessageAt);
+      }
+
       query += `, last_message_at = NOW() WHERE phone = $${pIndex}`;
       params.push(clean);
 
@@ -583,7 +596,10 @@ export class OutreachRepo {
       if (lead) {
         lead.status = status;
         lead.updatedAt = new Date().toISOString();
-        lead.lastMessageAt = new Date().toISOString();
+        lead.lastMessageAt = extra?.lastMessageAt || new Date().toISOString();
+        if (extra?.lastCustomerMessageAt !== undefined) {
+          lead.lastCustomerMessageAt = extra.lastCustomerMessageAt || undefined;
+        }
         if (status === 'OUTREACH_SENT') {
           lead.lastOutreachAt = new Date().toISOString();
         }
@@ -1065,7 +1081,12 @@ export class OutreachRepo {
         aiModel: r.ai_model || 'google/gemini-2.5-flash',
         currency: r.currency || 'S/.',
         monthlyRetainerFee: r.monthly_retainer_fee != null ? Number(r.monthly_retainer_fee) : 2800,
-        successFeePerMeeting: r.success_fee_per_meeting != null ? Number(r.success_fee_per_meeting) : 200
+        successFeePerMeeting: r.success_fee_per_meeting != null ? Number(r.success_fee_per_meeting) : 200,
+        whatsappProvider: r.whatsapp_provider || 'direct_qr',
+        metaPhoneNumberId: r.meta_phone_number_id || '',
+        metaWabaId: r.meta_waba_id || '',
+        metaAccessToken: r.meta_access_token || '',
+        metaWebhookVerifyToken: r.meta_webhook_verify_token || 'qp_verify_token_2026'
       };
     } else {
       const data = DbConnection.getFallbackData();
@@ -1084,7 +1105,12 @@ export class OutreachRepo {
         aiModel: 'google/gemini-2.5-flash',
         currency: 'S/.',
         monthlyRetainerFee: 2800,
-        successFeePerMeeting: 200
+        successFeePerMeeting: 200,
+        whatsappProvider: 'direct_qr',
+        metaPhoneNumberId: '',
+        metaWabaId: '',
+        metaAccessToken: '',
+        metaWebhookVerifyToken: 'qp_verify_token_2026'
       };
     }
   }
@@ -1112,6 +1138,11 @@ export class OutreachRepo {
            currency = $15,
            monthly_retainer_fee = $16,
            success_fee_per_meeting = $17,
+           whatsapp_provider = $18,
+           meta_phone_number_id = $19,
+           meta_waba_id = $20,
+           meta_access_token = $21,
+           meta_webhook_verify_token = $22,
            updated_at = NOW()
          WHERE id = 'main_config'`,
         [
@@ -1131,7 +1162,12 @@ export class OutreachRepo {
           updated.aiModel || 'google/gemini-2.5-flash',
           updated.currency || 'S/.',
           updated.monthlyRetainerFee ?? 2800,
-          updated.successFeePerMeeting ?? 200
+          updated.successFeePerMeeting ?? 200,
+          updated.whatsappProvider || 'direct_qr',
+          updated.metaPhoneNumberId || '',
+          updated.metaWabaId || '',
+          updated.metaAccessToken || '',
+          updated.metaWebhookVerifyToken || 'qp_verify_token_2026'
         ]
       );
     } else {

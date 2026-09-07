@@ -1,4 +1,6 @@
 import { BaileysEngine } from '../whatsapp/baileys_engine.js';
+import { MetaCloudEngine } from '../whatsapp/meta_cloud_engine.js';
+import { OutreachRepo } from '../db/repo.js';
 import { StartCampaignRequest, StartCampaignResponse } from '../types/index.js';
 import crypto from 'crypto';
 
@@ -80,7 +82,16 @@ export class DripOrchestrator {
 
       console.log(`[DripOrchestrator][${i + 1}/${req.leads.length}] Enviando a ${lead.name} (${lead.phone})...`);
       
-      const result = await whatsapp.send(lead.phone, texto);
+      const settings = await OutreachRepo.getSettings();
+      const provider = settings.whatsappProvider || 'direct_qr';
+      let result: { success: boolean; error?: string };
+
+      if (provider === 'meta_cloud_api') {
+        const metaRes = await MetaCloudEngine.sendTextMessage(lead.phone, texto);
+        result = { success: metaRes.success, error: metaRes.error };
+      } else {
+        result = await whatsapp.send(lead.phone, texto);
+      }
 
       if (result.success) {
         state.sentCount++;

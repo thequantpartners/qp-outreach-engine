@@ -55,6 +55,7 @@ export interface Lead {
   lastOutreachAt?: string;
   scheduledMeetingAt?: string;
   lastMessageAt?: string;
+  lastCustomerMessageAt?: string;
   humanTakeoverAt?: string;
   assignedRepName?: string;
   assignedRepPhone?: string;
@@ -103,6 +104,11 @@ export interface CampaignSettings {
   currency?: string;
   monthlyRetainerFee?: number;
   successFeePerMeeting?: number;
+  whatsappProvider?: 'direct_qr' | 'meta_cloud_api';
+  metaPhoneNumberId?: string;
+  metaWabaId?: string;
+  metaAccessToken?: string;
+  metaWebhookVerifyToken?: string;
 }
 
 export const SendMessageSchema = z.object({

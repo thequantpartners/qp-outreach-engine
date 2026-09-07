@@ -287,10 +287,41 @@ export class BaileysEngine {
           } catch {}
         }
 
+        // 3.5. Comprobar política de Opt-Out de Meta/WhatsApp (STOP, BAJA, CANCELAR, etc.)
+        const cleanUpper = incomingText.trim().toUpperCase();
+        const isOptOut = /^(STOP|BAJA|SALIR|CANCELAR|NO CONTACTAR|DETENER)$/i.test(cleanUpper);
+
+        if (isOptOut) {
+          console.log(`🛑 [BaileysEngine] Lead ${senderPhone} solicitó Opt-Out (${cleanUpper}). Bloqueando envíos automáticos.`);
+          await OutreachRepo.addChatMessage(senderPhone, 'user', incomingText);
+          await OutreachRepo.updateLeadStatus(senderPhone, 'OPT_OUT', {
+            humanTakeoverAt: new Date().toISOString(),
+            handoffNotes: `Opt-Out solicitado por el usuario: "${incomingText}"`
+          });
+          await OutreachRepo.addChatMessage(senderPhone, 'system', '🔒 Prospecto dio de baja sus comunicaciones (Opt-Out). Se desactivó el bot y no se le enviarán más mensajes.');
+          try {
+            const { broadcastDashboardEvent } = await import('../gateway/server.js');
+            broadcastDashboardEvent({
+              type: 'new_message',
+              phone: senderPhone,
+              role: 'user',
+              content: incomingText,
+              createdAt: new Date().toISOString()
+            });
+            broadcastDashboardEvent({
+              type: 'lead_updated',
+              phone: senderPhone,
+              status: 'OPT_OUT'
+            });
+          } catch {}
+          continue;
+        }
+
         // 4. Registrar mensaje del usuario en la base de datos y activar Human Takeover (El bot se silencia)
         await OutreachRepo.addChatMessage(senderPhone, 'user', incomingText);
         await OutreachRepo.updateLeadStatus(senderPhone, 'REPLIED', {
-          humanTakeoverAt: new Date().toISOString()
+          humanTakeoverAt: new Date().toISOString(),
+          lastCustomerMessageAt: new Date().toISOString()
         });
 
         // Transmitir al Dashboard en tiempo real

@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import dotenv from 'dotenv';
 import { BaileysEngine } from '../whatsapp/baileys_engine.js';
+import { MetaCloudEngine } from '../whatsapp/meta_cloud_engine.js';
 import { ApifyScraper } from '../scraper/apify_scraper.js';
 import { DripOrchestrator } from '../queue/drip_orchestrator.js';
 import { OutreachRepo } from '../db/repo.js';
@@ -81,6 +82,146 @@ const whatsapp = BaileysEngine.getInstance();
 
 // 1. Montar endpoints de Servidor MCP (SSE para clientes de IA remotos en Railway)
 McpServerManager.mountSseEndpoints(app);
+
+// =================================================================
+// META WHATSAPP CLOUD API OFICIAL (Graph API v21.0 Webhooks)
+// =================================================================
+// Verificación obligatoria de Webhook por Meta (GET Challenge)
+app.get('/api/webhook/whatsapp', async (req: Request, res: Response) => {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+
+  const settings = await OutreachRepo.getSettings();
+  const expectedToken = settings.metaWebhookVerifyToken || process.env.META_WEBHOOK_VERIFY_TOKEN || 'qp_verify_token_2026';
+
+  if (mode === 'subscribe' && token === expectedToken) {
+    console.log('✅ [MetaWebhook] Webhook de WhatsApp verificado exitosamente por Meta Graph API.');
+    res.status(200).send(challenge);
+  } else {
+    console.warn(`⚠️ [MetaWebhook] Verificación rechazada. Token recibido: "${token}", esperado: "${expectedToken}"`);
+    res.status(403).send('Forbidden');
+  }
+});
+
+// Ingesta de Mensajes y Eventos en tiempo real desde Meta Cloud API (POST)
+app.post('/api/webhook/whatsapp', async (req: Request, res: Response) => {
+  // Confirmar recepción inmediatamente con 200 OK para cumplir SLA de Meta (<3s)
+  res.status(200).send('EVENT_RECEIVED');
+
+  try {
+    const body = req.body;
+    if (body.object !== 'whatsapp_business_account') return;
+
+    for (const entry of body.entry || []) {
+      for (const change of entry.changes || []) {
+        const val = change.value;
+        if (!val || !val.messages || val.messages.length === 0) continue;
+
+        const contact = val.contacts?.[0];
+        const rawMsg = val.messages[0];
+        const rawPhone = String(rawMsg.from || '').replace(/[^0-9]/g, '');
+        if (!rawPhone) continue;
+
+        let text = '';
+        if (rawMsg.type === 'text') {
+          text = rawMsg.text?.body || '';
+        } else if (rawMsg.type === 'interactive') {
+          text = rawMsg.interactive?.button_reply?.title || rawMsg.interactive?.list_reply?.title || '';
+        } else if (rawMsg.type === 'button') {
+          text = rawMsg.button?.text || '';
+        } else if (rawMsg.caption) {
+          text = rawMsg.caption;
+        } else {
+          text = `[${rawMsg.type || 'Mensaje multimedia'}]`;
+        }
+
+        if (!text.trim()) continue;
+
+        const contactName = contact?.profile?.name || `Contacto +${rawPhone}`;
+        console.log(`📩 [MetaWebhook] Mensaje entrante de ${contactName} (${rawPhone}): "${text}"`);
+
+        // Registrar o buscar Lead
+        let lead = await OutreachRepo.getLeadByPhone(rawPhone);
+        if (!lead) {
+          const activeService = await OutreachRepo.getActiveService();
+          await OutreachRepo.saveLeadsFromScraper(activeService?.id || 'custom-service', [{
+            title: contactName,
+            phone: rawPhone,
+            phoneClean: rawPhone
+          }]);
+          lead = await OutreachRepo.getLeadByPhone(rawPhone);
+        }
+
+        // Asignar vendedor Round Robin si no tenía
+        if (lead && !lead.assignedRepName) {
+          try {
+            const nextRep = await OutreachRepo.getNextSalesRep();
+            if (nextRep) {
+              await OutreachRepo.assignLeadToRep(rawPhone, nextRep.name, nextRep.phone);
+              lead.assignedRepName = nextRep.name;
+              lead.assignedRepPhone = nextRep.phone;
+            }
+          } catch {}
+        }
+
+        // Registrar el mensaje en historial
+        await OutreachRepo.addChatMessage(rawPhone, 'user', text);
+
+        // Cumplimiento estricto de política Meta: Opt-Out / Baja automática
+        const cleanUpper = text.trim().toUpperCase();
+        const isOptOut = /^(STOP|BAJA|SALIR|CANCELAR|NO CONTACTAR|DETENER)$/i.test(cleanUpper);
+
+        if (isOptOut) {
+          console.log(`🛑 [MetaWebhook] Lead ${rawPhone} solicitó Opt-Out (${cleanUpper}).`);
+          await OutreachRepo.updateLeadStatus(rawPhone, 'OPT_OUT', {
+            humanTakeoverAt: new Date().toISOString(),
+            handoffNotes: `Opt-Out solicitado por el usuario: "${text}"`
+          });
+          await OutreachRepo.addChatMessage(rawPhone, 'system', '🔒 Prospecto dio de baja sus comunicaciones (Opt-Out). Se desactivó el bot y no se le enviarán más mensajes.');
+          broadcastDashboardEvent({
+            type: 'new_message',
+            phone: rawPhone,
+            role: 'user',
+            content: text,
+            createdAt: new Date().toISOString()
+          });
+          broadcastDashboardEvent({
+            type: 'lead_updated',
+            phone: rawPhone,
+            status: 'OPT_OUT'
+          });
+          continue;
+        }
+
+        // Registrar timestamp para la ventana de atención al cliente de 24h
+        const nowIso = new Date().toISOString();
+        await OutreachRepo.updateLeadStatus(rawPhone, 'REPLIED', {
+          humanTakeoverAt: nowIso,
+          lastCustomerMessageAt: nowIso,
+          lastMessageAt: nowIso
+        });
+
+        // Transmitir al Dashboard en vivo vía SSE
+        broadcastDashboardEvent({
+          type: 'new_message',
+          phone: rawPhone,
+          role: 'user',
+          content: text,
+          assignedRepName: lead?.assignedRepName,
+          createdAt: nowIso
+        });
+        broadcastDashboardEvent({
+          type: 'lead_updated',
+          phone: rawPhone,
+          status: 'REPLIED'
+        });
+      }
+    }
+  } catch (err: any) {
+    console.error('❌ [MetaWebhook] Error procesando payload de Meta:', err);
+  }
+});
 
 // Middleware de Autenticación por API Key para rutas /api/
 function authenticate(req: Request, res: Response, next: NextFunction): void {
@@ -282,11 +423,23 @@ app.get('/api/client/overview', authenticateClientPin, async (req: Request, res:
       };
     }
 
+    const settings = await OutreachRepo.getSettings();
+    const provider = settings.whatsappProvider || 'direct_qr';
+    let isWhatsAppReady = waStatus.isReady;
+    let hasQr = waStatus.hasQr;
     let qrData: string | undefined;
-    const latestQr = whatsapp.getLatestQr();
-    if (latestQr && !waStatus.isReady) {
-      const QRCode = (await import('qrcode')).default;
-      qrData = await QRCode.toDataURL(latestQr, { width: 450, margin: 2 });
+
+    if (provider === 'meta_cloud_api') {
+      const isMetaConfigured = await MetaCloudEngine.isConfigured();
+      isWhatsAppReady = isMetaConfigured;
+      hasQr = false;
+      qrData = undefined;
+    } else {
+      const latestQr = whatsapp.getLatestQr();
+      if (latestQr && !waStatus.isReady) {
+        const QRCode = (await import('qrcode')).default;
+        qrData = await QRCode.toDataURL(latestQr, { width: 450, margin: 2 });
+      }
     }
 
     res.json({
@@ -294,8 +447,9 @@ app.get('/api/client/overview', authenticateClientPin, async (req: Request, res:
       repName: clientUser?.repName,
       companyName: process.env.COMPANY_NAME || 'The Quant Partners',
       serviceName: process.env.SERVICE_NAME || 'Departamento Comercial Autónomo',
-      isWhatsAppReady: waStatus.isReady,
-      hasQr: waStatus.hasQr,
+      whatsappProvider: provider,
+      isWhatsAppReady,
+      hasQr,
       qrData,
       salesReps,
       metrics,
@@ -354,7 +508,12 @@ app.get('/api/client/settings', authenticateClientPin, async (_req: Request, res
         aiModel: settings.aiModel || 'google/gemini-2.5-flash',
         currency: settings.currency || 'S/.',
         monthlyRetainerFee: settings.monthlyRetainerFee ?? 2800,
-        successFeePerMeeting: settings.successFeePerMeeting ?? 200
+        successFeePerMeeting: settings.successFeePerMeeting ?? 200,
+        whatsappProvider: settings.whatsappProvider || 'direct_qr',
+        metaPhoneNumberId: settings.metaPhoneNumberId || '',
+        metaWabaId: settings.metaWabaId || '',
+        metaAccessToken: settings.metaAccessToken ? (settings.metaAccessToken.length > 8 ? '••••••••' + settings.metaAccessToken.slice(-4) : '••••••••') : '',
+        metaWebhookVerifyToken: settings.metaWebhookVerifyToken || ''
       },
       whatsapp: waStatus
     });
@@ -369,7 +528,8 @@ app.post('/api/client/settings', authenticateClientPin, requireOwnerRole, async 
     const { 
       startHour, endHour, minDelaySeconds, maxDelaySeconds, dailyLimit, 
       adminWhatsAppPhone, salesReps, aiProvider, aiApiKey, aiModel,
-      currency, monthlyRetainerFee, successFeePerMeeting
+      currency, monthlyRetainerFee, successFeePerMeeting,
+      whatsappProvider, metaPhoneNumberId, metaWabaId, metaAccessToken, metaWebhookVerifyToken
     } = req.body || {};
     
     await OutreachRepo.updateSettings({
@@ -385,7 +545,12 @@ app.post('/api/client/settings', authenticateClientPin, requireOwnerRole, async 
       ...(aiModel !== undefined ? { aiModel } : {}),
       ...(currency !== undefined ? { currency: String(currency).trim() } : {}),
       ...(monthlyRetainerFee !== undefined ? { monthlyRetainerFee: Number(monthlyRetainerFee) } : {}),
-      ...(successFeePerMeeting !== undefined ? { successFeePerMeeting: Number(successFeePerMeeting) } : {})
+      ...(successFeePerMeeting !== undefined ? { successFeePerMeeting: Number(successFeePerMeeting) } : {}),
+      ...(whatsappProvider !== undefined ? { whatsappProvider } : {}),
+      ...(metaPhoneNumberId !== undefined ? { metaPhoneNumberId: String(metaPhoneNumberId).trim() } : {}),
+      ...(metaWabaId !== undefined ? { metaWabaId: String(metaWabaId).trim() } : {}),
+      ...(metaAccessToken !== undefined && !metaAccessToken.startsWith('••••') ? { metaAccessToken: String(metaAccessToken).trim() } : {}),
+      ...(metaWebhookVerifyToken !== undefined ? { metaWebhookVerifyToken: String(metaWebhookVerifyToken).trim() } : {})
     });
 
     const updated = await OutreachRepo.getSettings();
@@ -500,9 +665,25 @@ app.post('/api/client/chat/send', authenticateClientPin, async (req: Request, re
       return;
     }
     const clean = String(phone).replace(/[^0-9]/g, '');
-    const result = await whatsapp.send(clean, message);
+    const settings = await OutreachRepo.getSettings();
+    const provider = settings.whatsappProvider || 'direct_qr';
 
-    if (result.success) {
+    let sendSuccess = false;
+    let sendError = '';
+    let isWindowClosed = false;
+
+    if (provider === 'meta_cloud_api') {
+      const metaRes = await MetaCloudEngine.sendTextMessage(clean, message);
+      sendSuccess = metaRes.success;
+      sendError = metaRes.error || '';
+      isWindowClosed = !!metaRes.isWindowClosed;
+    } else {
+      const result = await whatsapp.send(clean, message);
+      sendSuccess = result.success;
+      sendError = result.error || '';
+    }
+
+    if (sendSuccess) {
       await OutreachRepo.updateLeadStatus(clean, 'HUMAN_TAKEOVER', {
         humanTakeoverAt: new Date().toISOString()
       });
@@ -518,7 +699,13 @@ app.post('/api/client/chat/send', authenticateClientPin, async (req: Request, re
 
       res.json({ success: true });
     } else {
-      res.status(500).json({ error: result.error || 'Fallo enviando WhatsApp' });
+      res.status(500).json({ 
+        error: sendError || 'Fallo enviando WhatsApp',
+        isWindowClosed,
+        tip: isWindowClosed
+          ? 'Política Meta 2026: La ventana de atención al cliente de 24 horas ha expirado. En Meta Cloud API oficial solo se pueden enviar plantillas aprobadas (HSM) para reabrir la conversación.'
+          : undefined
+      });
     }
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -572,9 +759,26 @@ app.post('/api/client/chat/send-document', authenticateClientPin, async (req: Re
       return;
     }
     const clean = String(phone).replace(/[^0-9]/g, '');
-    const result = await whatsapp.sendDocument(clean, filePathOrUrl, fileName, caption);
+    const settings = await OutreachRepo.getSettings();
+    const provider = settings.whatsappProvider || 'direct_qr';
 
-    if (result.success) {
+    let sendSuccess = false;
+    let sendError = '';
+    let jid: string | undefined;
+
+    if (provider === 'meta_cloud_api') {
+      const metaRes = await MetaCloudEngine.sendDocumentMessage(clean, filePathOrUrl, fileName, caption);
+      sendSuccess = metaRes.success;
+      sendError = metaRes.error || '';
+      jid = metaRes.messageId;
+    } else {
+      const result = await whatsapp.sendDocument(clean, filePathOrUrl, fileName, caption);
+      sendSuccess = result.success;
+      sendError = result.error || '';
+      jid = result.jid;
+    }
+
+    if (sendSuccess) {
       await OutreachRepo.updateLeadStatus(clean, 'HUMAN_TAKEOVER', {
         humanTakeoverAt: new Date().toISOString()
       });
@@ -589,9 +793,9 @@ app.post('/api/client/chat/send-document', authenticateClientPin, async (req: Re
         createdAt: new Date().toISOString()
       });
 
-      res.json({ success: true, fileName, jid: result.jid });
+      res.json({ success: true, fileName, jid });
     } else {
-      res.status(500).json({ error: result.error || 'Fallo despachando documento por WhatsApp' });
+      res.status(500).json({ error: sendError || 'Fallo despachando documento por WhatsApp' });
     }
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -1614,7 +1818,21 @@ app.post('/api/send', authenticate, async (req: Request, res: Response) => {
   }
 
   const { to, message } = parseResult.data;
-  const result = await whatsapp.send(to, message);
+  const settings = await OutreachRepo.getSettings();
+  const provider = settings.whatsappProvider || 'direct_qr';
+
+  let result: { success: boolean; jid?: string; error?: string } = { success: false };
+
+  if (provider === 'meta_cloud_api') {
+    const metaRes = await MetaCloudEngine.sendTextMessage(to, message);
+    result = {
+      success: metaRes.success,
+      jid: metaRes.messageId,
+      error: metaRes.error
+    };
+  } else {
+    result = await whatsapp.send(to, message);
+  }
 
   if (result.success) {
     res.json({

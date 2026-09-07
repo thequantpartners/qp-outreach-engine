@@ -944,6 +944,8 @@ async function handleReassignLead(repName) {
         });
       }
       renderLeadsStream();
+      playNotificationSound();
+      showNotificationToast(`👤 Asesor asignado: ${repName}`);
     } else {
       alert('Error reasignando asesor: ' + (data.error || 'Error desconocido'));
     }
@@ -1137,9 +1139,53 @@ function exportCurrentLeadsCsv() {
   });
 }
 
+function updateMeta24hWindowBadge(lead, messages) {
+  const badge = document.getElementById('detailLeadMetaWindowBadge');
+  if (!badge) return;
+
+  let lastCustomerTime = lead?.lastCustomerMessageAt ? new Date(lead.lastCustomerMessageAt).getTime() : null;
+  if (!lastCustomerTime && Array.isArray(messages)) {
+    const userMsgs = messages.filter(m => m.role === 'user');
+    if (userMsgs.length > 0) {
+      lastCustomerTime = new Date(userMsgs[userMsgs.length - 1].createdAt).getTime();
+    }
+  }
+
+  if (!lastCustomerTime) {
+    badge.className = 'text-[10px] font-mono px-2 py-0.5 rounded-full border bg-amber-500/10 text-amber-400 border-amber-500/30 flex items-center gap-1';
+    badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Fuera de Ventana 24h';
+    badge.title = 'Política Meta 2026: No hay mensaje reciente del cliente. En API Oficial solo se pueden enviar plantillas HSM aprobadas.';
+    badge.classList.remove('hidden');
+    return;
+  }
+
+  const now = Date.now();
+  const diffMs = (lastCustomerTime + 24 * 60 * 60 * 1000) - now;
+
+  if (diffMs > 0) {
+    const hours = Math.floor(diffMs / (1000 * 60 * 60));
+    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    badge.className = 'text-[10px] font-mono px-2 py-0.5 rounded-full border bg-emerald-500/10 text-emerald-400 border-emerald-500/30 flex items-center gap-1';
+    badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Ventana 24h Activa (${hours}h ${minutes}m)`;
+    badge.title = 'Política Meta 2026: Ventana de atención al cliente activa. Se pueden enviar mensajes libres.';
+    badge.classList.remove('hidden');
+  } else {
+    badge.className = 'text-[10px] font-mono px-2 py-0.5 rounded-full border bg-amber-500/10 text-amber-400 border-amber-500/30 flex items-center gap-1';
+    badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Fuera de Ventana 24h';
+    badge.title = 'Política Meta 2026: Han pasado más de 24h desde el último mensaje del cliente. En API Oficial solo se permiten plantillas HSM aprobadas.';
+    badge.classList.remove('hidden');
+  }
+}
+
 function renderChatMessages(messages) {
   const container = document.getElementById('chatMessagesContainer');
   container.innerHTML = '';
+
+  const allLeads = getConsolidatedLeads();
+  const lead = allLeads.find(l => l.phone === activeLeadPhone);
+
+  // Actualizar indicador de ventana 24h Meta
+  updateMeta24hWindowBadge(lead, messages);
 
   if (messages.length === 0) {
     container.innerHTML = `
@@ -1155,27 +1201,54 @@ function renderChatMessages(messages) {
 
   messages.forEach(m => {
     const isOutbound = m.role === 'assistant' || m.role === 'human_agent';
+    const isSystem = m.role === 'system';
     const bubble = document.createElement('div');
-    bubble.className = `flex flex-col ${isOutbound ? 'items-end' : 'items-start'}`;
+    bubble.className = `flex flex-col ${isSystem ? 'items-center my-2' : (isOutbound ? 'items-end' : 'items-start')}`;
 
-    const timeStr = new Date(m.createdAt).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
-    const authorBadge = m.role === 'human_agent' 
-      ? '<span class="text-[9px] font-mono text-gold">👤 Kenneth (Socio Consultor)</span>' 
-      : (m.role === 'assistant' ? '<span class="text-[9px] font-mono text-slate-400">🤖 Agente IA</span>' : '');
+    const dateObj = new Date(m.createdAt);
+    const dateStr = dateObj.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
+    const timeStr = dateObj.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true });
+    const auditTimeStr = `${dateStr}, ${timeStr}`;
 
-    bubble.innerHTML = `
-      <div class="max-w-[75%] rounded-2xl px-4 py-2.5 text-xs leading-relaxed ${
-        isOutbound 
-          ? 'bg-gold/10 border border-gold/25 text-slate-100 rounded-tr-none' 
-          : 'bg-surface border border-white/[0.06] text-slate-200 rounded-tl-none'
-      }">
-        <div class="flex items-center justify-between gap-4 mb-1">
-          ${authorBadge}
-          <span class="text-[9px] text-slate-500 font-mono">${timeStr}</span>
+    let authorBadge = '';
+    if (m.role === 'human_agent') {
+      const repName = lead?.assignedRepName || 'Kenneth (Director Comercial)';
+      authorBadge = `<span class="text-[9px] font-mono text-gold flex items-center gap-1">👤 ${escapeHtml(repName)} · Asesor</span>`;
+    } else if (m.role === 'assistant') {
+      authorBadge = `<span class="text-[9px] font-mono text-slate-400 flex items-center gap-1">🤖 Agente IA (Outreach Engine)</span>`;
+    } else if (m.role === 'user') {
+      const compName = lead?.companyName || 'Prospecto WhatsApp';
+      authorBadge = `<span class="text-[9px] font-mono text-blue-400 flex items-center gap-1">🏢 ${escapeHtml(compName)}</span>`;
+    } else if (isSystem) {
+      authorBadge = `<span class="text-[9px] font-mono text-amber-400 flex items-center gap-1">⚙️ Sistema · Auditoría</span>`;
+    }
+
+    if (isSystem) {
+      bubble.innerHTML = `
+        <div class="max-w-[85%] rounded-xl px-3 py-1.5 text-[11px] leading-relaxed bg-amber-500/10 border border-amber-500/20 text-amber-300 text-center font-sans space-y-0.5">
+          <div class="flex items-center justify-center gap-2 text-[9px] text-amber-400/70 font-mono">
+            ${authorBadge}
+            <span>&bull;</span>
+            <span>${auditTimeStr}</span>
+          </div>
+          <p class="font-light">${escapeHtml(m.content)}</p>
         </div>
-        <p class="whitespace-pre-wrap select-text font-light">${escapeHtml(m.content)}</p>
-      </div>
-    `;
+      `;
+    } else {
+      bubble.innerHTML = `
+        <div class="max-w-[78%] rounded-2xl px-4 py-2.5 text-xs leading-relaxed ${
+          isOutbound 
+            ? 'bg-gold/10 border border-gold/25 text-slate-100 rounded-tr-none' 
+            : 'bg-surface border border-white/[0.06] text-slate-200 rounded-tl-none'
+        }">
+          <div class="flex items-center justify-between gap-4 mb-1 border-b border-white/[0.04] pb-1">
+            ${authorBadge}
+            <span class="text-[9px] text-slate-500 font-mono flex-shrink-0" title="Fecha y hora de auditoría B2B">${auditTimeStr}</span>
+          </div>
+          <p class="whitespace-pre-wrap select-text font-light pt-0.5">${escapeHtml(m.content)}</p>
+        </div>
+      `;
+    }
     container.appendChild(bubble);
   });
 
@@ -1243,7 +1316,11 @@ async function handleSendManualMessage(e) {
     if (res.ok) {
       selectLeadForDetail(activeLeadPhone);
     } else {
-      alert('Error enviando mensaje: ' + data.error);
+      if (data.isWindowClosed) {
+        alert(`⚠️ [POLÍTICA META 2026] Ventana de 24h Expirada\n\n${data.error}\n\n${data.tip || 'En la API oficial de Meta solo puedes enviar plantillas pre-aprobadas (HSM) para reactivar la conversación fuera de las 24 horas.'}`);
+      } else {
+        alert('Error enviando mensaje: ' + (data.error || 'Error desconocido'));
+      }
     }
   } catch (err) {
     alert('Error de red al enviar mensaje: ' + err.message);
@@ -2568,6 +2645,41 @@ function switchSettingsTab(tabName) {
   }
 
   if (window.lucide) lucide.createIcons();
+let currentWhatsAppProvider = 'direct_qr';
+
+function selectWhatsAppProvider(provider) {
+  currentWhatsAppProvider = provider;
+
+  const btnDirect = document.getElementById('btnProviderDirectQr');
+  const btnMeta = document.getElementById('btnProviderMetaCloud');
+  const secDirect = document.getElementById('providerDirectQrSection');
+  const secMeta = document.getElementById('providerMetaCloudSection');
+
+  if (provider === 'meta_cloud_api') {
+    if (btnDirect) btnDirect.className = 'p-3 rounded-xl border border-white/[0.08] bg-card hover:border-gold/30 text-left transition flex items-start gap-2.5';
+    if (btnMeta) btnMeta.className = 'p-3 rounded-xl border border-blue-500/40 bg-blue-500/10 text-left transition flex items-start gap-2.5';
+    if (secDirect) secDirect.classList.add('hidden');
+    if (secMeta) secMeta.classList.remove('hidden');
+  } else {
+    if (btnDirect) btnDirect.className = 'p-3 rounded-xl border border-gold/40 bg-gold/10 text-left transition flex items-start gap-2.5';
+    if (btnMeta) btnMeta.className = 'p-3 rounded-xl border border-white/[0.08] bg-card hover:border-gold/30 text-left transition flex items-start gap-2.5';
+    if (secDirect) secDirect.classList.remove('hidden');
+    if (secMeta) secMeta.classList.add('hidden');
+  }
+
+  if (window.lucide) lucide.createIcons();
+}
+
+function copyMetaWebhookUrl() {
+  const input = document.getElementById('settingMetaWebhookUrl');
+  if (!input) return;
+  navigator.clipboard.writeText(input.value).then(() => {
+    showNotificationToast('📋 URL de Webhook copiada al portapapeles.');
+  }).catch(() => {
+    input.select();
+    document.execCommand('copy');
+    showNotificationToast('📋 URL de Webhook copiada.');
+  });
 }
 
 function refreshSettingsQr() {
@@ -2904,21 +3016,47 @@ async function loadSettingsData() {
     if (successFeeEl) successFeeEl.value = settings.successFeePerMeeting ?? 200;
     if (autoSwitchEl) autoSwitchEl.checked = !!data.isAutonomousActive;
 
+    // Proveedor WhatsApp y Meta Cloud API
+    const effectiveProvider = settings.whatsappProvider || 'direct_qr';
+    selectWhatsAppProvider(effectiveProvider);
+
+    const metaPhoneEl = document.getElementById('settingMetaPhoneId');
+    const metaWabaEl = document.getElementById('settingMetaWabaId');
+    const metaTokenEl = document.getElementById('settingMetaAccessToken');
+    const metaVerifyEl = document.getElementById('settingMetaVerifyToken');
+
+    if (metaPhoneEl) metaPhoneEl.value = settings.metaPhoneNumberId || '';
+    if (metaWabaEl) metaWabaEl.value = settings.metaWabaId || '';
+    if (metaTokenEl) metaTokenEl.value = settings.metaAccessToken || '';
+    if (metaVerifyEl) metaVerifyEl.value = settings.metaWebhookVerifyToken || 'qp_verify_token_2026';
+
     // Estado WhatsApp
     const cardConnected = document.getElementById('settingsWaCardConnected');
     const cardDisconnected = document.getElementById('settingsWaCardDisconnected');
     const phoneEl = document.getElementById('settingsWaConnectedPhone');
 
-    if (wa.isReady) {
-      if (cardConnected) cardConnected.classList.remove('hidden');
-      if (cardDisconnected) cardDisconnected.classList.add('hidden');
+    if (effectiveProvider === 'meta_cloud_api') {
+      const isConfigured = !!(settings.metaPhoneNumberId && settings.metaAccessToken);
       if (phoneEl) {
-        phoneEl.textContent = wa.connectedPhone ? `+${wa.connectedPhone}` : 'Conexión Activa';
+        phoneEl.textContent = isConfigured ? `Phone ID: ${settings.metaPhoneNumberId}` : 'Credenciales requeridas';
       }
+      if (cardConnected) {
+        if (isConfigured) cardConnected.classList.remove('hidden');
+        else cardConnected.classList.add('hidden');
+      }
+      if (cardDisconnected) cardDisconnected.classList.add('hidden');
     } else {
-      if (cardConnected) cardConnected.classList.add('hidden');
-      if (cardDisconnected) cardDisconnected.classList.remove('hidden');
-      refreshSettingsQr();
+      if (wa.isReady) {
+        if (cardConnected) cardConnected.classList.remove('hidden');
+        if (cardDisconnected) cardDisconnected.classList.add('hidden');
+        if (phoneEl) {
+          phoneEl.textContent = wa.connectedPhone ? `+${wa.connectedPhone}` : 'Conexión Activa';
+        }
+      } else {
+        if (cardConnected) cardConnected.classList.add('hidden');
+        if (cardDisconnected) cardDisconnected.classList.remove('hidden');
+        refreshSettingsQr();
+      }
     }
   } catch (err) {
     console.error('Error cargando configuración:', err);
@@ -2947,6 +3085,12 @@ async function handleSaveSettings() {
   const monthlyRetainerFee = parseFloat(document.getElementById('settingMonthlyRetainer')?.value || '2800');
   const successFeePerMeeting = parseFloat(document.getElementById('settingSuccessFee')?.value || '200');
   const isAutonomousActive = document.getElementById('settingAutonomousSwitch')?.checked;
+
+  const metaPhoneNumberId = document.getElementById('settingMetaPhoneId')?.value?.trim() || '';
+  const metaWabaId = document.getElementById('settingMetaWabaId')?.value?.trim() || '';
+  const metaAccessToken = document.getElementById('settingMetaAccessToken')?.value?.trim() || '';
+  const metaWebhookVerifyToken = document.getElementById('settingMetaVerifyToken')?.value?.trim() || '';
+  const whatsappProvider = currentWhatsAppProvider || 'direct_qr';
 
   if (minDelaySeconds < 60) {
     alert('Por seguridad anti-baneo, el delay mínimo no puede ser menor a 60 segundos.');
@@ -2980,7 +3124,12 @@ async function handleSaveSettings() {
         aiModel,
         currency,
         monthlyRetainerFee,
-        successFeePerMeeting
+        successFeePerMeeting,
+        whatsappProvider,
+        metaPhoneNumberId,
+        metaWabaId,
+        metaAccessToken,
+        metaWebhookVerifyToken
       })
     });
 

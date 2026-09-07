@@ -1,4 +1,5 @@
 import { BaileysEngine } from '../whatsapp/baileys_engine.js';
+import { MetaCloudEngine } from '../whatsapp/meta_cloud_engine.js';
 import { ApifyScraper } from '../scraper/apify_scraper.js';
 import { OutreachRepo } from '../db/repo.js';
 
@@ -18,56 +19,78 @@ export class AutonomousPipeline {
   public static start(): void {
     if (this.isRunning) return;
     this.isRunning = true;
-    console.log('⚡ [AutonomousPipeline] Orquestador continuo de adquisición y prospección INICIADO.');
-    this.scheduleNextTick(5000);
+    console.log('🤖 [AutonomousPipeline] Motor comercial autónomo INICIADO.');
+    this.scheduleNextTick(3000);
   }
 
+  /**
+   * Detiene el orquestador
+   */
   public static stop(): void {
     this.isRunning = false;
     if (this.loopTimer) {
       clearTimeout(this.loopTimer);
       this.loopTimer = null;
     }
-    console.log('🛑 [AutonomousPipeline] Orquestador continuo DETENIDO.');
+    console.log('🛑 [AutonomousPipeline] Motor comercial autónomo DETENIDO.');
+  }
+
+  public static getStatus() {
+    return {
+      isRunning: this.isRunning,
+      sentToday: this.sentTodayCount,
+      day: this.currentDay,
+      lastScrapeTime: this.lastScrapeTime ? new Date(this.lastScrapeTime).toISOString() : null
+    };
   }
 
   private static scheduleNextTick(delayMs: number): void {
     if (!this.isRunning) return;
-    this.loopTimer = setTimeout(() => {
-      this.runTick().catch((err) => {
-        console.error('❌ [AutonomousPipeline] Error en ciclo:', err.message);
-        this.scheduleNextTick(30000); // reintentar en 30s tras error
-      });
-    }, delayMs);
+    if (this.loopTimer) clearTimeout(this.loopTimer);
+    this.loopTimer = setTimeout(() => this.tick().catch((err) => {
+      console.error('❌ [AutonomousPipeline] Error en ciclo:', err.message);
+      this.scheduleNextTick(30000);
+    }), delayMs);
   }
 
   /**
-   * Ciclo principal del pipeline
+   * Ciclo principal del pipeline autónomo
    */
-  private static async runTick(): Promise<void> {
+  private static async tick(): Promise<void> {
     if (!this.isRunning) return;
 
-    // 1. Resetear contador diario si cambió la fecha
+    // Resetear contador diario a medianoche
     const today = new Date().toISOString().slice(0, 10);
     if (today !== this.currentDay) {
       this.currentDay = today;
       this.sentTodayCount = 0;
-      console.log(`📅 [AutonomousPipeline] Nuevo día detectado (${today}). Contador diario reiniciado.`);
+      this.dailyReportSentDay = '';
     }
 
+    // 1. Obtener configuración
     const settings = await OutreachRepo.getSettings();
     if (!settings.isAutonomousActive) {
+      console.log('⏸️ [AutonomousPipeline] Prospección autónoma pausada en configuración.');
       this.scheduleNextTick(60000);
       return;
     }
 
-    const whatsapp = BaileysEngine.getInstance();
-    const waStatus = whatsapp.getStatus();
-
-    if (!waStatus.isReady) {
-      console.log('⏳ [AutonomousPipeline] Esperando que WhatsApp se conecte...');
-      this.scheduleNextTick(15000);
-      return;
+    const provider = settings.whatsappProvider || 'direct_qr';
+    if (provider === 'meta_cloud_api') {
+      const isConfigured = await MetaCloudEngine.isConfigured();
+      if (!isConfigured) {
+        console.log('⏳ [AutonomousPipeline] Esperando que Meta WhatsApp Cloud API esté configurada...');
+        this.scheduleNextTick(15000);
+        return;
+      }
+    } else {
+      const whatsapp = BaileysEngine.getInstance();
+      const waStatus = whatsapp.getStatus();
+      if (!waStatus.isReady) {
+        console.log('⏳ [AutonomousPipeline] Esperando que WhatsApp se conecte...');
+        this.scheduleNextTick(15000);
+        return;
+      }
     }
 
     // 2. Comprobar horario comercial (ej. 9am a 7pm hora local)
@@ -177,7 +200,16 @@ export class AutonomousPipeline {
     message = message.replace(/{{phone}}/g, lead.phone);
 
     console.log(`🔁 [AutonomousPipeline] Despachando Follow-up #${nextCount} a ${lead.companyName} (${lead.phone})...`);
-    const result = await whatsapp.send(lead.phone, message);
+    const provider = settings.whatsappProvider || 'direct_qr';
+    let result: { success: boolean; error?: string };
+
+    if (provider === 'meta_cloud_api') {
+      const metaRes = await MetaCloudEngine.sendTextMessage(lead.phone, message);
+      result = { success: metaRes.success, error: metaRes.error };
+    } else {
+      const whatsapp = BaileysEngine.getInstance();
+      result = await whatsapp.send(lead.phone, message);
+    }
 
     if (result.success) {
       this.sentTodayCount++;
@@ -200,11 +232,20 @@ export class AutonomousPipeline {
    * Despacha recordatorio automático 2h antes de la cita (Anti No-Show)
    */
   private static async dispatchMeetingReminder(lead: any): Promise<void> {
-    const whatsapp = BaileysEngine.getInstance();
+    const settings = await OutreachRepo.getSettings();
+    const provider = settings.whatsappProvider || 'direct_qr';
     const reminderMsg = `Hola al equipo de *${lead.companyName}*, le saluda Kenneth de The Quant Partners.\n\nLe escribo para confirmar nuestra sesión técnica programada para hoy. ¿Me confirma si todo sigue en pie para conectarnos a tiempo? ¡Un saludo!`;
 
     console.log(`⏰ [AutonomousPipeline] Enviando recordatorio Anti No-Show a ${lead.companyName} (${lead.phone})...`);
-    const result = await whatsapp.send(lead.phone, reminderMsg);
+    let result: { success: boolean; error?: string };
+
+    if (provider === 'meta_cloud_api') {
+      const metaRes = await MetaCloudEngine.sendTextMessage(lead.phone, reminderMsg);
+      result = { success: metaRes.success, error: metaRes.error };
+    } else {
+      const whatsapp = BaileysEngine.getInstance();
+      result = await whatsapp.send(lead.phone, reminderMsg);
+    }
 
     if (result.success) {
       await OutreachRepo.addChatMessage(lead.phone, 'assistant', reminderMsg);
@@ -249,8 +290,6 @@ export class AutonomousPipeline {
    * Despacha el mensaje de prospección con plantilla y pausa anti-ban
    */
   private static async dispatchLead(lead: any, service: any, settings: any): Promise<void> {
-    const whatsapp = BaileysEngine.getInstance();
-
     // Formatear mensaje
     let message = service.outreachTemplate;
     message = message.replace(/{{name}}/g, lead.companyName);
@@ -258,7 +297,16 @@ export class AutonomousPipeline {
 
     console.log(`🚀 [AutonomousPipeline] Despachando prospección a ${lead.companyName} (${lead.phone})...`);
 
-    const result = await whatsapp.send(lead.phone, message);
+    const provider = settings.whatsappProvider || 'direct_qr';
+    let result: { success: boolean; error?: string };
+
+    if (provider === 'meta_cloud_api') {
+      const metaRes = await MetaCloudEngine.sendTextMessage(lead.phone, message);
+      result = { success: metaRes.success, error: metaRes.error };
+    } else {
+      const whatsapp = BaileysEngine.getInstance();
+      result = await whatsapp.send(lead.phone, message);
+    }
 
     if (result.success) {
       this.sentTodayCount++;
@@ -311,19 +359,5 @@ export class AutonomousPipeline {
       console.error('❌ [AutonomousPipeline] Fallo al raspar Apify:', err.message);
       return { inserted: 0, skipped: 0 };
     }
-  }
-
-  public static getStatus(): {
-    isRunning: boolean;
-    sentTodayCount: number;
-    currentDay: string;
-    lastScrapeTime: number;
-  } {
-    return {
-      isRunning: this.isRunning,
-      sentTodayCount: this.sentTodayCount,
-      currentDay: this.currentDay,
-      lastScrapeTime: this.lastScrapeTime
-    };
   }
 }
