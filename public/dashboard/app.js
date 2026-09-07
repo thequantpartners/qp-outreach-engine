@@ -669,7 +669,6 @@ async function selectLeadForDetail(phone) {
   const phoneEl = document.getElementById('detailLeadPhone');
   const tagEl = document.getElementById('detailLeadStatusTag');
   const actionsEl = document.getElementById('leadDetailActions');
-  const waBtn = document.getElementById('detailDirectWaBtn');
   const composer = document.getElementById('chatComposer');
   const avatarEl = document.getElementById('detailLeadAvatar');
 
@@ -680,7 +679,6 @@ async function selectLeadForDetail(phone) {
     tagEl.classList.remove('hidden');
   }
   if (actionsEl) actionsEl.classList.remove('hidden');
-  if (waBtn) waBtn.href = `https://wa.me/${lead.phone}`;
   if (composer) composer.classList.remove('hidden');
   if (avatarEl) {
     const initials = (lead.companyName || 'WA').slice(0, 2).toUpperCase();
