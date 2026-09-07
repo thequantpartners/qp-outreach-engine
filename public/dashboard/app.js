@@ -2168,12 +2168,17 @@ function initSSE() {
   eventSource.onmessage = (e) => {
     try {
       const event = JSON.parse(e.data);
+      if (event.type === 'ping' || event.type === 'connected') {
+        return;
+      }
+
       if (event.type === 'new_message') {
-        if (activeLeadPhone && activeLeadPhone === event.phone) {
+        const cleanEventPhone = (event.phone || '').replace(/[^0-9]/g, '');
+        const cleanActivePhone = (activeLeadPhone || '').replace(/[^0-9]/g, '');
+        if (cleanActivePhone && cleanActivePhone === cleanEventPhone) {
           selectLeadForDetail(activeLeadPhone);
-        } else {
-          fetchOverview();
         }
+        fetchOverview();
       }
 
       if (event.type === 'lead_updated' || event.type === 'appointment_booked' || event.type === 'meeting_attendance_updated' || event.type === 'settings_updated' || event.type === 'whatsapp_disconnected') {
@@ -2194,9 +2199,19 @@ function initSSE() {
   };
 
   eventSource.onerror = () => {
-    console.warn('⚠️ [SSE] Reconectando en 5 segundos...');
+    console.warn('⚠️ [SSE] Reconectando flujo en tiempo real...');
   };
 }
+
+// Sincronización instantánea al regresar a la pestaña del navegador
+window.addEventListener('focus', () => {
+  if (currentPin) {
+    if (activeLeadPhone) {
+      selectLeadForDetail(activeLeadPhone);
+    }
+    fetchOverview();
+  }
+});
 
 // =================================================================
 // 16. ONBOARDING & ACTIVACIÓN RÁPIDA (LINEAR STYLE)

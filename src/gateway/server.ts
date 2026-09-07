@@ -1312,7 +1312,18 @@ app.get('/api/client/stream', (req: Request, res: Response) => {
   clientSseSubscribers.add(res);
   res.write(`data: ${JSON.stringify({ type: 'connected', timestamp: new Date().toISOString() })}\n\n`);
 
+  // Heartbeat ping cada 15 segundos para mantener el stream activo a través de proxies (Vercel/Railway)
+  const heartbeatInterval = setInterval(() => {
+    try {
+      res.write(`data: ${JSON.stringify({ type: 'ping', timestamp: new Date().toISOString() })}\n\n`);
+    } catch {
+      clearInterval(heartbeatInterval);
+      clientSseSubscribers.delete(res);
+    }
+  }, 15000);
+
   req.on('close', () => {
+    clearInterval(heartbeatInterval);
     clientSseSubscribers.delete(res);
   });
 });
