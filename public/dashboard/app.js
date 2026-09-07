@@ -9,7 +9,11 @@ let activeLeadPhone = null;
 let currentStreamFilter = 'ALL';
 let currentSearchQuery = '';
 let currentRepFilter = 'ALL';
+let currentCampaignFilter = 'ALL';
 let currentTeamReps = [];
+let currentServicesList = [];
+let createCampaignTargetSelectId = null;
+let batchCountdownInterval = null;
 let currentMainView = 'workspace'; // 'workspace' | 'discovery' | 'metrics'
 let eventSource = null;
 
@@ -96,6 +100,7 @@ async function fetchOverview() {
       currentTeamReps = data.salesReps;
     }
 
+    await loadAllCampaigns();
     renderHeader(data);
     renderLeadsStream();
     renderMetrics(data);
@@ -179,7 +184,95 @@ function getConsolidatedLeads() {
   return consolidated;
 }
 
-// 5. Render Stream de Prospectos (Panel Izquierdo estilo Linear)
+// 5. Gestión de Campañas y Listados
+async function loadAllCampaigns() {
+  if (!currentPin) return;
+  try {
+    const res = await fetch('/api/client/services', {
+      headers: { 'x-client-pin': currentPin }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      currentServicesList = data.services || [];
+      populateAllCampaignDropdowns();
+    }
+  } catch (err) {
+    console.warn('Error cargando campañas:', err);
+  }
+}
+
+function populateAllCampaignDropdowns() {
+  // 1. Selector de filtro en Columna 1 (#streamCampaignFilter)
+  const streamFilter = document.getElementById('streamCampaignFilter');
+  if (streamFilter) {
+    let html = '<option value="ALL">Todas las campañas</option><option value="NONE">Directo / Sin campaña</option>';
+    currentServicesList.forEach(s => {
+      html += `<option value="${escapeHtml(s.id)}">🏷️ ${escapeHtml(s.name)}</option>`;
+    });
+    streamFilter.innerHTML = html;
+    streamFilter.value = currentCampaignFilter;
+  }
+
+  // 2. Selector en Modal de Importación (#importServiceSelect)
+  const importSelect = document.getElementById('importServiceSelect');
+  if (importSelect) {
+    let html = '';
+    currentServicesList.forEach(s => {
+      html += `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)} (${escapeHtml(s.id)})${s.isActive ? ' - Activa' : ''}</option>`;
+    });
+    importSelect.innerHTML = html;
+  }
+
+  // 3. Selector en Previsualización de Scraping (#previewServiceSelect)
+  const previewSelect = document.getElementById('previewServiceSelect');
+  if (previewSelect) {
+    let html = '';
+    currentServicesList.forEach(s => {
+      html += `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`;
+    });
+    previewSelect.innerHTML = html;
+  }
+
+  // 4. Selector en Consola de Despacho en Lote (#batchServiceSelect)
+  const batchSelect = document.getElementById('batchServiceSelect');
+  if (batchSelect) {
+    let html = '';
+    currentServicesList.forEach(s => {
+      html += `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`;
+    });
+    batchSelect.innerHTML = html;
+  }
+
+  // 5. Selector en Modal de Nuevo Chat (#directChatServiceSelect)
+  const directSelect = document.getElementById('directChatServiceSelect');
+  if (directSelect) {
+    let html = '<option value="">Directo / Sin Campaña</option>';
+    currentServicesList.forEach(s => {
+      html += `<option value="${escapeHtml(s.id)}">🏷️ ${escapeHtml(s.name)}</option>`;
+    });
+    directSelect.innerHTML = html;
+  }
+
+  // 6. Selector en Columna 3 (#intelCampaignSelect)
+  const intelSelect = document.getElementById('intelCampaignSelect');
+  if (intelSelect && activeLeadPhone) {
+    const allLeads = getConsolidatedLeads();
+    const lead = allLeads.find(l => l.phone === activeLeadPhone);
+    let html = '<option value="">Reasignar campaña...</option><option value="DIRECT">Directo / Sin campaña</option>';
+    currentServicesList.forEach(s => {
+      const isSel = lead && lead.serviceId === s.id ? 'selected' : '';
+      html += `<option value="${escapeHtml(s.id)}" ${isSel}>🏷️ ${escapeHtml(s.name)}</option>`;
+    });
+    intelSelect.innerHTML = html;
+  }
+}
+
+function handleCampaignFilterChange(campaignId) {
+  currentCampaignFilter = campaignId;
+  renderLeadsStream();
+}
+
+// 6. Render Stream de Prospectos (Panel Izquierdo estilo Linear)
 function renderLeadsStream() {
   const container = document.getElementById('leadsStreamContainer');
   if (!container) return;
@@ -210,6 +303,13 @@ function renderLeadsStream() {
     return true;
   });
 
+  // Filtrar por campaña seleccionada
+  if (currentCampaignFilter === 'NONE') {
+    filtered = filtered.filter(l => !l.serviceId);
+  } else if (currentCampaignFilter !== 'ALL') {
+    filtered = filtered.filter(l => l.serviceId === currentCampaignFilter);
+  }
+
   // Filtrar por asesor Round Robin
   if (currentRepFilter === 'UNASSIGNED') {
     filtered = filtered.filter(l => !l.assignedRepName);
@@ -223,7 +323,8 @@ function renderLeadsStream() {
     filtered = filtered.filter(l => 
       (l.companyName || '').toLowerCase().includes(q) || 
       (l.phone || '').includes(q) ||
-      (l.assignedRepName || '').toLowerCase().includes(q)
+      (l.assignedRepName || '').toLowerCase().includes(q) ||
+      (l.serviceName || '').toLowerCase().includes(q)
     );
   }
 
@@ -253,7 +354,8 @@ function renderLeadsStream() {
     QUALIFIED: { label: 'Calificado', class: 'text-emerald-400 border-emerald-500/20 bg-emerald-500/5' },
     MEETING_SCHEDULED: { label: 'Cita en Cal', class: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' },
     CLOSED_WON: { label: 'Ganado', class: 'text-amber-300 border-amber-500/30 bg-amber-500/10' },
-    HUMAN_TAKEOVER: { label: 'Humano', class: 'text-purple-400 border-purple-500/20 bg-purple-500/5' }
+    HUMAN_TAKEOVER: { label: 'Humano', class: 'text-purple-400 border-purple-500/20 bg-purple-500/5' },
+    OPT_OUT: { label: 'No Contactar', class: 'text-rose-400 border-rose-500/30 bg-rose-500/10' }
   };
 
   filtered.forEach(lead => {
@@ -271,6 +373,7 @@ function renderLeadsStream() {
     item.onclick = () => selectLeadForDetail(lead.phone);
 
     const repLabel = lead.assignedRepName || 'Sin asignar';
+    const campLabel = lead.serviceName || (lead.serviceId ? lead.serviceId : 'Directo');
 
     item.innerHTML = `
       <div class="flex items-center justify-between gap-2 mb-1">
@@ -280,9 +383,13 @@ function renderLeadsStream() {
       <div class="flex items-center justify-between gap-2 mb-1">
         <span class="font-mono text-[11px] text-gold/90">+${escapeHtml(lead.phone)}</span>
         <div class="flex items-center gap-1.5 flex-shrink-0">
+          <span class="text-[9px] font-mono text-gold/80 bg-gold/5 px-1.5 py-0.5 rounded border border-gold/20 flex items-center gap-1 max-w-[90px] truncate" title="Campaña: ${escapeHtml(campLabel)}">
+            <i data-lucide="tag" class="w-2.5 h-2.5 text-gold flex-shrink-0"></i>
+            <span class="truncate">${escapeHtml(campLabel)}</span>
+          </span>
           <span class="text-[9px] font-mono text-slate-400 bg-white/[0.03] px-1.5 py-0.5 rounded border border-white/[0.06] flex items-center gap-1" title="Asesor Asignado: ${escapeHtml(repLabel)}">
-            <i data-lucide="user" class="w-2.5 h-2.5 text-gold"></i>
-            <span class="max-w-[70px] truncate">${escapeHtml(repLabel)}</span>
+            <i data-lucide="user" class="w-2.5 h-2.5 text-gold flex-shrink-0"></i>
+            <span class="max-w-[60px] truncate">${escapeHtml(repLabel)}</span>
           </span>
           <span class="text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border ${badge.class}">
             ${badge.label}
@@ -386,6 +493,22 @@ async function selectLeadForDetail(phone) {
   if (intelPlaceholder) intelPlaceholder.classList.add('hidden');
   if (intelLeadCard) intelLeadCard.classList.remove('hidden');
 
+  // Campaña Origen
+  const intelCampaignBadge = document.getElementById('intelCampaignBadge');
+  if (intelCampaignBadge) {
+    intelCampaignBadge.textContent = lead.serviceName || (lead.serviceId ? lead.serviceId : 'Directo / Orgánico');
+  }
+
+  const intelCampaignSelect = document.getElementById('intelCampaignSelect');
+  if (intelCampaignSelect) {
+    let campOptionsHtml = '<option value="">Reasignar campaña...</option><option value="DIRECT">Directo / Sin campaña</option>';
+    currentServicesList.forEach(s => {
+      const isSel = lead.serviceId === s.id ? 'selected' : '';
+      campOptionsHtml += `<option value="${escapeHtml(s.id)}" ${isSel}>🏷️ ${escapeHtml(s.name)}</option>`;
+    });
+    intelCampaignSelect.innerHTML = campOptionsHtml;
+  }
+
   const intelAssignedBadge = document.getElementById('intelAssignedBadge');
   if (intelAssignedBadge) {
     intelAssignedBadge.textContent = lead.assignedRepName || 'Sin asignar';
@@ -462,6 +585,8 @@ function updateActiveLeadHeader() {
     if (tagEl) tagEl.textContent = lead.status;
     const intelAssignedBadge = document.getElementById('intelAssignedBadge');
     if (intelAssignedBadge) intelAssignedBadge.textContent = lead.assignedRepName || 'Sin asignar';
+    const intelCampaignBadge = document.getElementById('intelCampaignBadge');
+    if (intelCampaignBadge) intelCampaignBadge.textContent = lead.serviceName || (lead.serviceId ? lead.serviceId : 'Directo / Orgánico');
   }
 }
 
@@ -504,8 +629,46 @@ async function handleReassignLead(repName) {
   }
 }
 
+async function handleReassignLeadCampaign(serviceId) {
+  if (!activeLeadPhone) return;
+  try {
+    const targetId = (serviceId === 'DIRECT' || !serviceId) ? '' : serviceId;
+    const res = await fetch(`/api/client/leads/${activeLeadPhone}/service`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-client-pin': currentPin
+      },
+      body: JSON.stringify({ serviceId: targetId })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      const allLeads = getConsolidatedLeads();
+      const lead = allLeads.find(l => l.phone === activeLeadPhone);
+      if (lead) {
+        lead.serviceId = targetId || null;
+        const matched = currentServicesList.find(s => s.id === targetId);
+        lead.serviceName = matched ? matched.name : (targetId ? targetId : 'Directo');
+        const badge = document.getElementById('intelCampaignBadge');
+        if (badge) badge.textContent = lead.serviceName;
+      }
+      renderLeadsStream();
+    } else {
+      alert('Error reasignando campaña: ' + (data.error || 'Error desconocido'));
+    }
+  } catch (err) {
+    alert('Error de conexión al reasignar campaña.');
+  }
+}
+
 async function handleLeadStatusChange(newStatus) {
   if (!activeLeadPhone || !newStatus) return;
+
+  if (newStatus === 'OPT_OUT') {
+    handleLeadOptOut();
+    return;
+  }
+
   try {
     const res = await fetch('/api/client/leads/status', {
       method: 'POST',
@@ -531,6 +694,107 @@ async function handleLeadStatusChange(newStatus) {
   } catch (err) {
     alert('Error al actualizar etapa: ' + err.message);
   }
+}
+
+async function handleLeadOptOut() {
+  if (!activeLeadPhone) return;
+  if (!confirm(`¿Deseas marcar a este prospecto (+${activeLeadPhone}) como "No Contactar (OPT-OUT)"?\n\nEl bot de IA y los despachos automáticos quedarán permanentemente bloqueados para este número.`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/client/leads/${activeLeadPhone}/opt-out`, {
+      method: 'PATCH',
+      headers: { 'x-client-pin': currentPin }
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      const allLeads = getConsolidatedLeads();
+      const lead = allLeads.find(l => l.phone === activeLeadPhone);
+      if (lead) {
+        lead.status = 'OPT_OUT';
+      }
+      const tagEl = document.getElementById('detailLeadStatusTag');
+      if (tagEl) tagEl.textContent = 'OPT_OUT';
+      const intelStatus = document.getElementById('intelStatusSelect');
+      if (intelStatus) intelStatus.value = 'OPT_OUT';
+      renderLeadsStream();
+      alert('✅ Prospecto marcado como No Contactar (OPT-OUT).');
+    } else {
+      alert('Error: ' + (data.error || 'No se pudo actualizar estado.'));
+    }
+  } catch (err) {
+    alert('Error al comunicar opt-out con el servidor.');
+  }
+}
+
+async function handleDeleteCurrentLead() {
+  if (!activeLeadPhone) return;
+  if (!confirm(`⚠️ ¿Estás seguro de eliminar permanentemente a este prospecto (+${activeLeadPhone})?\n\nSe borrará su registro y todo el historial de chat en la base de datos.`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/client/leads/${activeLeadPhone}`, {
+      method: 'DELETE',
+      headers: { 'x-client-pin': currentPin }
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      activeLeadPhone = null;
+      document.getElementById('detailLeadName').textContent = 'Selecciona un chat';
+      document.getElementById('detailLeadPhone').textContent = '';
+      document.getElementById('detailLeadStatusTag').classList.add('hidden');
+      document.getElementById('leadDetailActions').classList.add('hidden');
+      document.getElementById('chatComposer').classList.add('hidden');
+      document.getElementById('intelPlaceholder').classList.remove('hidden');
+      document.getElementById('intelLeadCard').classList.add('hidden');
+      document.getElementById('chatMessagesContainer').innerHTML = `
+        <div class="h-full flex flex-col items-center justify-center text-center p-6 text-slate-500">
+          <i data-lucide="message-square" class="w-8 h-8 text-slate-600 mb-2"></i>
+          <p class="text-xs">Selecciona un prospecto para ver el historial</p>
+        </div>
+      `;
+      if (window.lucide) lucide.createIcons();
+      fetchOverview();
+    } else {
+      alert('Error: ' + (data.error || 'No se pudo eliminar el prospecto.'));
+    }
+  } catch (err) {
+    alert('Error al comunicar la eliminación con el servidor.');
+  }
+}
+
+function exportCurrentLeadsCsv() {
+  const params = new URLSearchParams({
+    filter: currentStreamFilter,
+    search: currentSearchQuery,
+    rep: currentRepFilter,
+    campaign: currentCampaignFilter
+  });
+
+  const url = `/api/client/leads/export?${params.toString()}`;
+  
+  fetch(url, {
+    headers: { 'x-client-pin': currentPin }
+  })
+  .then(res => {
+    if (!res.ok) throw new Error('Error al exportar CSV');
+    return res.blob();
+  })
+  .then(blob => {
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = `prospectos_qp_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(downloadUrl);
+  })
+  .catch(err => {
+    alert('Error al descargar el archivo CSV: ' + err.message);
+  });
 }
 
 function renderChatMessages(messages) {
@@ -579,30 +843,6 @@ function renderChatMessages(messages) {
   if (window.lucide) lucide.createIcons();
 }
 
-// 7. Cambio directo de estado comercial
-async function handleLeadStatusChange(newStatus) {
-  if (!activeLeadPhone) return;
-
-  try {
-    const res = await fetch('/api/client/leads/status', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-client-pin': currentPin
-      },
-      body: JSON.stringify({ phone: activeLeadPhone, status: newStatus })
-    });
-
-    if (res.ok) {
-      fetchOverview();
-    } else {
-      const data = await res.json();
-      alert('Error cambiando estado: ' + (data.error || 'Desconocido'));
-    }
-  } catch (err) {
-    console.error('Error actualizando estado:', err);
-  }
-}
 
 // 8. Control Humano (Takeover)
 function updateTakeoverUI(isTakeover) {
@@ -1269,19 +1509,66 @@ async function handleInjectApprovedLeads() {
 
 function renderMetrics(data) {
   const m = data.metrics || {};
-  document.getElementById('kpiTotalContacted').textContent = m.outreachSent || 0;
-  document.getElementById('kpiReplyRate').textContent = `${m.replyRatePercent || 0}%`;
-  document.getElementById('kpiRepliedCount').textContent = m.replied || 0;
-  document.getElementById('kpiMeetingsScheduled').textContent = m.meetingsScheduled || 0;
-  document.getElementById('kpiQualified').textContent = m.qualified || 0;
+  const totalContactedEl = document.getElementById('kpiTotalContacted');
+  const replyRateEl = document.getElementById('kpiReplyRate');
+  const repliedCountEl = document.getElementById('kpiRepliedCount');
+  const meetingsEl = document.getElementById('kpiMeetingsScheduled');
+  const qualifiedEl = document.getElementById('kpiQualified');
+
+  if (totalContactedEl) totalContactedEl.textContent = m.outreachSent || 0;
+  if (replyRateEl) replyRateEl.textContent = `${m.replyRatePercent || 0}%`;
+  if (repliedCountEl) repliedCountEl.textContent = m.replied || 0;
+  if (meetingsEl) meetingsEl.textContent = m.meetingsScheduled || 0;
+  if (qualifiedEl) qualifiedEl.textContent = m.qualified || 0;
 
   if (m.settlement) {
     const s = m.settlement;
-    document.getElementById('settlementBaseRetainer').textContent = `${s.currency} ${(s.baseRetainer || 0).toLocaleString()}`;
-    document.getElementById('settlementFeePerMeeting').textContent = s.successFeePerMeeting || 200;
-    document.getElementById('settlementAttendedCount').textContent = m.attendedMeetings || 0;
-    document.getElementById('settlementVariableTotal').textContent = `${s.currency} ${(s.variableTotal || 0).toLocaleString()}`;
-    document.getElementById('settlementGrandTotal').textContent = `${s.currency} ${(s.grandTotal || 0).toLocaleString()}`;
+    const baseRetainerEl = document.getElementById('settlementBaseRetainer');
+    const feeMeetingEl = document.getElementById('settlementFeePerMeeting');
+    const attendedCountEl = document.getElementById('settlementAttendedCount');
+    const varTotalEl = document.getElementById('settlementVariableTotal');
+    const grandTotalEl = document.getElementById('settlementGrandTotal');
+
+    if (baseRetainerEl) baseRetainerEl.textContent = `${s.currency} ${(s.baseRetainer || 0).toLocaleString()}`;
+    if (feeMeetingEl) feeMeetingEl.textContent = s.successFeePerMeeting || 200;
+    if (attendedCountEl) attendedCountEl.textContent = m.attendedMeetings || 0;
+    if (varTotalEl) varTotalEl.textContent = `${s.currency} ${(s.variableTotal || 0).toLocaleString()}`;
+    if (grandTotalEl) grandTotalEl.textContent = `${s.currency} ${(s.grandTotal || 0).toLocaleString()}`;
+  }
+
+  // Rampa Anti-Ban Dinámica
+  if (m.warmup) {
+    const w = m.warmup;
+    const badge = document.getElementById('warmupStatusBadge');
+    if (badge) {
+      if (w.isWarmupActive) {
+        badge.className = 'text-[10px] font-mono text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-md border border-amber-500/20';
+        badge.textContent = `Warmup Activo · Fase ${w.activePhase} (${w.sentToday} / ${w.dailyLimit} msgs hoy)`;
+      } else {
+        badge.className = 'text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/20';
+        badge.textContent = `Línea Madura (${w.sentToday} / ${w.dailyLimit} msgs hoy)`;
+      }
+    }
+
+    const stage1 = document.getElementById('warmupStage1');
+    const stage2 = document.getElementById('warmupStage2');
+    const stage3 = document.getElementById('warmupStage3');
+
+    if (stage1) {
+      stage1.className = w.activePhase === 1 
+        ? 'p-3 bg-gold/10 rounded-lg border border-gold/40 flex items-center justify-between shadow-sm'
+        : 'p-3 bg-obsidian rounded-lg border border-white/[0.06] flex items-center justify-between opacity-60';
+    }
+    if (stage2) {
+      stage2.className = w.activePhase === 2
+        ? 'p-3 bg-gold/10 rounded-lg border border-gold/40 flex items-center justify-between shadow-sm'
+        : 'p-3 bg-obsidian rounded-lg border border-white/[0.06] flex items-center justify-between opacity-60';
+    }
+    if (stage3) {
+      stage3.className = w.activePhase === 3
+        ? 'p-3 bg-emerald-500/10 rounded-lg border border-emerald-500/40 flex items-center justify-between shadow-sm'
+        : 'p-3 bg-obsidian rounded-lg border border-white/[0.06] flex items-center justify-between opacity-60';
+    }
   }
 }
 
@@ -1689,6 +1976,10 @@ function initSSE() {
       if (event.type === 'lead_updated' || event.type === 'appointment_booked' || event.type === 'meeting_attendance_updated' || event.type === 'settings_updated' || event.type === 'whatsapp_disconnected') {
         fetchOverview();
       }
+
+      if (event.type === 'batch_dispatch_update') {
+        updateBatchUI(event.job);
+      }
     } catch (err) {
       console.error('Error parseando evento SSE:', err);
     }
@@ -1798,7 +2089,7 @@ function closeSettingsModal() {
 }
 
 function switchSettingsTab(tabName) {
-  const tabs = ['whatsapp', 'team', 'ai', 'antiban'];
+  const tabs = ['whatsapp', 'team', 'ai', 'antiban', 'saar'];
   tabs.forEach(t => {
     const btn = document.getElementById(`settingsTabBtn${t.charAt(0).toUpperCase() + t.slice(1)}`);
     const content = document.getElementById(`settingsTabContent${t.charAt(0).toUpperCase() + t.slice(1)}`);
@@ -2144,6 +2435,17 @@ async function loadSettingsData() {
         aiKeyStatusBadge.className = 'text-[11px] font-sans font-medium text-emerald-400 flex items-center gap-1.5';
       }
     }
+    
+    // Poblado SaaR & Finanzas
+    const currencyEl = document.getElementById('settingCurrency');
+    const retainerEl = document.getElementById('settingMonthlyRetainer');
+    const successFeeEl = document.getElementById('settingSuccessFee');
+    const autoSwitchEl = document.getElementById('settingAutonomousSwitch');
+
+    if (currencyEl) currencyEl.value = settings.currency || 'S/.';
+    if (retainerEl) retainerEl.value = settings.monthlyRetainerFee ?? 2800;
+    if (successFeeEl) successFeeEl.value = settings.successFeePerMeeting ?? 200;
+    if (autoSwitchEl) autoSwitchEl.checked = !!data.isAutonomousActive;
 
     // Estado WhatsApp
     const cardConnected = document.getElementById('settingsWaCardConnected');
@@ -2184,6 +2486,11 @@ async function handleSaveSettings() {
   const aiApiKey = document.getElementById('settingAiApiKey')?.value || '';
   const aiModel = document.getElementById('settingAiModel')?.value || '';
 
+  const currency = document.getElementById('settingCurrency')?.value || 'S/.';
+  const monthlyRetainerFee = parseFloat(document.getElementById('settingMonthlyRetainer')?.value || '2800');
+  const successFeePerMeeting = parseFloat(document.getElementById('settingSuccessFee')?.value || '200');
+  const isAutonomousActive = document.getElementById('settingAutonomousSwitch')?.checked;
+
   if (minDelaySeconds < 60) {
     alert('Por seguridad anti-baneo, el delay mínimo no puede ser menor a 60 segundos.');
     return;
@@ -2213,15 +2520,34 @@ async function handleSaveSettings() {
         salesReps: validReps,
         aiProvider,
         aiApiKey,
-        aiModel
+        aiModel,
+        currency,
+        monthlyRetainerFee,
+        successFeePerMeeting
       })
     });
+
+    // Toggle autonomous pipeline if changed
+    if (typeof isAutonomousActive === 'boolean') {
+      try {
+        await fetch('/api/client/pipeline/toggle', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-client-pin': currentPin
+          },
+          body: JSON.stringify({ active: isAutonomousActive })
+        });
+      } catch (pipeErr) {
+        console.warn('Error toggling pipeline:', pipeErr);
+      }
+    }
 
     const data = await res.json();
     if (res.ok && data.success) {
       if (alertBox) {
         alertBox.className = 'p-3 rounded-xl text-xs font-mono bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 block';
-        alertBox.textContent = '✅ Configuración y equipo guardados en PostgreSQL correctamente.';
+        alertBox.textContent = '✅ Configuración, honorarios SaaR y equipo guardados en PostgreSQL correctamente.';
       }
       setTimeout(() => {
         if (alertBox) alertBox.classList.add('hidden');
@@ -2278,4 +2604,580 @@ function escapeHtml(str) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+// =================================================================
+// 16. GESTIÓN INTEGRAL DE CAMPAÑAS Y FORMULACIÓN CON IA
+// =================================================================
+async function openCampaignsModal() {
+  const modal = document.getElementById('campaignsModal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  await renderCampaignsModalList();
+  if (window.lucide) lucide.createIcons();
+}
+
+function closeCampaignsModal() {
+  const modal = document.getElementById('campaignsModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function renderCampaignsModalList() {
+  const container = document.getElementById('campaignsListContainer');
+  const countEl = document.getElementById('campaignsTotalCount');
+  if (!container) return;
+
+  container.innerHTML = `
+    <div class="p-8 text-center text-xs text-gold font-mono flex items-center justify-center gap-2">
+      <i data-lucide="loader" class="w-4 h-4 animate-spin"></i>
+      <span>Cargando campañas de PostgreSQL...</span>
+    </div>
+  `;
+  if (window.lucide) lucide.createIcons();
+
+  try {
+    const res = await fetch('/api/client/services', {
+      headers: { 'x-client-pin': currentPin }
+    });
+    const data = await res.json();
+    const services = data.services || [];
+    currentServicesList = services;
+
+    if (countEl) countEl.textContent = services.length;
+
+    if (services.length === 0) {
+      container.innerHTML = `
+        <div class="p-8 text-center text-xs text-slate-500 font-sans space-y-3">
+          <i data-lucide="tag" class="w-8 h-8 text-slate-600 mx-auto"></i>
+          <p>No hay campañas configuradas todavía.</p>
+          <button onclick="openCreateCampaignModal()" class="px-4 py-2 btn-gold rounded-xl text-xs font-sans font-semibold inline-flex items-center gap-1.5">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+            <span>Crear la primera campaña con IA</span>
+          </button>
+        </div>
+      `;
+      if (window.lucide) lucide.createIcons();
+      return;
+    }
+
+    container.innerHTML = '';
+    services.forEach(s => {
+      const card = document.createElement('div');
+      card.className = 'p-4 rounded-xl bg-card border border-white/[0.06] hover:border-white/[0.12] transition space-y-3';
+      const initials = (s.name || 'CP').slice(0, 2).toUpperCase();
+
+      card.innerHTML = `
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-lg bg-gold/10 text-gold border border-gold/25 flex items-center justify-center font-serif text-xs font-bold">
+              ${escapeHtml(initials)}
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h4 class="font-medium text-xs text-white font-sans">${escapeHtml(s.name)}</h4>
+                <span class="text-[9px] font-mono text-slate-500 bg-white/[0.04] px-1.5 py-0.5 rounded border border-white/[0.06]">${escapeHtml(s.id)}</span>
+              </div>
+              <p class="text-[11px] text-slate-400 font-sans font-light truncate max-w-md">${escapeHtml(s.searchQueries ? s.searchQueries.join(', ') : 'Sin queries')}</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <label class="relative inline-flex items-center cursor-pointer" title="${s.isActive ? 'Campaña Activa' : 'Campaña Pausada'}">
+              <input type="checkbox" ${s.isActive ? 'checked' : ''} onchange="handleToggleCampaign('${escapeHtml(s.id)}', this.checked)" class="sr-only peer">
+              <div class="w-8 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3.5 after:transition-all peer-checked:bg-gold"></div>
+            </label>
+            <button onclick="handleDeleteCampaign('${escapeHtml(s.id)}')" class="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg hover:bg-rose-500/10 transition" title="Eliminar campaña">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-4 gap-2 pt-2 border-t border-white/[0.04] text-center font-mono text-xs">
+          <div class="p-2 rounded-lg bg-obsidian">
+            <span class="text-[10px] text-slate-500 block uppercase">Prospectos</span>
+            <span class="text-white font-semibold">${s.totalLeads ?? 0}</span>
+          </div>
+          <div class="p-2 rounded-lg bg-obsidian">
+            <span class="text-[10px] text-slate-500 block uppercase">Enviados</span>
+            <span class="text-sky-400 font-semibold">${s.sentLeads ?? 0}</span>
+          </div>
+          <div class="p-2 rounded-lg bg-obsidian">
+            <span class="text-[10px] text-slate-500 block uppercase">Respondieron</span>
+            <span class="text-gold font-semibold">${s.repliedLeads ?? 0}</span>
+          </div>
+          <div class="p-2 rounded-lg bg-obsidian">
+            <span class="text-[10px] text-slate-500 block uppercase">Calificados</span>
+            <span class="text-emerald-400 font-semibold">${s.qualifiedLeads ?? 0}</span>
+          </div>
+        </div>
+      `;
+      container.appendChild(card);
+    });
+
+    if (window.lucide) lucide.createIcons();
+  } catch (err) {
+    container.innerHTML = `<div class="p-6 text-center text-xs text-rose-400 font-mono">Error cargando campañas: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function handleToggleCampaign(serviceId, active) {
+  try {
+    const res = await fetch(`/api/client/services/${serviceId}/toggle`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-client-pin': currentPin
+      },
+      body: JSON.stringify({ active })
+    });
+    if (res.ok) {
+      await loadAllCampaigns();
+      await renderCampaignsModalList();
+      await fetchOverview();
+    }
+  } catch (err) {
+    console.error('Error alternando campaña:', err);
+  }
+}
+
+async function handleDeleteCampaign(serviceId) {
+  if (!confirm(`⚠️ ¿Deseas eliminar permanentemente la campaña "${serviceId}"?\n\nLos prospectos asociados conservarán su historial pero quedarán desvinculados de esta campaña.`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/client/services/${serviceId}`, {
+      method: 'DELETE',
+      headers: { 'x-client-pin': currentPin }
+    });
+    if (res.ok) {
+      await loadAllCampaigns();
+      await renderCampaignsModalList();
+      await fetchOverview();
+    } else {
+      alert('Error eliminando la campaña.');
+    }
+  } catch (err) {
+    alert('Error al comunicar la eliminación.');
+  }
+}
+
+function openCreateCampaignModal(targetSelectId = null) {
+  createCampaignTargetSelectId = targetSelectId;
+  const modal = document.getElementById('createCampaignModal');
+  if (!modal) return;
+
+  const nameEl = document.getElementById('newCampName');
+  const nicheEl = document.getElementById('newCampNiche');
+  const solEl = document.getElementById('newCampSolution');
+  const locEl = document.getElementById('newCampLocation');
+  const tmplEl = document.getElementById('newCampTemplate');
+  const followEl = document.getElementById('newCampFollowUp');
+  const promptEl = document.getElementById('newCampPrompt');
+  const alertBox = document.getElementById('newCampAlertBox');
+
+  if (nameEl) nameEl.value = '';
+  if (nicheEl) nicheEl.value = '';
+  if (solEl) solEl.value = '';
+  if (locEl) locEl.value = 'Lima, Peru';
+  if (tmplEl) tmplEl.value = '';
+  if (followEl) followEl.value = '';
+  if (promptEl) promptEl.value = '';
+  if (alertBox) {
+    alertBox.classList.add('hidden');
+    alertBox.innerHTML = '';
+  }
+
+  modal.classList.remove('hidden');
+  if (nameEl) nameEl.focus();
+  if (window.lucide) lucide.createIcons();
+}
+
+function closeCreateCampaignModal() {
+  const modal = document.getElementById('createCampaignModal');
+  if (modal) modal.classList.add('hidden');
+  createCampaignTargetSelectId = null;
+}
+
+async function handleAiGenerateCampaign() {
+  const name = document.getElementById('newCampName')?.value.trim();
+  const niche = document.getElementById('newCampNiche')?.value.trim();
+  const solution = document.getElementById('newCampSolution')?.value.trim();
+  const location = document.getElementById('newCampLocation')?.value.trim();
+  const btn = document.getElementById('btnAiGenCamp');
+  const alertBox = document.getElementById('newCampAlertBox');
+
+  if (!name || !niche) {
+    if (alertBox) {
+      alertBox.className = 'p-3 rounded-xl text-xs font-sans bg-amber-500/10 border border-amber-500/20 text-amber-300 block';
+      alertBox.textContent = 'Por favor ingresa al menos el Nombre de la Campaña y el Nicho / Sector.';
+    }
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader" class="w-3.5 h-3.5 animate-spin"></i><span>Generando propuesta...</span>';
+    if (window.lucide) lucide.createIcons();
+  }
+
+  try {
+    const res = await fetch('/api/client/services/ai-generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-client-pin': currentPin
+      },
+      body: JSON.stringify({ name, niche, solution, location })
+    });
+    const data = await res.json();
+    if (res.ok && data.success && data.proposal) {
+      const p = data.proposal;
+      if (document.getElementById('newCampTemplate')) document.getElementById('newCampTemplate').value = p.outreachTemplate || '';
+      if (document.getElementById('newCampFollowUp')) document.getElementById('newCampFollowUp').value = p.followUpTemplate || '';
+      if (document.getElementById('newCampPrompt')) document.getElementById('newCampPrompt').value = p.aiInstructions || '';
+      if (alertBox) {
+        alertBox.className = 'p-3 rounded-xl text-xs font-sans bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 block';
+        alertBox.textContent = '✅ Propuesta comercial y prompt formulados por IA con técnica de permiso en 2 pasos.';
+      }
+    } else {
+      if (alertBox) {
+        alertBox.className = 'p-3 rounded-xl text-xs font-sans bg-rose-500/10 border border-rose-500/20 text-rose-400 block';
+        alertBox.textContent = data.error || 'No se pudo generar la propuesta con IA.';
+      }
+    }
+  } catch (err) {
+    if (alertBox) {
+      alertBox.className = 'p-3 rounded-xl text-xs font-sans bg-rose-500/10 border border-rose-500/20 text-rose-400 block';
+      alertBox.textContent = 'Error al comunicarse con el generador de IA.';
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="wand-2" class="w-3.5 h-3.5"></i><span>Generar con IA</span>';
+      if (window.lucide) lucide.createIcons();
+    }
+  }
+}
+
+async function handleSaveNewCampaign() {
+  const name = document.getElementById('newCampName')?.value.trim();
+  const location = document.getElementById('newCampLocation')?.value.trim() || 'Lima, Peru';
+  const outreachTemplate = document.getElementById('newCampTemplate')?.value.trim();
+  const followUpTemplate = document.getElementById('newCampFollowUp')?.value.trim();
+  const aiInstructions = document.getElementById('newCampPrompt')?.value.trim();
+  const btn = document.getElementById('btnSaveNewCamp');
+  const alertBox = document.getElementById('newCampAlertBox');
+
+  if (!name) {
+    if (alertBox) {
+      alertBox.className = 'p-3 rounded-xl text-xs font-sans bg-rose-500/10 border border-rose-500/20 text-rose-400 block';
+      alertBox.textContent = 'El nombre de la campaña es obligatorio.';
+    }
+    return;
+  }
+
+  if (btn) btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/client/services', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-client-pin': currentPin
+      },
+      body: JSON.stringify({
+        name,
+        targetLocations: [location],
+        outreachTemplate,
+        followUpTemplate,
+        aiInstructions,
+        active: true
+      })
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      closeCreateCampaignModal();
+      await loadAllCampaigns();
+      if (createCampaignTargetSelectId) {
+        const targetSel = document.getElementById(createCampaignTargetSelectId);
+        if (targetSel && data.service?.id) targetSel.value = data.service.id;
+      }
+      await renderCampaignsModalList();
+      await fetchOverview();
+      alert(`✅ Campaña "${name}" creada y activada exitosamente.`);
+    } else {
+      if (alertBox) {
+        alertBox.className = 'p-3 rounded-xl text-xs font-sans bg-rose-500/10 border border-rose-500/20 text-rose-400 block';
+        alertBox.textContent = data.error || 'Error al guardar la campaña.';
+      }
+    }
+  } catch (err) {
+    if (alertBox) {
+      alertBox.className = 'p-3 rounded-xl text-xs font-sans bg-rose-500/10 border border-rose-500/20 text-rose-400 block';
+      alertBox.textContent = 'Error de conexión al guardar la campaña.';
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// =================================================================
+// 17. NUEVO CHAT DIRECTO (+ NUEVO CHAT)
+// =================================================================
+function openDirectChatModal() {
+  const modal = document.getElementById('directChatModal');
+  if (!modal) return;
+
+  const phoneEl = document.getElementById('directChatPhone');
+  const nameEl = document.getElementById('directChatName');
+  const msgEl = document.getElementById('directChatMessage');
+  const alertBox = document.getElementById('directChatAlertBox');
+
+  if (phoneEl) phoneEl.value = '';
+  if (nameEl) nameEl.value = '';
+  if (msgEl) msgEl.value = '';
+  if (alertBox) {
+    alertBox.classList.add('hidden');
+    alertBox.innerHTML = '';
+  }
+
+  const select = document.getElementById('directChatServiceSelect');
+  if (select) {
+    let opts = '<option value="">Directo / Sin Campaña</option>';
+    currentServicesList.forEach(s => {
+      opts += `<option value="${escapeHtml(s.id)}">🏷️ ${escapeHtml(s.name)}</option>`;
+    });
+    select.innerHTML = opts;
+  }
+
+  modal.classList.remove('hidden');
+  if (phoneEl) phoneEl.focus();
+  if (window.lucide) lucide.createIcons();
+}
+
+function closeDirectChatModal() {
+  const modal = document.getElementById('directChatModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function handleCreateDirectChat() {
+  const phoneInput = document.getElementById('directChatPhone');
+  const nameInput = document.getElementById('directChatName');
+  const serviceInput = document.getElementById('directChatServiceSelect');
+  const messageInput = document.getElementById('directChatMessage');
+  const btn = document.getElementById('btnSubmitDirectChat');
+  const alertBox = document.getElementById('directChatAlertBox');
+
+  const phone = (phoneInput?.value || '').trim();
+  const name = (nameInput?.value || '').trim();
+  const serviceId = serviceInput?.value || '';
+  const initialMessage = (messageInput?.value || '').trim();
+
+  if (!phone) {
+    if (alertBox) {
+      alertBox.className = 'p-3 rounded-xl text-xs font-sans bg-rose-500/10 border border-rose-500/20 text-rose-400 block';
+      alertBox.textContent = 'Por favor ingresa un número de teléfono celular.';
+    }
+    return;
+  }
+
+  if (btn) btn.disabled = true;
+  if (alertBox) alertBox.classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/client/leads/direct', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-client-pin': currentPin
+      },
+      body: JSON.stringify({
+        phone,
+        name: name || undefined,
+        serviceId: serviceId || undefined,
+        initialMessage: initialMessage || undefined
+      })
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      closeDirectChatModal();
+      await fetchOverview();
+      if (data.lead && data.lead.phone) {
+        selectLeadForDetail(data.lead.phone);
+      }
+    } else {
+      if (alertBox) {
+        alertBox.className = 'p-3 rounded-xl text-xs font-sans bg-rose-500/10 border border-rose-500/20 text-rose-400 block';
+        alertBox.textContent = data.error || 'Error al crear la conversación.';
+      }
+    }
+  } catch (err) {
+    if (alertBox) {
+      alertBox.className = 'p-3 rounded-xl text-xs font-sans bg-rose-500/10 border border-rose-500/20 text-rose-400 block';
+      alertBox.textContent = 'Error de conexión con el servidor.';
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// =================================================================
+// 18. CONSOLA DE DESPACHO EN LOTE (BATCH DISPATCH)
+// =================================================================
+async function handleStartBatchDispatch() {
+  const serviceId = document.getElementById('batchServiceSelect')?.value;
+  const btn = document.getElementById('btnStartBatchDispatch');
+  if (!serviceId) {
+    alert('Por favor selecciona una campaña para despachar el lote.');
+    return;
+  }
+
+  if (!confirm(`¿Deseas iniciar el despacho secuencial de prospectos para la campaña seleccionada?\n\nLos mensajes se enviarán automáticamente con cadencia anti-ban (mínimo 180 segundos entre prospectos).`)) {
+    return;
+  }
+
+  if (btn) btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/client/campaign/batch-dispatch', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-client-pin': currentPin
+      },
+      body: JSON.stringify({ serviceId })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      updateBatchUI(data.job);
+    } else {
+      alert(data.error || 'No se pudo iniciar el despacho en lote.');
+    }
+  } catch (err) {
+    alert('Error al iniciar el despacho.');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function handlePauseBatchDispatch() {
+  try {
+    const res = await fetch('/api/client/campaign/batch-dispatch/pause', {
+      method: 'POST',
+      headers: { 'x-client-pin': currentPin }
+    });
+    const data = await res.json();
+    if (res.ok) updateBatchUI(data.job);
+  } catch (err) {
+    console.error('Error pausando lote:', err);
+  }
+}
+
+async function handleResumeBatchDispatch() {
+  try {
+    const res = await fetch('/api/client/campaign/batch-dispatch/resume', {
+      method: 'POST',
+      headers: { 'x-client-pin': currentPin }
+    });
+    const data = await res.json();
+    if (res.ok) updateBatchUI(data.job);
+  } catch (err) {
+    console.error('Error reanudando lote:', err);
+  }
+}
+
+async function handleStopBatchDispatch() {
+  if (!confirm('¿Deseas detener el despacho del lote actual?')) return;
+  try {
+    const res = await fetch('/api/client/campaign/batch-dispatch/stop', {
+      method: 'POST',
+      headers: { 'x-client-pin': currentPin }
+    });
+    const data = await res.json();
+    if (res.ok) updateBatchUI(data.job);
+  } catch (err) {
+    console.error('Error deteniendo lote:', err);
+  }
+}
+
+function updateBatchUI(job) {
+  const container = document.getElementById('batchProgressContainer');
+  if (!container || !job) return;
+
+  if (job.status === 'IDLE' || job.status === 'STOPPED') {
+    container.classList.add('hidden');
+    if (batchCountdownInterval) {
+      clearInterval(batchCountdownInterval);
+      batchCountdownInterval = null;
+    }
+    return;
+  }
+
+  container.classList.remove('hidden');
+
+  const statusDot = document.getElementById('batchStatusDot');
+  const statusLabel = document.getElementById('batchStatusLabel');
+  const currentLead = document.getElementById('batchCurrentLead');
+  const countsText = document.getElementById('batchCountsText');
+  const countdownText = document.getElementById('batchCountdownText');
+  const progressBar = document.getElementById('batchProgressBar');
+  const pauseBtn = document.getElementById('btnPauseBatch');
+
+  if (countsText) countsText.textContent = `${job.sent || 0} / ${job.total || 0}`;
+  
+  const pct = job.total > 0 ? Math.min(100, Math.round(((job.sent || 0) / job.total) * 100)) : 0;
+  if (progressBar) progressBar.style.width = `${pct}%`;
+
+  if (currentLead) {
+    currentLead.textContent = job.currentLeadName ? `→ ${job.currentLeadName}` : '';
+  }
+
+  if (job.status === 'RUNNING') {
+    if (statusDot) statusDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse';
+    if (statusLabel) statusLabel.textContent = 'Despachando lote en vivo...';
+    if (pauseBtn) {
+      pauseBtn.onclick = handlePauseBatchDispatch;
+      pauseBtn.innerHTML = '<i data-lucide="pause" class="w-3.5 h-3.5"></i><span>Pausar</span>';
+    }
+
+    if (batchCountdownInterval) clearInterval(batchCountdownInterval);
+    if (job.nextRunAt) {
+      const updateCountdown = () => {
+        const remainingMs = Math.max(0, job.nextRunAt - Date.now());
+        const remainingSec = Math.ceil(remainingMs / 1000);
+        if (countdownText) {
+          countdownText.textContent = remainingSec > 0 ? `(Próximo en ${remainingSec}s)` : '(Enviando...)';
+        }
+        if (remainingSec <= 0 && batchCountdownInterval) {
+          clearInterval(batchCountdownInterval);
+        }
+      };
+      updateCountdown();
+      batchCountdownInterval = setInterval(updateCountdown, 1000);
+    }
+  } else if (job.status === 'PAUSED') {
+    if (statusDot) statusDot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400';
+    if (statusLabel) statusLabel.textContent = 'Despacho en Pausa';
+    if (countdownText) countdownText.textContent = '(En pausa)';
+    if (pauseBtn) {
+      pauseBtn.onclick = handleResumeBatchDispatch;
+      pauseBtn.innerHTML = '<i data-lucide="play" class="w-3.5 h-3.5"></i><span>Reanudar</span>';
+    }
+    if (batchCountdownInterval) {
+      clearInterval(batchCountdownInterval);
+      batchCountdownInterval = null;
+    }
+  } else if (job.status === 'COMPLETED') {
+    if (statusDot) statusDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400';
+    if (statusLabel) statusLabel.textContent = '¡Lote completado exitosamente!';
+    if (countdownText) countdownText.textContent = '';
+    if (batchCountdownInterval) clearInterval(batchCountdownInterval);
+    setTimeout(() => {
+      fetchOverview();
+    }, 2000);
+  }
+
+  if (window.lucide) lucide.createIcons();
 }

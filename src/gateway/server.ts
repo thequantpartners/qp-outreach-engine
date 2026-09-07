@@ -35,7 +35,7 @@ app.use(express.json());
 app.use((req: Request, res: Response, next: NextFunction) => {
   const origin = req.headers.origin;
   res.setHeader('Access-Control-Allow-Origin', origin || '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key, x-client-pin, Cache-Control');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
 
@@ -270,7 +270,10 @@ app.get('/api/client/settings', authenticateClientPin, async (_req: Request, res
         salesReps: settings.salesReps || [],
         aiProvider: settings.aiProvider || 'openrouter',
         aiApiKey: settings.aiApiKey ? (settings.aiApiKey.length > 8 ? '••••••••' + settings.aiApiKey.slice(-4) : '••••••••') : '',
-        aiModel: settings.aiModel || 'google/gemini-2.0-flash-001'
+        aiModel: settings.aiModel || 'google/gemini-2.5-flash',
+        currency: settings.currency || 'S/.',
+        monthlyRetainerFee: settings.monthlyRetainerFee ?? 2800,
+        successFeePerMeeting: settings.successFeePerMeeting ?? 200
       },
       whatsapp: waStatus
     });
@@ -282,7 +285,11 @@ app.get('/api/client/settings', authenticateClientPin, async (_req: Request, res
 // Guardar configuración comercial
 app.post('/api/client/settings', authenticateClientPin, async (req: Request, res: Response) => {
   try {
-    const { startHour, endHour, minDelaySeconds, maxDelaySeconds, dailyLimit, adminWhatsAppPhone, salesReps, aiProvider, aiApiKey, aiModel } = req.body || {};
+    const { 
+      startHour, endHour, minDelaySeconds, maxDelaySeconds, dailyLimit, 
+      adminWhatsAppPhone, salesReps, aiProvider, aiApiKey, aiModel,
+      currency, monthlyRetainerFee, successFeePerMeeting
+    } = req.body || {};
     
     await OutreachRepo.updateSettings({
       ...(startHour !== undefined ? { startHour: parseInt(startHour, 10) } : {}),
@@ -294,7 +301,10 @@ app.post('/api/client/settings', authenticateClientPin, async (req: Request, res
       ...(Array.isArray(salesReps) ? { salesReps } : {}),
       ...(aiProvider !== undefined ? { aiProvider } : {}),
       ...(aiApiKey !== undefined && !aiApiKey.startsWith('••••') ? { aiApiKey } : {}),
-      ...(aiModel !== undefined ? { aiModel } : {})
+      ...(aiModel !== undefined ? { aiModel } : {}),
+      ...(currency !== undefined ? { currency: String(currency).trim() } : {}),
+      ...(monthlyRetainerFee !== undefined ? { monthlyRetainerFee: Number(monthlyRetainerFee) } : {}),
+      ...(successFeePerMeeting !== undefined ? { successFeePerMeeting: Number(successFeePerMeeting) } : {})
     });
 
     const updated = await OutreachRepo.getSettings();
@@ -555,21 +565,503 @@ app.post('/api/client/leads/meeting-attendance', authenticateClientPin, async (r
   }
 });
 
+// --- GESTIÓN COMPLETA DE CAMPAÑAS Y SERVICIOS CLIENTE ---
 app.get('/api/client/services', authenticateClientPin, async (_req: Request, res: Response) => {
   try {
-    const services = await OutreachRepo.getServices();
-    res.json({
-      success: true,
-      services: services.map(s => ({
-        id: s.id,
-        name: s.name,
-        isActive: s.isActive,
-        targetLocations: s.targetLocations
-      }))
-    });
+    if (DbConnection.isPg()) {
+      const pool = DbConnection.getPool();
+      const resDb = await pool.query(`
+        SELECT 
+          s.*,
+          COUNT(l.id) as total_leads,
+          COUNT(l.id) FILTER (WHERE l.status IN ('OUTREACH_SENT', 'FOLLOW_UP_SENT')) as sent_leads,
+          COUNT(l.id) FILTER (WHERE l.status = 'REPLIED') as replied_leads,
+          COUNT(l.id) FILTER (WHERE l.status = 'QUALIFIED') as qualified_leads
+        FROM services s
+        LEFT JOIN leads l ON l.service_id = s.id
+        GROUP BY s.id
+        ORDER BY s.created_at DESC
+      `);
+      const services = resDb.rows.map(r => ({
+        id: r.id,
+        name: r.name,
+        description: r.description || '',
+        isActive: r.is_active,
+        targetLocations: r.target_locations || [],
+        outreachTemplate: r.outreach_template || '',
+        followUpTemplate1: r.follow_up_template_1 || '',
+        aiSystemPrompt: r.ai_system_prompt || '',
+        closingType: r.closing_type || 'HUMAN_TAKEOVER',
+        totalLeads: parseInt(r.total_leads || '0', 10),
+        sentLeads: parseInt(r.sent_leads || '0', 10),
+        repliedLeads: parseInt(r.replied_leads || '0', 10),
+        qualifiedLeads: parseInt(r.qualified_leads || '0', 10)
+      }));
+      res.json({ success: true, services });
+    } else {
+      const services = await OutreachRepo.getServices();
+      res.json({
+        success: true,
+        services: services.map(s => ({
+          id: s.id,
+          name: s.name,
+          description: s.description || '',
+          isActive: s.isActive,
+          targetLocations: s.targetLocations,
+          outreachTemplate: s.outreachTemplate,
+          followUpTemplate1: s.followUpTemplate1 || '',
+          aiSystemPrompt: s.aiSystemPrompt,
+          closingType: s.closingType,
+          totalLeads: 0,
+          sentLeads: 0,
+          repliedLeads: 0,
+          qualifiedLeads: 0
+        }))
+      });
+    }
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// Guardar o crear campaña desde el dashboard
+app.post('/api/client/services', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const { id, name, description, outreachTemplate, followUpTemplate1, aiSystemPrompt, closingType, targetLocations, apifyQueries, isActive } = req.body || {};
+    if (!name || !String(name).trim()) {
+      res.status(400).json({ error: 'El nombre de la campaña es requerido.' });
+      return;
+    }
+    const cleanName = String(name).trim();
+    const serviceId = id && String(id).trim() 
+      ? String(id).trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-') 
+      : cleanName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').slice(0, 40);
+    
+    const serviceDef = {
+      id: serviceId,
+      name: cleanName,
+      description: description || '',
+      targetPersona: description || cleanName,
+      apifyQueries: Array.isArray(apifyQueries) ? apifyQueries : [],
+      targetLocations: Array.isArray(targetLocations) ? targetLocations : ['Lima, Peru'],
+      outreachTemplate: outreachTemplate || `Hola al equipo de {{name}}, un gusto saludarlos.\n\nLe escribe Kenneth de The Quant Partners.\n\n¿Me permite compartirle una breve propuesta para potenciar sus canales?`,
+      followUpTemplate1: followUpTemplate1 || `Estimado equipo de {{name}}, ¿pudieron revisar la propuesta anterior? Quedo a su disposición.`,
+      closingType: (closingType as any) || 'HUMAN_TAKEOVER',
+      closingPayload: {},
+      aiSystemPrompt: aiSystemPrompt || `Eres Kenneth de The Quant Partners. Asistes al prospecto con tono consultivo y respuestas de máximo 2 oraciones. Si muestran interés, transfiere a Kenneth (+51902105668).`,
+      isActive: isActive !== undefined ? !!isActive : true
+    };
+    await OutreachRepo.saveService(serviceDef);
+    broadcastDashboardEvent({ type: 'campaign_updated', serviceId });
+    res.json({ success: true, service: serviceDef });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Asistente IA para formular campaña completa en 1 clic
+app.post('/api/client/services/ai-generate', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const { name, niche, solution, location = 'Lima, Peru' } = req.body || {};
+    if (!niche && !name) {
+      res.status(400).json({ error: 'Debes proporcionar al menos el nombre o el nicho de la campaña.' });
+      return;
+    }
+
+    const aiConfig = await OpenRouterCloser.getAiConfig();
+    const prompt = `Actúa como el Director Comercial y Estratega B2B de The Quant Partners.
+Diseña una campaña de prospección en frío por WhatsApp altamente efectiva para:
+- Nicho/Sector: ${niche || name}
+- Solución/Oferta: ${solution || 'Optimización operativa y captación de clientes'}
+- Ubicación: ${location}
+
+REGLAS ESTRICTAS DE SALIDA:
+Debes responder ÚNICAMENTE un JSON válido (sin bloques de código markdown, sin \`\`\`json ni texto introductorio) con la siguiente estructura exacta:
+{
+  "serviceName": "Nombre ejecutivo de la campaña (máximo 5 palabras)",
+  "outreachTemplate": "Plantilla del primer mensaje en frío personalizada con {{name}}. Máximo 3 párrafos muy breves. Tono respetuoso, consultivo y profesional. TERMINA OBLIGATORIAMENTE con una pregunta de permiso en 2 pasos para compartir valor (ej: ¿Me permite compartírselo por aquí para que lo evalúen?). NUNCA incluyas links en este primer mensaje.",
+  "followUpTemplate1": "Mensaje de seguimiento cortés 48h después si no respondieron. Máximo 2 líneas breves.",
+  "aiSystemPrompt": "Instrucciones de venta para el bot de WhatsApp cuando el prospecto responda. Incluye: Identidad como Kenneth de The Quant Partners, tono ejecutivo, 3 objeciones frecuentes de este nicho y cómo responderlas en 2 oraciones, y política de derivación a WhatsApp humano (+51902105668).",
+  "suggestedQueries": ["query 1 para Google Maps", "query 2", "query 3"]
+}`;
+
+    let rawResponse = '';
+    if (aiConfig.apiKey) {
+      const url = OpenRouterCloser.getEndpoint(aiConfig.provider);
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${aiConfig.apiKey}`,
+          'HTTP-Referer': 'https://qp-outreach-engine.vercel.app',
+          'X-Title': 'QP Outreach Engine'
+        },
+        body: JSON.stringify({
+          model: aiConfig.model,
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.3
+        })
+      });
+      const data = (await resp.json()) as any;
+      rawResponse = data.choices?.[0]?.message?.content || '';
+    }
+
+    let parsed: any = null;
+    try {
+      const cleaned = rawResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
+      parsed = JSON.parse(cleaned);
+    } catch {
+      const cleanNiche = (niche || name || 'Servicio B2B').toLowerCase();
+      parsed = {
+        serviceName: name || `Prospección ${niche}`,
+        outreachTemplate: `Buenas tardes al equipo de {{name}}.\n\nLe escribe Kenneth de The Quant Partners.\n\nEstuvimos analizando el sector de ${cleanNiche} y desarrollamos una arquitectura para optimizar sus procesos comerciales y triplicar respuestas.\n\n¿Me permite compartirle un documento de 2 páginas con los detalles?`,
+        followUpTemplate1: `Buenas tardes estimado equipo de {{name}}, ¿tuvieron oportunidad de revisar la nota que les compartí? Quedo a su disposición.`,
+        aiSystemPrompt: `Eres Kenneth de The Quant Partners. Hablas con directores y administradores de ${cleanNiche}. Mantén un tono respetuoso, ultra-consultivo y respuestas breves (máximo 2 oraciones). Si el prospecto muestra interés o pregunta por precios, confirma su interés y transfiere a Kenneth (+51902105668).`,
+        suggestedQueries: [`${cleanNiche} lima`, `${cleanNiche} san isidro`, `${cleanNiche} miraflores`]
+      };
+    }
+
+    res.json({ success: true, generated: parsed });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Activar o pausar campaña
+app.patch('/api/client/services/:id/toggle', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const { active } = req.body || {};
+    const result = await OutreachRepo.toggleService(String(req.params.id), !!active);
+    broadcastDashboardEvent({ type: 'campaign_toggled', serviceId: String(req.params.id), active: !!active });
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Eliminar campaña
+app.delete('/api/client/services/:id', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const deleteLeads = req.query.deleteLeads !== 'false';
+    const result = await OutreachRepo.deleteService(String(req.params.id), deleteLeads);
+    broadcastDashboardEvent({ type: 'campaign_deleted', serviceId: String(req.params.id) });
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Crear nuevo chat directo (+ Nuevo Chat)
+app.post('/api/client/leads/direct', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const { phone, companyName, serviceId } = req.body || {};
+    if (!phone) {
+      res.status(400).json({ error: 'El número de teléfono es requerido' });
+      return;
+    }
+    const lead = await OutreachRepo.createDirectLead({ phone, companyName, serviceId });
+    broadcastDashboardEvent({ type: 'lead_updated', phone: lead.phone, status: lead.status });
+    res.json({ success: true, lead });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Eliminar prospecto y sus mensajes
+app.delete('/api/client/leads/:phone', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const clean = String(req.params.phone).replace(/[^0-9]/g, '');
+    const success = await OutreachRepo.deleteLeadAndChats(clean);
+    broadcastDashboardEvent({ type: 'lead_deleted', phone: clean });
+    res.json({ success, message: 'Prospecto y conversaciones eliminados exitosamente.' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Marcar como Opt-Out (No Contactar)
+app.patch('/api/client/leads/:phone/opt-out', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const clean = String(req.params.phone).replace(/[^0-9]/g, '');
+    const success = await OutreachRepo.setLeadOptOut(clean);
+    broadcastDashboardEvent({ type: 'lead_updated', phone: clean, status: 'OPT_OUT' });
+    res.json({ success, status: 'OPT_OUT', message: 'Prospecto marcado como No Contactar (Opt-Out).' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Reasignar campaña de un lead
+app.patch('/api/client/leads/:phone/service', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const clean = String(req.params.phone).replace(/[^0-9]/g, '');
+    const { serviceId } = req.body || {};
+    if (!serviceId) {
+      res.status(400).json({ error: 'serviceId es requerido' });
+      return;
+    }
+    const success = await OutreachRepo.updateLeadService(clean, serviceId);
+    broadcastDashboardEvent({ type: 'lead_updated', phone: clean, serviceId });
+    res.json({ success, serviceId });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Exportar prospectos a CSV
+app.get('/api/client/leads/export', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const { serviceId, status } = req.query as { serviceId?: string; status?: string };
+    let query = `
+      SELECT l.company_name, l.phone, l.status, COALESCE(s.name, 'Directo / Orgánico') as service_name, 
+             COALESCE(l.assigned_rep_name, 'Sin Asignar') as rep_name, l.created_at
+      FROM leads l
+      LEFT JOIN services s ON l.service_id = s.id
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+    let pIdx = 1;
+    if (serviceId && serviceId !== 'ALL') {
+      query += ` AND l.service_id = $${pIdx++}`;
+      params.push(serviceId);
+    }
+    if (status && status !== 'ALL') {
+      query += ` AND l.status = $${pIdx++}`;
+      params.push(status);
+    }
+    query += ` ORDER BY l.created_at DESC`;
+
+    let rows: any[] = [];
+    if (DbConnection.isPg()) {
+      const resDb = await DbConnection.getPool().query(query, params);
+      rows = resDb.rows;
+    } else {
+      const fb = DbConnection.getFallbackData();
+      rows = (fb.leads || []).map((l: any) => ({
+        company_name: l.companyName,
+        phone: l.phone,
+        status: l.status,
+        service_name: l.serviceId,
+        rep_name: l.assignedRepName || 'Sin Asignar',
+        created_at: l.createdAt
+      }));
+    }
+
+    let csvContent = '\uFEFF'; // UTF-8 BOM para soporte de tildes en Excel
+    csvContent += 'Empresa,Telefono,Estado,Campana,Asesor_Asignado,Fecha_Creacion\r\n';
+    for (const r of rows) {
+      const comp = `"${(r.company_name || '').replace(/"/g, '""')}"`;
+      const phone = `"+${r.phone}"`;
+      const st = `"${r.status}"`;
+      const srv = `"${(r.service_name || '').replace(/"/g, '""')}"`;
+      const rep = `"${(r.rep_name || '').replace(/"/g, '""')}"`;
+      const dt = `"${(r.created_at || '').toString().slice(0, 19)}"`;
+      csvContent += `${comp},${phone},${st},${srv},${rep},${dt}\r\n`;
+    }
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="prospectos_qp_${Date.now()}.csv"`);
+    res.send(csvContent);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Toggle Piloto Automático
+app.post('/api/client/pipeline/toggle', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const { active } = req.body || {};
+    const isNowActive = !!active;
+    await OutreachRepo.updateSettings({ isAutonomousActive: isNowActive });
+    if (isNowActive) {
+      AutonomousPipeline.start();
+    } else {
+      AutonomousPipeline.stop();
+    }
+    broadcastDashboardEvent({ type: 'pipeline_toggled', active: isNowActive });
+    res.json({ success: true, isAutonomousActive: isNowActive });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- MOTOR DE DESPACHO EN LOTE (BATCH DISPATCHER) ---
+interface BatchJob {
+  serviceId: string;
+  serviceName: string;
+  totalLeads: number;
+  sentCount: number;
+  failedCount: number;
+  status: 'IDLE' | 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'STOPPED';
+  delaySeconds: number;
+  currentLeadName?: string;
+  currentLeadPhone?: string;
+  nextRunAt?: number;
+  timeoutId?: any;
+}
+
+let activeBatchJob: BatchJob = {
+  serviceId: '',
+  serviceName: '',
+  totalLeads: 0,
+  sentCount: 0,
+  failedCount: 0,
+  status: 'IDLE',
+  delaySeconds: 180
+};
+
+async function runNextBatchStep() {
+  if (activeBatchJob.status !== 'RUNNING') return;
+
+  try {
+    let nextLead: any = null;
+    if (DbConnection.isPg()) {
+      const res = await DbConnection.getPool().query(
+        `SELECT * FROM leads WHERE service_id = $1 AND status IN ('DISCOVERED', 'QUEUED') ORDER BY id ASC LIMIT 1`,
+        [activeBatchJob.serviceId]
+      );
+      if (res.rows.length > 0) {
+        nextLead = OutreachRepo['mapLeadRow'](res.rows[0]);
+      }
+    } else {
+      const data = DbConnection.getFallbackData();
+      nextLead = (data.leads || []).find((l: any) => l.serviceId === activeBatchJob.serviceId && (l.status === 'DISCOVERED' || l.status === 'QUEUED')) || null;
+    }
+
+    if (!nextLead) {
+      activeBatchJob.status = 'COMPLETED';
+      activeBatchJob.currentLeadName = undefined;
+      activeBatchJob.currentLeadPhone = undefined;
+      broadcastDashboardEvent({ type: 'batch_dispatch_update', job: { ...activeBatchJob, timeoutId: undefined } });
+      return;
+    }
+
+    const service = await OutreachRepo.getServiceById(activeBatchJob.serviceId);
+    if (!service) {
+      activeBatchJob.status = 'STOPPED';
+      return;
+    }
+
+    activeBatchJob.currentLeadName = nextLead.companyName;
+    activeBatchJob.currentLeadPhone = nextLead.phone;
+
+    const personalized = (service.outreachTemplate || 'Buenas tardes {{name}}')
+      .replace(/{{name}}/g, nextLead.companyName || 'estimado equipo')
+      .replace(/{{empresa}}/g, nextLead.companyName || 'su empresa');
+
+    const result = await whatsapp.send(nextLead.phone, personalized);
+    if (result.success) {
+      activeBatchJob.sentCount++;
+      await OutreachRepo.updateLeadStatus(nextLead.phone, 'OUTREACH_SENT');
+      await OutreachRepo.addChatMessage(nextLead.phone, 'assistant', personalized);
+      broadcastDashboardEvent({
+        type: 'new_message',
+        phone: nextLead.phone,
+        role: 'assistant',
+        content: personalized,
+        createdAt: new Date().toISOString()
+      });
+    } else {
+      activeBatchJob.failedCount++;
+      await OutreachRepo.updateLeadStatus(nextLead.phone, 'INVALID_PHONE');
+    }
+
+    const delayMs = Math.max(30, activeBatchJob.delaySeconds) * 1000;
+    activeBatchJob.nextRunAt = Date.now() + delayMs;
+
+    broadcastDashboardEvent({ type: 'batch_dispatch_update', job: { ...activeBatchJob, timeoutId: undefined } });
+
+    if (activeBatchJob.status === 'RUNNING') {
+      activeBatchJob.timeoutId = setTimeout(() => {
+        runNextBatchStep();
+      }, delayMs);
+    }
+  } catch (err: any) {
+    console.error('Error en runNextBatchStep:', err.message);
+    activeBatchJob.status = 'STOPPED';
+    broadcastDashboardEvent({ type: 'batch_dispatch_update', job: { ...activeBatchJob, timeoutId: undefined } });
+  }
+}
+
+app.post('/api/client/campaign/batch-dispatch', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const { serviceId, delaySeconds = 180 } = req.body || {};
+    if (!serviceId) {
+      res.status(400).json({ error: 'serviceId es requerido' });
+      return;
+    }
+
+    const service = await OutreachRepo.getServiceById(serviceId);
+    if (!service) {
+      res.status(404).json({ error: 'Campaña no encontrada' });
+      return;
+    }
+
+    let uncontactedCount = 0;
+    if (DbConnection.isPg()) {
+      const countRes = await DbConnection.getPool().query(
+        `SELECT COUNT(*) FROM leads WHERE service_id = $1 AND status IN ('DISCOVERED', 'QUEUED')`,
+        [serviceId]
+      );
+      uncontactedCount = parseInt(countRes.rows[0]?.count || '0', 10);
+    } else {
+      const data = DbConnection.getFallbackData();
+      uncontactedCount = (data.leads || []).filter((l: any) => l.serviceId === serviceId && (l.status === 'DISCOVERED' || l.status === 'QUEUED')).length;
+    }
+
+    if (uncontactedCount === 0) {
+      res.status(400).json({ error: 'No hay prospectos en estado "Por Contactar" para esta campaña.' });
+      return;
+    }
+
+    if (activeBatchJob.timeoutId) clearTimeout(activeBatchJob.timeoutId);
+
+    activeBatchJob = {
+      serviceId,
+      serviceName: service.name,
+      totalLeads: uncontactedCount,
+      sentCount: 0,
+      failedCount: 0,
+      status: 'RUNNING',
+      delaySeconds: Math.max(30, Number(delaySeconds) || 180)
+    };
+
+    // Iniciar el primer despacho inmediatamente
+    runNextBatchStep();
+
+    res.json({ success: true, job: { ...activeBatchJob, timeoutId: undefined } });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/client/campaign/batch-dispatch/pause', authenticateClientPin, (_req: Request, res: Response) => {
+  if (activeBatchJob.timeoutId) clearTimeout(activeBatchJob.timeoutId);
+  activeBatchJob.status = 'PAUSED';
+  broadcastDashboardEvent({ type: 'batch_dispatch_update', job: { ...activeBatchJob, timeoutId: undefined } });
+  res.json({ success: true, job: { ...activeBatchJob, timeoutId: undefined } });
+});
+
+app.post('/api/client/campaign/batch-dispatch/resume', authenticateClientPin, (_req: Request, res: Response) => {
+  if (activeBatchJob.status === 'PAUSED') {
+    activeBatchJob.status = 'RUNNING';
+    runNextBatchStep();
+  }
+  broadcastDashboardEvent({ type: 'batch_dispatch_update', job: { ...activeBatchJob, timeoutId: undefined } });
+  res.json({ success: true, job: { ...activeBatchJob, timeoutId: undefined } });
+});
+
+app.post('/api/client/campaign/batch-dispatch/stop', authenticateClientPin, (_req: Request, res: Response) => {
+  if (activeBatchJob.timeoutId) clearTimeout(activeBatchJob.timeoutId);
+  activeBatchJob.status = 'STOPPED';
+  activeBatchJob.currentLeadName = undefined;
+  activeBatchJob.currentLeadPhone = undefined;
+  broadcastDashboardEvent({ type: 'batch_dispatch_update', job: { ...activeBatchJob, timeoutId: undefined } });
+  res.json({ success: true, job: { ...activeBatchJob, timeoutId: undefined } });
+});
+
+app.get('/api/client/campaign/batch-dispatch/status', authenticateClientPin, (_req: Request, res: Response) => {
+  res.json({ success: true, job: { ...activeBatchJob, timeoutId: undefined } });
 });
 
 app.post('/api/client/leads/import', authenticateClientPin, async (req: Request, res: Response) => {

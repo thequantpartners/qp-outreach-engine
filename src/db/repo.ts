@@ -168,7 +168,7 @@ export class OutreachRepo {
       ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS round_robin_index INT DEFAULT 0;
       ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS ai_provider VARCHAR(50) DEFAULT 'openrouter';
       ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS ai_api_key TEXT DEFAULT '';
-      ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS ai_model VARCHAR(100) DEFAULT 'google/gemini-2.0-flash-001';
+      ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS ai_model VARCHAR(100) DEFAULT 'google/gemini-2.5-flash';
 
       ALTER TABLE leads ADD COLUMN IF NOT EXISTS assigned_rep_name VARCHAR(100);
       ALTER TABLE leads ADD COLUMN IF NOT EXISTS assigned_rep_phone VARCHAR(50);
@@ -177,6 +177,10 @@ export class OutreachRepo {
       ALTER TABLE leads ADD COLUMN IF NOT EXISTS meeting_attendance_status VARCHAR(50) DEFAULT 'PENDING';
       ALTER TABLE leads ADD COLUMN IF NOT EXISTS source VARCHAR(50) DEFAULT 'google_maps';
       ALTER TABLE leads ADD COLUMN IF NOT EXISTS custom_fields JSONB DEFAULT '{}'::jsonb;
+
+      ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS currency VARCHAR(10) DEFAULT 'S/.';
+      ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS monthly_retainer_fee NUMERIC DEFAULT 2800;
+      ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS success_fee_per_meeting NUMERIC DEFAULT 200;
     `);
 
     // Comprobar si no hay servicios registrados
@@ -483,6 +487,7 @@ export class OutreachRepo {
     return {
       id: r.id,
       serviceId: r.service_id,
+      serviceName: r.service_name || undefined,
       companyName: r.company_name,
       phone: r.phone,
       website: r.website,
@@ -1073,7 +1078,10 @@ export class OutreachRepo {
           roundRobinIndex: 0,
           aiProvider: 'openrouter',
           aiApiKey: '',
-          aiModel: 'google/gemini-2.0-flash-001'
+          aiModel: 'google/gemini-2.5-flash',
+          currency: 'S/.',
+          monthlyRetainerFee: 2800,
+          successFeePerMeeting: 200
         };
       }
       const r = res.rows[0];
@@ -1091,7 +1099,10 @@ export class OutreachRepo {
         roundRobinIndex: r.round_robin_index ?? 0,
         aiProvider: r.ai_provider || 'openrouter',
         aiApiKey: r.ai_api_key || '',
-        aiModel: r.ai_model || 'google/gemini-2.0-flash-001'
+        aiModel: r.ai_model || 'google/gemini-2.5-flash',
+        currency: r.currency || 'S/.',
+        monthlyRetainerFee: r.monthly_retainer_fee != null ? Number(r.monthly_retainer_fee) : 2800,
+        successFeePerMeeting: r.success_fee_per_meeting != null ? Number(r.success_fee_per_meeting) : 200
       };
     } else {
       const data = DbConnection.getFallbackData();
@@ -1107,7 +1118,10 @@ export class OutreachRepo {
         roundRobinIndex: 0,
         aiProvider: 'openrouter',
         aiApiKey: '',
-        aiModel: 'google/gemini-2.0-flash-001'
+        aiModel: 'google/gemini-2.5-flash',
+        currency: 'S/.',
+        monthlyRetainerFee: 2800,
+        successFeePerMeeting: 200
       };
     }
   }
@@ -1132,6 +1146,9 @@ export class OutreachRepo {
            ai_provider = $12,
            ai_api_key = $13,
            ai_model = $14,
+           currency = $15,
+           monthly_retainer_fee = $16,
+           success_fee_per_meeting = $17,
            updated_at = NOW()
          WHERE id = 'main_config'`,
         [
@@ -1148,7 +1165,10 @@ export class OutreachRepo {
           updated.roundRobinIndex ?? 0,
           updated.aiProvider || 'openrouter',
           updated.aiApiKey || '',
-          updated.aiModel || 'google/gemini-2.0-flash-001'
+          updated.aiModel || 'google/gemini-2.5-flash',
+          updated.currency || 'S/.',
+          updated.monthlyRetainerFee ?? 2800,
+          updated.successFeePerMeeting ?? 200
         ]
       );
     } else {
@@ -1322,6 +1342,107 @@ export class OutreachRepo {
     }
   }
 
+  // --- MÉTODOS DE PRODUCCIÓN: DIRECT LEAD, DELETE, OPT-OUT, REASSIGN ---
+  public static async createDirectLead(data: { phone: string; companyName?: string; serviceId?: string }): Promise<Lead> {
+    const cleanPhone = data.phone.replace(/[^0-9]/g, '');
+    const companyName = data.companyName?.trim() || `WhatsApp ${cleanPhone}`;
+    const serviceId = data.serviceId || (await OutreachRepo.getActiveService())?.id || 'custom-service';
+
+    if (DbConnection.isPg()) {
+      const pool = DbConnection.getPool();
+      const existing = await OutreachRepo.getLeadByPhone(cleanPhone);
+      if (existing) {
+        return existing;
+      }
+      const res = await pool.query(
+        `INSERT INTO leads (service_id, company_name, phone, status, source, created_at, updated_at)
+         VALUES ($1, $2, $3, 'REPLIED', 'direct', NOW(), NOW())
+         RETURNING *`,
+        [serviceId, companyName, cleanPhone]
+      );
+      return OutreachRepo.mapLeadRow(res.rows[0]);
+    } else {
+      const fbData = DbConnection.getFallbackData();
+      if (!fbData.leads) fbData.leads = [];
+      let lead = fbData.leads.find((l: Lead) => l.phone === cleanPhone);
+      if (!lead) {
+        lead = {
+          serviceId,
+          companyName,
+          phone: cleanPhone,
+          status: 'REPLIED',
+          source: 'direct',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        fbData.leads.push(lead);
+        DbConnection.saveFallbackData(fbData);
+      }
+      return lead;
+    }
+  }
+
+  public static async deleteLeadAndChats(phone: string): Promise<boolean> {
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    if (DbConnection.isPg()) {
+      const pool = DbConnection.getPool();
+      await pool.query('DELETE FROM chat_messages WHERE lead_phone = $1', [cleanPhone]);
+      const res = await pool.query('DELETE FROM leads WHERE phone = $1', [cleanPhone]);
+      return (res.rowCount ?? 0) > 0;
+    } else {
+      const data = DbConnection.getFallbackData();
+      data.leads = (data.leads || []).filter((l: Lead) => l.phone !== cleanPhone);
+      data.chatMessages = (data.chatMessages || []).filter((m: ChatMessage) => m.leadPhone !== cleanPhone);
+      DbConnection.saveFallbackData(data);
+      return true;
+    }
+  }
+
+  public static async setLeadOptOut(phone: string): Promise<boolean> {
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    if (DbConnection.isPg()) {
+      const pool = DbConnection.getPool();
+      const res = await pool.query(
+        `UPDATE leads SET status = 'OPT_OUT', human_takeover_at = NOW(), updated_at = NOW() WHERE phone = $1`,
+        [cleanPhone]
+      );
+      return (res.rowCount ?? 0) > 0;
+    } else {
+      const data = DbConnection.getFallbackData();
+      const lead = (data.leads || []).find((l: Lead) => l.phone === cleanPhone);
+      if (lead) {
+        lead.status = 'OPT_OUT';
+        lead.humanTakeoverAt = new Date().toISOString();
+        lead.updatedAt = new Date().toISOString();
+        DbConnection.saveFallbackData(data);
+        return true;
+      }
+      return false;
+    }
+  }
+
+  public static async updateLeadService(phone: string, serviceId: string): Promise<boolean> {
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    if (DbConnection.isPg()) {
+      const pool = DbConnection.getPool();
+      const res = await pool.query(
+        `UPDATE leads SET service_id = $1, updated_at = NOW() WHERE phone = $2`,
+        [serviceId, cleanPhone]
+      );
+      return (res.rowCount ?? 0) > 0;
+    } else {
+      const data = DbConnection.getFallbackData();
+      const lead = (data.leads || []).find((l: Lead) => l.phone === cleanPhone);
+      if (lead) {
+        lead.serviceId = serviceId;
+        lead.updatedAt = new Date().toISOString();
+        DbConnection.saveFallbackData(data);
+        return true;
+      }
+      return false;
+    }
+  }
+
   // --- DASHBOARD OVERVIEW ---
   public static async getDashboardOverview(): Promise<{
     metrics: {
@@ -1346,6 +1467,9 @@ export class OutreachRepo {
         isWarmupActive: boolean;
         currentDay: number;
         dailyLimit: number;
+        sentToday: number;
+        remainingToday: number;
+        activePhase: number;
       };
     };
     kanban: {
@@ -1360,6 +1484,8 @@ export class OutreachRepo {
       leadPhone: string;
       leadName: string;
       status: LeadStatus;
+      serviceId?: string;
+      serviceName?: string;
       assignedRepName?: string;
       isHumanTakeover: boolean;
       lastMessageSnippet: string;
@@ -1374,9 +1500,12 @@ export class OutreachRepo {
     }
     const isWarmupActive = activeDays <= 4;
     const warmupDailyLimit = activeDays <= 2 ? 10 : (activeDays <= 4 ? 20 : 35);
+    const activePhase = activeDays <= 2 ? 1 : (activeDays <= 4 ? 2 : 3);
 
-    const baseRetainer = Number(process.env.MONTHLY_RETAINER_FEE || 2800);
-    const successFeePerMeeting = Number(process.env.SUCCESS_FEE_PER_MEETING || 200);
+    const settings = await OutreachRepo.getSettings();
+    const currency = settings.currency || 'S/.';
+    const baseRetainer = settings.monthlyRetainerFee ?? Number(process.env.MONTHLY_RETAINER_FEE || 2800);
+    const successFeePerMeeting = settings.successFeePerMeeting ?? Number(process.env.SUCCESS_FEE_PER_MEETING || 200);
 
     if (DbConnection.isPg()) {
       const pool = DbConnection.getPool();
@@ -1405,15 +1534,32 @@ export class OutreachRepo {
       const noShowMeetings = parseInt(mRow.no_show_meetings || '0', 10);
       const humanTakeover = parseInt(mRow.human_takeover || '0', 10);
       const closedWon = parseInt(mRow.closed_won || '0', 10);
-      const replyRatePercent = outreachSent > 0 ? Math.round((replied / outreachSent) * 100) : 0;
+
+      // Conteo de envíos salientes en el día de hoy
+      const sentTodayRes = await pool.query(`
+        SELECT COUNT(*) as sent_today FROM leads 
+        WHERE last_outreach_at >= CURRENT_DATE
+      `);
+      const sentToday = parseInt(sentTodayRes.rows[0]?.sent_today || '0', 10);
+      const remainingToday = Math.max(0, warmupDailyLimit - sentToday);
+
+      // Tasa de respuesta justa: considera prospectos salientes y conversaciones totales
+      const totalConversations = outreachSent + (replied > outreachSent ? (replied - outreachSent) : 0);
+      const replyRatePercent = totalConversations > 0 
+        ? Math.min(100, Math.round((replied / totalConversations) * 100)) 
+        : (replied > 0 ? 100 : 0);
 
       const variableTotal = attendedMeetings * successFeePerMeeting;
       const grandTotal = baseRetainer + variableTotal;
 
-      // Columnas Kanban (Top 25 por columna)
+      // Columnas Kanban con el nombre de campaña
       const fetchColumn = async (statuses: string[]) => {
         const res = await pool.query(
-          `SELECT * FROM leads WHERE status = ANY($1) ORDER BY updated_at DESC LIMIT 25`,
+          `SELECT l.*, s.name as service_name 
+           FROM leads l 
+           LEFT JOIN services s ON l.service_id = s.id 
+           WHERE l.status = ANY($1) 
+           ORDER BY l.updated_at DESC LIMIT 50`,
           [statuses]
         );
         return res.rows.map(r => OutreachRepo.mapLeadRow(r));
@@ -1428,7 +1574,7 @@ export class OutreachRepo {
         fetchColumn(['HUMAN_TAKEOVER'])
       ]);
 
-      // Chats activos con último mensaje
+      // Chats activos con último mensaje y nombre de campaña
       const chatsRes = await pool.query(`
         SELECT DISTINCT ON (m.lead_phone)
           m.lead_phone,
@@ -1436,12 +1582,15 @@ export class OutreachRepo {
           m.created_at as last_created_at,
           l.company_name,
           l.status,
+          l.service_id,
+          s.name as service_name,
           l.assigned_rep_name,
           l.human_takeover_at
         FROM chat_messages m
         LEFT JOIN leads l ON l.phone = m.lead_phone
+        LEFT JOIN services s ON l.service_id = s.id
         ORDER BY m.lead_phone, m.created_at DESC
-        LIMIT 35
+        LIMIT 50
       `);
 
       const activeChats = chatsRes.rows
@@ -1450,6 +1599,8 @@ export class OutreachRepo {
           leadPhone: r.lead_phone,
           leadName: r.company_name || 'Prospecto',
           status: (r.status || 'REPLIED') as LeadStatus,
+          serviceId: r.service_id || undefined,
+          serviceName: r.service_name || 'Directo / Orgánico',
           assignedRepName: r.assigned_rep_name || undefined,
           isHumanTakeover: !!r.human_takeover_at || r.status === 'HUMAN_TAKEOVER',
           lastMessageSnippet: r.last_content ? r.last_content.slice(0, 75) : '',
@@ -1473,12 +1624,15 @@ export class OutreachRepo {
             successFeePerMeeting,
             variableTotal,
             grandTotal,
-            currency: 'S/.'
+            currency
           },
           warmup: {
             isWarmupActive,
             currentDay: activeDays,
-            dailyLimit: warmupDailyLimit
+            dailyLimit: warmupDailyLimit,
+            sentToday,
+            remainingToday,
+            activePhase
           }
         },
         kanban: {
@@ -1504,7 +1658,8 @@ export class OutreachRepo {
       const noShowMeetings = allLeads.filter(l => l.meetingAttendanceStatus === 'NO_SHOW').length;
       const humanTakeover = allLeads.filter(l => l.status === 'HUMAN_TAKEOVER').length;
       const closedWon = allLeads.filter(l => l.status === 'CLOSED_WON').length;
-      const replyRatePercent = outreachSent > 0 ? Math.round((replied / outreachSent) * 100) : 0;
+      const totalConversations = outreachSent + (replied > outreachSent ? (replied - outreachSent) : 0);
+      const replyRatePercent = totalConversations > 0 ? Math.min(100, Math.round((replied / totalConversations) * 100)) : (replied > 0 ? 100 : 0);
 
       const variableTotal = attendedMeetings * successFeePerMeeting;
       const grandTotal = baseRetainer + variableTotal;
@@ -1560,7 +1715,10 @@ export class OutreachRepo {
           warmup: {
             isWarmupActive,
             currentDay: activeDays,
-            dailyLimit: warmupDailyLimit
+            dailyLimit: warmupDailyLimit,
+            sentToday: 0,
+            remainingToday: warmupDailyLimit,
+            activePhase: activeDays <= 2 ? 1 : (activeDays <= 4 ? 2 : 3)
           }
         },
         kanban,

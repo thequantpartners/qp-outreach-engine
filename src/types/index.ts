@@ -12,7 +12,8 @@ export type LeadStatus =
   | 'CLOSED_LOST'
   | 'NO_RESPONSE'
   | 'HUMAN_TAKEOVER'
-  | 'INVALID_PHONE';
+  | 'INVALID_PHONE'
+  | 'OPT_OUT';
 
 export type ClosingType = 'MEETING_LINK' | 'PAYMENT_INFO' | 'VALUE_ASSET' | 'HUMAN_TAKEOVER';
 
@@ -43,6 +44,7 @@ export interface ServiceDefinition {
 export interface Lead {
   id?: number | string;
   serviceId: string;
+  serviceName?: string;
   companyName: string;
   phone: string;
   website?: string;
@@ -97,6 +99,9 @@ export interface CampaignSettings {
   aiProvider?: 'openrouter' | 'gemini' | 'openai';
   aiApiKey?: string;
   aiModel?: string;
+  currency?: string;
+  monthlyRetainerFee?: number;
+  successFeePerMeeting?: number;
 }
 
 export const SendMessageSchema = z.object({
@@ -264,7 +269,10 @@ export const ConfigureSettingsSchema = z.object({
   adminWhatsAppPhone: z.string().optional(),
   webhookUrl: z.string().optional(),
   alertWebhookUrl: z.string().optional(),
-  isAutonomousActive: z.boolean().optional()
+  isAutonomousActive: z.boolean().optional(),
+  currency: z.string().optional(),
+  monthlyRetainerFee: z.number().optional(),
+  successFeePerMeeting: z.number().optional()
 });
 
 export type ConfigureSettingsRequest = z.infer<typeof ConfigureSettingsSchema>;

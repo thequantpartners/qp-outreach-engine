@@ -27,7 +27,7 @@ export class OpenRouterCloser {
       const provider = (settings.aiProvider as any) || 'openrouter';
       const apiKey = settings.aiApiKey || process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || '';
       
-      let defaultModel = 'google/gemini-2.0-flash-001';
+      let defaultModel = 'google/gemini-2.5-flash';
       if (provider === 'gemini') defaultModel = 'gemini-2.0-flash';
       if (provider === 'openai') defaultModel = 'gpt-4o-mini';
 
@@ -37,7 +37,7 @@ export class OpenRouterCloser {
       return {
         provider: 'openrouter',
         apiKey: process.env.OPENROUTER_API_KEY || '',
-        model: 'google/gemini-2.0-flash-001'
+        model: 'google/gemini-2.5-flash'
       };
     }
   }
@@ -64,7 +64,7 @@ export class OpenRouterCloser {
     if (!chosenModel) {
       if (provider === 'gemini') chosenModel = 'gemini-2.0-flash';
       else if (provider === 'openai') chosenModel = 'gpt-4o-mini';
-      else chosenModel = 'google/gemini-2.0-flash-001';
+      else chosenModel = 'google/gemini-2.5-flash';
     }
 
     try {
