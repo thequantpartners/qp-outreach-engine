@@ -1,0 +1,29 @@
+{
+  "id": "clinicas_salud",
+  "nicheName": "Clínicas Odontológicas y Centros Estéticos",
+  "description": "Prospección B2B para clínicas privadas, odontología especializada y centros médicos en Perú.",
+  "recommendedClosingMode": "MEETING_LINK",
+  "defaultApifyQueries": [
+    "clinica dental san isidro lima",
+    "centros odontologicos miraflores",
+    "clinica estetica santiago de surco",
+    "clinicas privadas lima peru"
+  ],
+  "defaultTargetLocations": [
+    "Lima, Peru"
+  ],
+  "outreachTemplate": "Buenas tardes al área de administración de {{name}}.\n\nLe escribe {{agentName}} de {{companyName}}.\n\nEstuvimos evaluando la gestión de consultas en clínicas de su zona y detectamos una oportunidad concreta para automatizar el agendamiento y confirmación de pacientes en WhatsApp, reduciendo el ausentismo a menos del 5%.\n\n¿Me permite compartirle un video demostrativo de 2 minutos para que lo revisen con la dirección médica?",
+  "followUpTemplate1": "Buenas tardes equipo de {{name}}. Le escribe {{agentName}}.\n\nImagino que están con alta carga de citas hoy. ¿Pudieron revisar la propuesta de agendamiento y reducción de ausentismo?",
+  "followUpTemplate2": "Estimado equipo de {{name}}, último mensaje de seguimiento.\n\nSi la dirección médica ya tiene cubierto el sistema de confirmación de citas, no se preocupe. Si más adelante desean triplicar la conversión de consultas, quedamos atentos.",
+  "systemPromptTemplate": "Eres {{agentName}}, especialista en automatización de operaciones médicas en {{companyName}}. Hablas con administradores, directores médicos o dueños de clínicas. Tono profesional, enfocado en optimizar el tiempo de los médicos y reducir cancelaciones. Dirige al link de agendamiento o videollamada de 15 minutos.",
+  "typicalObjections": [
+    {
+      "objection": "Ya tenemos recepcionista que atiende WhatsApp.",
+      "responseGuidance": "La recepcionista atiende de 9 a 6 y se le pasan mensajes en horas punta. El sistema atiende en 10 segundos las 24 horas y le deja a la recepcionista las citas ya pagadas o confirmadas en agenda."
+    },
+    {
+      "objection": "¿Cuánto cuesta el sistema?",
+      "responseGuidance": "El costo se paga solo con 2 o 3 pacientes adicionales recuperados al mes. Con gusto le muestro en una videollamada de 15 minutos los números exactos para su clínica."
+    }
+  ]
+}

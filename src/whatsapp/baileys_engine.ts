@@ -112,6 +112,9 @@ export class BaileysEngine {
           } catch (qrErr: any) {
             console.error('[BaileysEngine] Error guardando QR:', qrErr.message);
           }
+
+          // Alerta externa (Discord / Telegram / Webhook)
+          await this.notifyExternalAlert('⚠️ [QP Outreach Engine] WhatsApp requiere vincularse. Escanea el nuevo código QR.');
         }
 
         if (connection === 'close') {
@@ -130,11 +133,14 @@ export class BaileysEngine {
             setTimeout(() => this.init(), 5000);
           } else {
             console.warn('⚠️ [BaileysEngine] Sesión cerrada formalmente por el usuario. Escanear nuevo QR.');
+            await this.notifyExternalAlert('🚨 [QP Outreach Engine] Sesión cerrada formalmente. Se necesita nuevo QR para operar.');
           }
         } else if (connection === 'open') {
           console.log('✅ [BaileysEngine] WhatsApp Conectado y Listo para Despachar!');
           this.isReady = true;
           this.latestQr = null;
+
+          await this.notifyExternalAlert('✅ [QP Outreach Engine] WhatsApp conectado exitosamente y listo para despachar.');
 
           // Respaldar sesión en tar.gz en segundo plano
           try {
@@ -260,6 +266,22 @@ export class BaileysEngine {
 
             // Registrar mensaje en DB
             await OutreachRepo.addChatMessage(senderPhone, 'assistant', closerResult.replyText);
+
+            // Si el servicio tiene configurado un archivo asset (PDF) y el prospecto respondió afirmativamente
+            if (service.assetFilePath && service.assetFileName) {
+              const lowerInbound = incomingText.toLowerCase();
+              const isAffirmative = /(^|\W)(si|sí|claro|dale|de acuerdo|pásalo|pasamelo|compartir|comparte|mándamelo|mandalo|envialo|envíalo)(\W|$)/i.test(lowerInbound);
+              if (isAffirmative || closerResult.intent === 'CLOSING_DELIVERED') {
+                const assetPath = path.isAbsolute(service.assetFilePath)
+                  ? service.assetFilePath
+                  : path.resolve(service.assetFilePath);
+                if (fs.existsSync(assetPath)) {
+                  console.log(`📎 [BaileysEngine] Despachando activo prometido (${service.assetFileName}) a ${senderPhone}...`);
+                  await this.sendDocument(senderPhone, assetPath, service.assetFileName, `Aquí tiene el archivo prometido: ${service.assetFileName}`);
+                  await OutreachRepo.addChatMessage(senderPhone, 'assistant', `[DOCUMENTO ENVIADO: ${service.assetFileName}]`);
+                }
+              }
+            }
           } catch (err: any) {
             console.error(`[BaileysEngine] Error enviando respuesta a ${senderPhone}:`, err.message);
           }
@@ -298,6 +320,123 @@ export class BaileysEngine {
     } catch (err: any) {
       console.error(`❌ [BaileysEngine] Error enviando a ${telefono}:`, err.message);
       return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Envía un documento PDF o archivo nativo por WhatsApp
+   */
+  public async sendDocument(
+    telefono: string,
+    filePathOrUrl: string,
+    fileName: string,
+    caption?: string
+  ): Promise<{ success: boolean; jid?: string; error?: string }> {
+    if (!this.sock || !this.isReady) {
+      return { success: false, error: 'WhatsApp no está conectado o autenticado.' };
+    }
+
+    try {
+      const limpio = telefono.replace(/[^0-9]/g, '');
+      const jid = `${limpio}@s.whatsapp.net`;
+
+      let fileBuffer: Buffer;
+      if (filePathOrUrl.startsWith('http://') || filePathOrUrl.startsWith('https://')) {
+        const resp = await fetch(filePathOrUrl);
+        const arrayBuf = await resp.arrayBuffer();
+        fileBuffer = Buffer.from(arrayBuf);
+      } else {
+        const resolvedPath = path.isAbsolute(filePathOrUrl)
+          ? filePathOrUrl
+          : path.resolve(filePathOrUrl);
+        if (!fs.existsSync(resolvedPath)) {
+          return { success: false, error: `Archivo local no encontrado en: ${resolvedPath}` };
+        }
+        fileBuffer = fs.readFileSync(resolvedPath);
+      }
+
+      console.log(`[BaileysEngine] Despachando documento "${fileName}" a ${limpio}...`);
+      await this.sock.sendMessage(jid, {
+        document: fileBuffer,
+        mimetype: 'application/pdf',
+        fileName,
+        caption
+      });
+      console.log(`✅ [BaileysEngine] Documento "${fileName}" entregado con éxito a ${limpio}!`);
+      return { success: true, jid };
+    } catch (err: any) {
+      console.error(`❌ [BaileysEngine] Error enviando documento a ${telefono}:`, err.message);
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Envía un mensaje de audio o nota de voz nativa por WhatsApp
+   */
+  public async sendAudio(
+    telefono: string,
+    filePathOrUrl: string,
+    isPtt: boolean = true
+  ): Promise<{ success: boolean; jid?: string; error?: string }> {
+    if (!this.sock || !this.isReady) {
+      return { success: false, error: 'WhatsApp no está conectado o autenticado.' };
+    }
+
+    try {
+      const limpio = telefono.replace(/[^0-9]/g, '');
+      const jid = `${limpio}@s.whatsapp.net`;
+
+      let audioBuffer: Buffer;
+      if (filePathOrUrl.startsWith('http://') || filePathOrUrl.startsWith('https://')) {
+        const resp = await fetch(filePathOrUrl);
+        const arrayBuf = await resp.arrayBuffer();
+        audioBuffer = Buffer.from(arrayBuf);
+      } else {
+        const resolvedPath = path.isAbsolute(filePathOrUrl)
+          ? filePathOrUrl
+          : path.resolve(filePathOrUrl);
+        if (!fs.existsSync(resolvedPath)) {
+          return { success: false, error: `Audio no encontrado en: ${resolvedPath}` };
+        }
+        audioBuffer = fs.readFileSync(resolvedPath);
+      }
+
+      console.log(`[BaileysEngine] Despachando nota de voz a ${limpio}...`);
+      await this.sock.sendMessage(jid, {
+        audio: audioBuffer,
+        mimetype: 'audio/ogg; codecs=opus',
+        ptt: isPtt
+      });
+      console.log(`✅ [BaileysEngine] Nota de voz entregada con éxito a ${limpio}!`);
+      return { success: true, jid };
+    } catch (err: any) {
+      console.error(`❌ [BaileysEngine] Error enviando audio a ${telefono}:`, err.message);
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Notificación externa de contingencia (Discord, Telegram o Webhook secundario)
+   */
+  public async notifyExternalAlert(message: string): Promise<void> {
+    try {
+      const settings = await OutreachRepo.getSettings();
+      const webhook = settings.alertWebhookUrl || process.env.ALERT_WEBHOOK_URL;
+      if (!webhook) return;
+
+      await fetch(webhook, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: message,
+          text: message,
+          message,
+          timestamp: new Date().toISOString()
+        })
+      });
+      console.log('[BaileysEngine] Alerta externa despachada exitosamente.');
+    } catch (err: any) {
+      console.warn('[BaileysEngine] No se pudo enviar alerta externa:', err.message);
     }
   }
 

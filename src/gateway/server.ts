@@ -10,15 +10,44 @@ import {
   SendMessageSchema,
   StartCampaignSchema,
   ScrapeGoogleMapsSchema,
-  GatewayStatusResponse
+  ScrapeMetaAdsSchema,
+  ScrapeInstagramSchema,
+  ScrapeApolloSchema,
+  ScrapeGoogleSearchSchema,
+  UnifiedScrapeSchema,
+  GatewayStatusResponse,
+  ImportLeadsRequestSchema,
+  SendDocumentSchema,
+  ConfigureSettingsSchema
 } from '../types/index.js';
 import fs from 'fs';
 import path from 'path';
+import { RoundRobinManager } from '../pipeline/round_robin.js';
+import { ClientRegistry } from '../master/client_registry.js';
+import { OpenRouterCloser } from '../ai/openrouter_closer.js';
 
 dotenv.config();
 
 const app = express();
 app.use(express.json());
+
+// Montar Dashboard Web estático
+const publicDashboardDir = path.resolve('public/dashboard');
+app.use('/dashboard', express.static(publicDashboardDir));
+
+// Suscriptores SSE para tiempo real en el Dashboard
+const clientSseSubscribers = new Set<Response>();
+
+export function broadcastDashboardEvent(event: { type: string; [key: string]: any }) {
+  const payload = `data: ${JSON.stringify(event)}\n\n`;
+  for (const client of clientSseSubscribers) {
+    try {
+      client.write(payload);
+    } catch {
+      clientSseSubscribers.delete(client);
+    }
+  }
+}
 
 const PORT = process.env.PORT || 3100;
 const API_SECRET_KEY = process.env.API_SECRET_KEY || 'qp-master-secret-2026';
@@ -52,13 +81,29 @@ function authenticate(req: Request, res: Response, next: NextFunction): void {
   next();
 }
 
-// 2. Información Headless en Root
+// Middleware de autenticación por PIN para el Dashboard del Cliente
+function authenticateClientPin(req: Request, res: Response, next: NextFunction): void {
+  const configuredPin = process.env.CLIENT_PIN || '1234';
+  const providedPin = (req.headers['x-client-pin'] as string) || (req.query.pin as string);
+  if (!providedPin || providedPin !== configuredPin) {
+    res.status(401).json({ error: 'PIN de acceso no autorizado o inválido.' });
+    return;
+  }
+  next();
+}
+
+// 2. Información Headless en Root (o redirección a Dashboard en modo cliente)
 app.get('/', (_req: Request, res: Response) => {
+  if (process.env.MODE === 'client') {
+    res.redirect('/dashboard');
+    return;
+  }
+
   const waStatus = whatsapp.getStatus();
   res.json({
     service: 'qp-outreach-engine',
     version: '2.0.0',
-    mode: 'headless-ai-gateway',
+    mode: process.env.MODE || 'master',
     status: 'online',
     whatsappConnected: waStatus.isReady,
     mcp: {
@@ -78,6 +123,239 @@ app.get('/', (_req: Request, res: Response) => {
     },
     documentation: 'https://github.com/the-quant-partners/qp-outreach-engine/blob/main/AGENTS.md'
   });
+});
+
+// --- CLIENT DASHBOARD API ---
+app.post('/api/client/auth', (req: Request, res: Response) => {
+  const configuredPin = process.env.CLIENT_PIN || '1234';
+  const { pin } = req.body || {};
+  if (pin && String(pin).trim() === configuredPin) {
+    res.json({
+      success: true,
+      companyName: process.env.COMPANY_NAME || 'Centro Comercial B2B',
+      serviceName: process.env.SERVICE_NAME || 'Departamento Comercial Autónomo'
+    });
+  } else {
+    res.status(401).json({ success: false, error: 'PIN incorrecto' });
+  }
+});
+
+app.get('/api/client/overview', authenticateClientPin, async (_req: Request, res: Response) => {
+  try {
+    const waStatus = whatsapp.getStatus();
+    const overview = await OutreachRepo.getDashboardOverview();
+    const salesReps = RoundRobinManager.getSalesReps();
+
+    res.json({
+      companyName: process.env.COMPANY_NAME || 'The Quant Partners',
+      serviceName: process.env.SERVICE_NAME || 'Departamento Comercial Autónomo',
+      isWhatsAppReady: waStatus.isReady,
+      hasQr: waStatus.hasQr,
+      salesReps,
+      metrics: overview.metrics,
+      kanban: overview.kanban,
+      activeChats: overview.activeChats
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/client/chat/:phone', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const clean = String(req.params.phone).replace(/[^0-9]/g, '');
+    const lead = await OutreachRepo.getLeadByPhone(clean);
+    const messages = await OutreachRepo.getChatHistory(clean, 60);
+    res.json({ lead, messages });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/client/chat/send', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const { phone, message } = req.body || {};
+    if (!phone || !message) {
+      res.status(400).json({ error: 'phone y message son requeridos' });
+      return;
+    }
+    const clean = String(phone).replace(/[^0-9]/g, '');
+    const result = await whatsapp.send(clean, message);
+
+    if (result.success) {
+      await OutreachRepo.updateLeadStatus(clean, 'HUMAN_TAKEOVER', {
+        humanTakeoverAt: new Date().toISOString()
+      });
+      await OutreachRepo.addChatMessage(clean, 'human_agent', message);
+
+      broadcastDashboardEvent({
+        type: 'new_message',
+        phone: clean,
+        role: 'human_agent',
+        content: message,
+        createdAt: new Date().toISOString()
+      });
+
+      res.json({ success: true });
+    } else {
+      res.status(500).json({ error: result.error || 'Fallo enviando WhatsApp' });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/client/chat/:phone/suggest', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const clean = String(req.params.phone).replace(/[^0-9]/g, '');
+    const lead = await OutreachRepo.getLeadByPhone(clean);
+    if (!lead) {
+      res.status(404).json({ error: 'Lead no encontrado' });
+      return;
+    }
+    const service = lead.serviceId ? await OutreachRepo.getServiceById(lead.serviceId) : undefined;
+    const suggestions = await OpenRouterCloser.generateCopilotSuggestions(lead, service || undefined);
+    res.json({ success: true, suggestions });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/client/chat/send-document', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const { phone, filePathOrUrl, fileName, caption } = req.body || {};
+    if (!phone || !filePathOrUrl || !fileName) {
+      res.status(400).json({ error: 'phone, filePathOrUrl y fileName son requeridos' });
+      return;
+    }
+    const clean = String(phone).replace(/[^0-9]/g, '');
+    const result = await whatsapp.sendDocument(clean, filePathOrUrl, fileName, caption);
+
+    if (result.success) {
+      await OutreachRepo.updateLeadStatus(clean, 'HUMAN_TAKEOVER', {
+        humanTakeoverAt: new Date().toISOString()
+      });
+      const docMsg = `📄 [DOCUMENTO: ${fileName}] ${caption || ''}`.trim();
+      await OutreachRepo.addChatMessage(clean, 'human_agent', docMsg);
+
+      broadcastDashboardEvent({
+        type: 'new_message',
+        phone: clean,
+        role: 'human_agent',
+        content: docMsg,
+        createdAt: new Date().toISOString()
+      });
+
+      res.json({ success: true, fileName, jid: result.jid });
+    } else {
+      res.status(500).json({ error: result.error || 'Fallo despachando documento por WhatsApp' });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/client/takeover', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const { phone } = req.body || {};
+    const clean = String(phone).replace(/[^0-9]/g, '');
+    const lead = await OutreachRepo.getLeadByPhone(clean);
+    if (!lead) {
+      res.status(404).json({ error: 'Lead no encontrado' });
+      return;
+    }
+
+    const isCurrentlyTakeover = lead.status === 'HUMAN_TAKEOVER' || !!lead.humanTakeoverAt;
+    const newStatus = isCurrentlyTakeover ? 'REPLIED' : 'HUMAN_TAKEOVER';
+    const newTakeoverTime = isCurrentlyTakeover ? null : new Date().toISOString();
+
+    await OutreachRepo.updateLeadStatus(clean, newStatus, {
+      humanTakeoverAt: newTakeoverTime
+    });
+
+    broadcastDashboardEvent({
+      type: 'lead_updated',
+      phone: clean,
+      status: newStatus,
+      isHumanTakeover: !isCurrentlyTakeover
+    });
+
+    res.json({ success: true, isHumanTakeover: !isCurrentlyTakeover });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/client/leads/status', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const { phone, status } = req.body || {};
+    const clean = String(phone).replace(/[^0-9]/g, '');
+    await OutreachRepo.updateLeadStatus(clean, status);
+
+    broadcastDashboardEvent({
+      type: 'lead_updated',
+      phone: clean,
+      status
+    });
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/client/leads/meeting-attendance', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const { phone, attendanceStatus } = req.body || {};
+    if (!phone || !attendanceStatus || !['ATTENDED', 'NO_SHOW', 'PENDING'].includes(attendanceStatus)) {
+      res.status(400).json({ error: 'phone y attendanceStatus válidos (ATTENDED, NO_SHOW, PENDING) son requeridos' });
+      return;
+    }
+    const clean = String(phone).replace(/[^0-9]/g, '');
+    await OutreachRepo.updateMeetingAttendance(clean, attendanceStatus);
+
+    broadcastDashboardEvent({
+      type: 'meeting_attendance_updated',
+      phone: clean,
+      attendanceStatus
+    });
+
+    res.json({ success: true, phone: clean, attendanceStatus });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/client/stream', (req: Request, res: Response) => {
+  const configuredPin = process.env.CLIENT_PIN || '1234';
+  const queryPin = req.query.pin as string;
+
+  if (!queryPin || queryPin !== configuredPin) {
+    res.status(401).end();
+    return;
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+
+  clientSseSubscribers.add(res);
+  res.write(`data: ${JSON.stringify({ type: 'connected', timestamp: new Date().toISOString() })}\n\n`);
+
+  req.on('close', () => {
+    clientSseSubscribers.delete(res);
+  });
+});
+
+// --- MASTER HEARTBEAT RECEIVER ---
+app.post('/api/master/heartbeat', async (req: Request, res: Response) => {
+  try {
+    await ClientRegistry.recordHeartbeat(req.body);
+    res.json({ success: true, recorded: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // 3. Healthcheck público
@@ -342,6 +620,262 @@ app.post('/api/scrape/google-maps', authenticate, async (req: Request, res: Resp
     res.status(500).json({ error: 'Error ejecutando scraping en Apify', details: err.message });
   }
 });
+
+// 15b. Scraping Meta Ads Library (Empresas con Pauta Publicitaria Activa)
+app.post('/api/scrape/meta-ads', authenticate, async (req: Request, res: Response) => {
+  const parseResult = ScrapeMetaAdsSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    res.status(400).json({ error: 'Parámetros inválidos para Meta Ads', details: parseResult.error.format() });
+    return;
+  }
+
+  try {
+    const leads = await ApifyScraper.scrapeMetaAds(parseResult.data);
+    if (parseResult.data.serviceId) {
+      await OutreachRepo.saveLeadsFromScraper(parseResult.data.serviceId, leads);
+    }
+    res.json({
+      success: true,
+      source: 'meta_ads',
+      query: parseResult.data.query,
+      totalFound: leads.length,
+      leads
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error ejecutando scraping en Meta Ads', details: err.message });
+  }
+});
+
+// 15c. Scraping Instagram Business
+app.post('/api/scrape/instagram', authenticate, async (req: Request, res: Response) => {
+  const parseResult = ScrapeInstagramSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    res.status(400).json({ error: 'Parámetros inválidos para Instagram', details: parseResult.error.format() });
+    return;
+  }
+
+  try {
+    const leads = await ApifyScraper.scrapeInstagram(parseResult.data);
+    if (parseResult.data.serviceId) {
+      await OutreachRepo.saveLeadsFromScraper(parseResult.data.serviceId, leads);
+    }
+    res.json({
+      success: true,
+      source: 'instagram',
+      query: parseResult.data.query,
+      totalFound: leads.length,
+      leads
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error ejecutando scraping en Instagram', details: err.message });
+  }
+});
+
+// 15d. Scraping Apollo / B2B Leads
+app.post('/api/scrape/apollo', authenticate, async (req: Request, res: Response) => {
+  const parseResult = ScrapeApolloSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    res.status(400).json({ error: 'Parámetros inválidos para Apollo', details: parseResult.error.format() });
+    return;
+  }
+
+  try {
+    const leads = await ApifyScraper.scrapeApollo(parseResult.data);
+    if (parseResult.data.serviceId) {
+      await OutreachRepo.saveLeadsFromScraper(parseResult.data.serviceId, leads);
+    }
+    res.json({
+      success: true,
+      source: 'apollo_b2b',
+      query: parseResult.data.query,
+      totalFound: leads.length,
+      leads
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error ejecutando scraping en Apollo B2B', details: err.message });
+  }
+});
+
+// 15e. Scraping Google Search
+app.post('/api/scrape/google-search', authenticate, async (req: Request, res: Response) => {
+  const parseResult = ScrapeGoogleSearchSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    res.status(400).json({ error: 'Parámetros inválidos para Google Search', details: parseResult.error.format() });
+    return;
+  }
+
+  try {
+    const leads = await ApifyScraper.scrapeGoogleSearch(parseResult.data);
+    if (parseResult.data.serviceId) {
+      await OutreachRepo.saveLeadsFromScraper(parseResult.data.serviceId, leads);
+    }
+    res.json({
+      success: true,
+      source: 'google_search',
+      query: parseResult.data.query,
+      totalFound: leads.length,
+      leads
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error ejecutando scraping en Google Search', details: err.message });
+  }
+});
+
+// 15f. Scraping Multi-Fuente Unificado
+app.post('/api/scrape/multi', authenticate, async (req: Request, res: Response) => {
+  const parseResult = UnifiedScrapeSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    res.status(400).json({ error: 'Parámetros inválidos para Scraping Multi-Fuente', details: parseResult.error.format() });
+    return;
+  }
+
+  try {
+    const leads = await ApifyScraper.scrapeMultiSource(parseResult.data);
+    if (parseResult.data.serviceId) {
+      await OutreachRepo.saveLeadsFromScraper(parseResult.data.serviceId, leads);
+    }
+    res.json({
+      success: true,
+      source: parseResult.data.source,
+      query: parseResult.data.query,
+      totalFound: leads.length,
+      leads
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error ejecutando scraping multi-fuente', details: err.message });
+  }
+});
+
+// 16. Importación masiva de prospectos (CSV / JSON)
+app.post('/api/leads/import', authenticate, async (req: Request, res: Response) => {
+  const parseResult = ImportLeadsRequestSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    res.status(400).json({ error: 'Datos de importación inválidos', details: parseResult.error.format() });
+    return;
+  }
+
+  try {
+    const { serviceId, leads } = parseResult.data;
+    const result = await OutreachRepo.importLeads(serviceId, leads);
+    res.json({ success: true, serviceId, ...result });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 17. Webhook Cal.com / Agendamiento de Citas (Público para recibir eventos de Cal.com)
+app.post('/api/webhooks/cal', async (req: Request, res: Response) => {
+  try {
+    const body = req.body || {};
+    const event = body.triggerEvent || body.event || 'BOOKING_CREATED';
+    const payload = body.payload || body;
+
+    console.log(`📥 [Webhook Cal.com] Evento recibido: ${event}`);
+
+    if (event === 'BOOKING_CREATED' || event === 'booking.created') {
+      // Extraer datos del asistente
+      const responses = payload.responses || {};
+      const rawPhone = responses.phone?.value || responses.phone || payload.attendees?.[0]?.phone || payload.phone || '';
+      const name = responses.name?.value || responses.name || payload.attendees?.[0]?.name || payload.name || 'Cliente';
+      const startTime = payload.startTime || payload.start_time || new Date().toISOString();
+      const cleanPhone = (rawPhone as string).replace(/[^0-9]/g, '');
+
+      if (cleanPhone) {
+        let phoneFormatted = cleanPhone;
+        if (phoneFormatted.length === 9 && phoneFormatted.startsWith('9')) {
+          phoneFormatted = `51${phoneFormatted}`;
+        }
+
+        console.log(`📅 [Webhook Cal.com] Cita confirmada para ${name} (${phoneFormatted}) a las ${startTime}`);
+
+        // Actualizar lead en la base de datos
+        await OutreachRepo.updateLeadSchedule(phoneFormatted, startTime, {
+          bookingId: payload.uid || payload.id,
+          bookingEmail: payload.attendees?.[0]?.email || responses.email?.value
+        });
+
+        // Enviar mensaje de confirmación inmediata por WhatsApp
+        const dateStr = new Date(startTime).toLocaleString('es-PE', { timeZone: 'America/Lima' });
+        const confirmationMsg = `¡Confirmado ${name}! Quedó agendada nuestra sesión técnica para el ${dateStr}. Kenneth se conectará puntualmente en el enlace acordado. ¡Un gusto saludarlo!`;
+        
+        await whatsapp.send(phoneFormatted, confirmationMsg);
+        await OutreachRepo.addChatMessage(phoneFormatted, 'assistant', confirmationMsg);
+
+        // Notificar al comercial vía Round-Robin
+        const lead = await OutreachRepo.getLeadByPhone(phoneFormatted);
+        if (lead) {
+          await RoundRobinManager.assignAndAlertLead(
+            lead,
+            'Cita Confirmada en Cal.com',
+            `Sesión agendada para: ${dateStr}`,
+            'MEETING_LINK'
+          );
+        } else {
+          await whatsapp.notifyAdmin(
+            `📅 *NUEVA CITA AGENDADA EN CAL.COM*\n\nContacto: *${name}*\nTeléfono: *+${phoneFormatted}*\nFecha y Hora: *${dateStr}*`
+          );
+        }
+
+        // Emitir evento en tiempo real a los dashboards conectados
+        broadcastDashboardEvent({
+          type: 'appointment_booked',
+          phone: phoneFormatted,
+          name,
+          startTime
+        });
+      }
+    }
+
+    res.json({ received: true });
+  } catch (err: any) {
+    console.error('[Webhook Cal.com] Error procesando evento:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 18. Envío de documentos nativos (PDFs)
+app.post('/api/send/document', authenticate, async (req: Request, res: Response) => {
+  const parseResult = SendDocumentSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    res.status(400).json({ error: 'Parámetros inválidos', details: parseResult.error.format() });
+    return;
+  }
+
+  const { to, filePathOrUrl, fileName, caption } = parseResult.data;
+  const result = await whatsapp.sendDocument(to, filePathOrUrl, fileName, caption);
+  if (result.success) {
+    res.json(result);
+  } else {
+    res.status(500).json(result);
+  }
+});
+
+// 19. Configuración del sistema
+app.get('/api/settings', authenticate, async (_req: Request, res: Response) => {
+  try {
+    const settings = await OutreachRepo.getSettings();
+    res.json(settings);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/settings', authenticate, async (req: Request, res: Response) => {
+  const parseResult = ConfigureSettingsSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    res.status(400).json({ error: 'Parámetros inválidos', details: parseResult.error.format() });
+    return;
+  }
+
+  try {
+    await OutreachRepo.updateSettings(parseResult.data);
+    const updated = await OutreachRepo.getSettings();
+    res.json({ success: true, settings: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // Iniciar servidor, base de datos, WhatsApp y Pipeline Autónomo
 app.listen(PORT, async () => {

@@ -1,0 +1,29 @@
+{
+  "id": "construccion_b2b",
+  "nicheName": "Empresas de Construcción, Contratistas y Maquinaria",
+  "description": "Prospección B2B para constructoras, contratistas generales y proveedores de maquinaria/suministros.",
+  "recommendedClosingMode": "PHONE_HANDOFF",
+  "defaultApifyQueries": [
+    "empresas constructoras lima peru",
+    "contratistas generales san isidro",
+    "alquiler de maquinaria pesada lima",
+    "proveedores de materiales de construccion lima"
+  ],
+  "defaultTargetLocations": [
+    "Lima, Peru"
+  ],
+  "outreachTemplate": "Buenas tardes al área comercial y de compras de {{name}}.\n\nLe escribe {{agentName}} de {{companyName}}.\n\nRevisamos sus proyectos y obras recientes y tenemos una propuesta técnica para abastecer requerimientos con precios de fábrica y entrega directa en obra con crédito a 30 días.\n\n¿Me permite compartirle el catálogo técnico y cuadro de precios por WhatsApp?",
+  "followUpTemplate1": "Buenas tardes equipo de {{name}}. Le escribe nuevamente {{agentName}}.\n\n¿Pudieron revisar los cuadros comparativos de materiales para sus frentes de obra?",
+  "followUpTemplate2": "Estimados de {{name}}, último intento por aquí para no insistir de más.\n\nSi ya cuentan con proveedores homologados para este semestre, lo entendemos. Quedamos a su disposición para cualquier licitación o concurso privado.",
+  "systemPromptTemplate": "Eres {{agentName}} de {{companyName}}. Hablas con jefes de compras, residentes de obra o gerentes de proyectos en Perú. Tono directo, técnico y al grano. Pregunta por las cantidades de la obra y coordina llamada telefónica directa para cotizar.",
+  "typicalObjections": [
+    {
+      "objection": "Ya tenemos proveedores homologados.",
+      "responseGuidance": "Excelente, solo pedimos la oportunidad de cotizar su siguiente frente de obra para que comparen precio y tiempo de entrega sin compromiso."
+    },
+    {
+      "objection": "Mándame la cotización a compras@empresa.com",
+      "responseGuidance": "Con gusto. Para cotizarle el pliego exacto, ¿a qué número celular podemos coordinar con el ingeniero a cargo?"
+    }
+  ]
+}

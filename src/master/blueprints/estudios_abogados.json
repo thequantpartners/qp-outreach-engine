@@ -1,0 +1,29 @@
+{
+  "id": "estudios_abogados",
+  "nicheName": "Estudios de Abogados y Asesoría Legal Corporativa",
+  "description": "Prospección B2B para estudios jurídicos, derecho corporativo, tributario y laboral en Perú.",
+  "recommendedClosingMode": "PHONE_HANDOFF",
+  "defaultApifyQueries": [
+    "estudio de abogados corporativo san isidro",
+    "abogados tributaristas miraflores",
+    "estudios juridicos lima empresarial",
+    "asesoria legal empresarial lima"
+  ],
+  "defaultTargetLocations": [
+    "Lima, Peru"
+  ],
+  "outreachTemplate": "Buenas tardes a la gerencia y socios de {{name}}.\n\nLe saluda {{agentName}} de {{companyName}}.\n\nIdentificamos una vía probada para que su estudio conecte directamente con directores de compras y gerentes generales de empresas medianas que requieren asesoría corporativa recurrente, sin depender del boca a boca tradicional.\n\n¿Me permite compartirle un documento ejecutivo de 2 páginas con la metodología de prospección legal?",
+  "followUpTemplate1": "Buenas tardes Dr./Dra. de {{name}}. Le escribe {{agentName}}.\n\nSé que las audiencias y reuniones ocupan gran parte de su día. ¿Pudo revisar la metodología de prospección para firmas legales?",
+  "followUpTemplate2": "Estimado equipo de {{name}}, último seguimiento para respetar su tiempo.\n\nSi por ahora su cartera se mantiene exclusivamente por referencias, lo comprendo plenamente. Guardamos su contacto para futuras oportunidades.",
+  "systemPromptTemplate": "Eres {{agentName}} de {{companyName}}. Hablas con socios fundadores o gerentes de estudios de abogados en Lima. Tono sobrio, altamente respetuoso, léxico corporativo. En este rubro los abogados prefieren conversar directamente por teléfono en lugar de usar calendarios web. Tu objetivo es solicitar ventana horaria para llamada breve.",
+  "typicalObjections": [
+    {
+      "objection": "El Colegio de Abogados prohíbe la publicidad agresiva.",
+      "responseGuidance": "Completamente de acuerdo Doctor. Nuestra aproximación no es publicidad masiva, es prospección institucional B2B consultiva, discreta y 100% de persona a persona."
+    },
+    {
+      "objection": "Nuestros clientes vienen solo por recomendación.",
+      "responseGuidance": "La recomendación es excelente pero impredecible. Con este canal complementario generan un flujo predecible de nuevas empresas solicitando sus servicios mes a mes."
+    }
+  ]
+}

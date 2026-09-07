@@ -1,0 +1,33 @@
+{
+  "id": "inmobiliarias",
+  "nicheName": "Inmobiliarias y Desarrollo Inmobiliario",
+  "description": "Prospección B2B para proyectos inmobiliarios y corretaje corporativo en Lima y provincias.",
+  "recommendedClosingMode": "HYBRID_SMART",
+  "defaultApifyQueries": [
+    "inmobiliarias miraflores lima",
+    "inmobiliarias san isidro lima",
+    "agencias inmobiliarias santiago de surco",
+    "desarrolladoras inmobiliarias lima peru"
+  ],
+  "defaultTargetLocations": [
+    "Lima, Peru"
+  ],
+  "outreachTemplate": "Buenas tardes al equipo comercial de {{name}}.\n\nLe saluda {{agentName}} de {{companyName}}.\n\nEstuvimos revisando sus proyectos inmobiliarios y notamos una oportunidad inmediata para triplicar la captación de compradores calificados en WhatsApp reduciendo el costo por prospecto.\n\nPreparamos un análisis de 3 minutos sobre el embudo de su zona; ¿me permite compartírselo por aquí para que lo evalúen?",
+  "followUpTemplate1": "Buenas tardes equipo de {{name}}. Le escribe nuevamente {{agentName}}.\n\nSé que su agenda de visitas suele ser intensa. ¿Pudo revisar el mensaje anterior sobre la optimización del embudo comercial inmobiliario?",
+  "followUpTemplate2": "Estimado equipo de {{name}}, último intento por aquí para no saturar su WhatsApp.\n\nSi en este momento su prioridad no es acelerar la rotación de inventario inmobiliario, no hay problema. Si les interesa evaluar la comparativa el próximo mes, quedo a su entera disposición.",
+  "systemPromptTemplate": "Eres {{agentName}}, consultor de desarrollo comercial en {{companyName}}. Hablas con gerentes de ventas o directores comerciales inmobiliarios en Perú. Tono consultivo, corporativo, sobrio y respetuoso. Respuestas cortas (máximo 2 a 3 oraciones). Tu objetivo es agendar una sesión de 20 minutos por Google Meet o coordinar una llamada telefónica para mostrarles la comparativa de captación de compradores.",
+  "typicalObjections": [
+    {
+      "objection": "¿Ya trabajamos con portales (Urbania/Nexo Inmobiliario), qué diferencia hay?",
+      "responseGuidance": "Los portales son genéricos y el prospecto cotiza con 10 inmobiliarias al mismo tiempo. Nuestra metodología filtra prospectos exclusivos con capacidad de pago y los sienta directo en su sala de ventas."
+    },
+    {
+      "objection": "¿Cuál es el costo o tarifa?",
+      "responseGuidance": "Manejamos un esquema orientado al resultado con setup mínimo y fee por cita calificada. Para ver el alcance exacto para su volumen de proyectos, ¿le queda mejor coordinar una breve llamada hoy por la tarde o mañana?"
+    },
+    {
+      "objection": "Mándame la propuesta por correo.",
+      "responseGuidance": "Con gusto, pero para no enviarle una propuesta genérica de 20 páginas, ¿a qué número y con qué persona de gerencia comercial podemos conversar 5 minutos?"
+    }
+  ]
+}

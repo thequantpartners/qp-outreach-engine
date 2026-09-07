@@ -10,6 +10,8 @@ export class AutonomousPipeline {
   private static lastScrapeTime: number = 0;
   private static currentQueryIndex: number = 0;
 
+  private static dailyReportSentDay: string = '';
+
   /**
    * Inicia el orquestador continuo autónomo
    */
@@ -74,15 +76,22 @@ export class AutonomousPipeline {
     const isWorkingHours = currentHour >= settings.startHour && currentHour < settings.endHour;
 
     if (!isWorkingHours) {
+      // Disparar reporte diario nocturno si es hora de cierre y no se ha enviado hoy
+      if (currentHour >= settings.endHour && this.dailyReportSentDay !== today) {
+        await this.sendNightlyReport(today, settings);
+      }
+
       console.log(`🌙 [AutonomousPipeline] Fuera de horario comercial (${currentHour}:00). Horario configurado: ${settings.startHour}:00 - ${settings.endHour}:00. En pausa.`);
       this.scheduleNextTick(10 * 60 * 1000); // esperar 10 minutos
       return;
     }
 
-    // 3. Comprobar cuota diaria anti-ban
-    if (this.sentTodayCount >= settings.dailyLimit) {
-      console.log(`🛡️ [AutonomousPipeline] Cuota diaria de seguridad alcanzada (${this.sentTodayCount}/${settings.dailyLimit} mensajes). Detenido hasta mañana.`);
-      this.scheduleNextTick(15 * 60 * 1000);
+    // 3. Comprobar recordatorios de citas agendadas próximas (Anti No-Show)
+    const upcomingMeetings = await OutreachRepo.getUpcomingMeetingsForReminder(2);
+    if (upcomingMeetings.length > 0) {
+      const meetingLead = upcomingMeetings[0];
+      await this.dispatchMeetingReminder(meetingLead);
+      this.scheduleNextTick(15000);
       return;
     }
 
@@ -94,7 +103,39 @@ export class AutonomousPipeline {
       return;
     }
 
-    // 5. Monitorear buffer de prospectos no contactados
+    // 5. Rampa Automática de Calentamiento Anti-Ban (Warm-up Ramping)
+    let activeDays = 5;
+    if (activeService.createdAt) {
+      const diffMs = Date.now() - new Date(activeService.createdAt).getTime();
+      activeDays = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1);
+    }
+    const isWarmupActive = activeDays <= 4;
+    const effectiveDailyLimit = activeDays <= 2 
+      ? Math.min(settings.dailyLimit, 10)
+      : (activeDays <= 4 ? Math.min(settings.dailyLimit, 20) : settings.dailyLimit);
+
+    const effectiveSettings = { ...settings, dailyLimit: effectiveDailyLimit };
+
+    if (isWarmupActive) {
+      console.log(`🔥 [AutonomousPipeline] Rampa de Calentamiento Activa (Día ${activeDays}/4): Límite de seguridad restringido a ${effectiveDailyLimit} msgs/día (Límite normal: ${settings.dailyLimit}).`);
+    }
+
+    // Comprobar cuota diaria anti-ban
+    if (this.sentTodayCount >= effectiveDailyLimit) {
+      console.log(`🛡️ [AutonomousPipeline] Cuota diaria de seguridad alcanzada (${this.sentTodayCount}/${effectiveDailyLimit} mensajes hoy | Normal: ${settings.dailyLimit}). Detenido hasta mañana.`);
+      this.scheduleNextTick(15 * 60 * 1000);
+      return;
+    }
+
+    // 6. PRIORIDAD 1: Prospectos pendientes de Follow-Up (>48h sin respuesta)
+    const followUpsDue = await OutreachRepo.getLeadsForFollowUp(activeService.id, 1);
+    if (followUpsDue.length > 0) {
+      const followUpLead = followUpsDue[0];
+      await this.dispatchFollowUp(followUpLead, activeService, effectiveSettings);
+      return;
+    }
+
+    // 7. Monitorear buffer de prospectos no contactados
     const uncontactedCount = await OutreachRepo.countUncontactedLeads(activeService.id);
     const minBuffer = 10;
 
@@ -105,7 +146,7 @@ export class AutonomousPipeline {
       await this.triggerScrape(activeService);
     }
 
-    // 6. Tomar el siguiente lead para prospección
+    // 8. PRIORIDAD 2: Siguiente nuevo lead en frío
     const leadsToContact = await OutreachRepo.getLeadsForOutreach(1);
     if (leadsToContact.length === 0) {
       console.log('ℹ️ [AutonomousPipeline] No hay prospectos pendientes en cola. Esperando recarga de buffer...');
@@ -114,7 +155,94 @@ export class AutonomousPipeline {
     }
 
     const lead = leadsToContact[0];
-    await this.dispatchLead(lead, activeService, settings);
+    await this.dispatchLead(lead, activeService, effectiveSettings);
+  }
+
+  /**
+   * Despacha mensaje de seguimiento (Follow-up 1 o 2) con pausa anti-ban
+   */
+  private static async dispatchFollowUp(lead: any, service: any, settings: any): Promise<void> {
+    const whatsapp = BaileysEngine.getInstance();
+    const currentCount = lead.followUpCount || 0;
+    const nextCount = currentCount + 1;
+
+    let template = nextCount === 1 ? service.followUpTemplate1 : service.followUpTemplate2;
+    if (!template) {
+      template = nextCount === 1
+        ? 'Hola {{name}}, un saludo breve. ¿Pudieron revisar la consulta anterior o los agarro en mala semana?'
+        : 'Hola {{name}}, solo para cerrar este contacto con respeto: si más adelante desean evaluar la solución, quedo a su disposición por aquí. Saludos cordiales!';
+    }
+
+    let message = template.replace(/{{name}}/g, lead.companyName);
+    message = message.replace(/{{phone}}/g, lead.phone);
+
+    console.log(`🔁 [AutonomousPipeline] Despachando Follow-up #${nextCount} a ${lead.companyName} (${lead.phone})...`);
+    const result = await whatsapp.send(lead.phone, message);
+
+    if (result.success) {
+      this.sentTodayCount++;
+      await OutreachRepo.updateLeadFollowUp(lead.phone, nextCount);
+      await OutreachRepo.addChatMessage(lead.phone, 'assistant', message);
+      console.log(`✅ [AutonomousPipeline] Follow-up #${nextCount} entregado a ${lead.companyName}! (${this.sentTodayCount}/${settings.dailyLimit} hoy)`);
+
+      const min = settings.minDelaySeconds || 180;
+      const max = settings.maxDelaySeconds || 300;
+      const randomDelay = Math.floor(Math.random() * (max - min + 1)) + min;
+      console.log(`🛡️ [AutonomousPipeline] Pausa de seguridad de ${randomDelay}s tras follow-up...`);
+      this.scheduleNextTick(randomDelay * 1000);
+    } else {
+      console.warn(`⚠️ [AutonomousPipeline] Error en follow-up a ${lead.phone}: ${result.error}`);
+      this.scheduleNextTick(15000);
+    }
+  }
+
+  /**
+   * Despacha recordatorio automático 2h antes de la cita (Anti No-Show)
+   */
+  private static async dispatchMeetingReminder(lead: any): Promise<void> {
+    const whatsapp = BaileysEngine.getInstance();
+    const reminderMsg = `Hola al equipo de *${lead.companyName}*, le saluda Kenneth de The Quant Partners.\n\nLe escribo para confirmar nuestra sesión técnica programada para hoy. ¿Me confirma si todo sigue en pie para conectarnos a tiempo? ¡Un saludo!`;
+
+    console.log(`⏰ [AutonomousPipeline] Enviando recordatorio Anti No-Show a ${lead.companyName} (${lead.phone})...`);
+    const result = await whatsapp.send(lead.phone, reminderMsg);
+
+    if (result.success) {
+      await OutreachRepo.addChatMessage(lead.phone, 'assistant', reminderMsg);
+      const customFields = { ...(lead.customFields || {}), reminderSent: true };
+      await OutreachRepo.updateLeadSchedule(lead.phone, lead.scheduledMeetingAt, customFields);
+      console.log(`✅ [AutonomousPipeline] Recordatorio entregado a ${lead.companyName}!`);
+    }
+  }
+
+  /**
+   * Envía el reporte ejecutivo consolidado de la jornada al WhatsApp de Kenneth
+   */
+  private static async sendNightlyReport(today: string, settings: any): Promise<void> {
+    try {
+      this.dailyReportSentDay = today;
+      const activity = await OutreachRepo.getDailyActivity(today);
+      const stats = await OutreachRepo.getStats();
+
+      const report = `📊 *REPORTE DIARIO DE PROSPECCIÓN QP* (${today})
+
+• *Mensajes enviados hoy:* ${activity.sentCount}
+• *Respuestas de prospectos:* ${activity.repliedCount}
+• *Reuniones agendadas:* ${activity.meetingsCount}
+
+📈 *Embudo Global:*
+• En cola: ${stats.discovered}
+• Contactados: ${stats.outreachSent}
+• En seguimiento: ${stats.followUpSent}
+• Calificados / Cierres: ${stats.qualified + stats.closedWon}
+
+🌙 *El motor ha entrado en pausa nocturna hasta las ${settings.startHour}:00 AM.*`;
+
+      const whatsapp = BaileysEngine.getInstance();
+      await whatsapp.notifyAdmin(report);
+      console.log('📊 [AutonomousPipeline] Reporte diario nocturno despachado a Kenneth.');
+    } catch (err: any) {
+      console.error('[AutonomousPipeline] Error enviando reporte nocturno:', err.message);
+    }
   }
 
   /**

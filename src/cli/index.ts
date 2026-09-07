@@ -4,6 +4,9 @@ import { ApifyScraper } from '../scraper/apify_scraper.js';
 import { AutonomousPipeline } from '../pipeline/autonomous_pipeline.js';
 import { McpServerManager } from '../mcp/server.js';
 import { ServiceDefinition } from '../types/index.js';
+import { Deployer } from '../master/deployer.js';
+import { ClientRegistry } from '../master/client_registry.js';
+import { BlueprintsManager } from '../master/blueprints_manager.js';
 
 function parseArgs(args: string[]): { command: string; positional: string[]; flags: Record<string, string | boolean> } {
   const command = args[0] || 'help';
@@ -51,11 +54,14 @@ export async function runCli(): Promise<void> {
       console.log(`Total Leads:       ${stats.totalLeads}`);
       console.log(`En Cola:           ${stats.discovered}`);
       console.log(`Contactados:       ${stats.outreachSent}`);
+      console.log(`En Follow-Up:      ${stats.followUpSent}`);
       console.log(`Respondieron:      ${stats.replied}`);
       console.log(`Calificados:       ${stats.qualified}`);
+      console.log(`Citas Agendadas:   ${stats.meetingScheduled}`);
       console.log(`Human Takeover:    ${stats.humanTakeover}`);
       console.log(`Cierres Ganados:   ${stats.closedWon}`);
       console.log(`Perdidos:          ${stats.closedLost}`);
+      console.log(`Sin Respuesta:     ${stats.noResponse}`);
       console.log('======================================================\n');
       process.exit(0);
       break;
@@ -308,6 +314,255 @@ export async function runCli(): Promise<void> {
       break;
     }
 
+    case 'import': {
+      const filePath = positional[0] || (flags.file as string);
+      const serviceId = (flags.service as string) || (flags.serviceId as string);
+
+      if (!filePath || !serviceId) {
+        console.error('❌ Error: Formato: qp-outreach import <archivo.csv> --service=<service_id>');
+        process.exit(1);
+      }
+
+      const fs = await import('fs');
+      const path = await import('path');
+      const resolved = path.resolve(filePath);
+
+      if (!fs.existsSync(resolved)) {
+        console.error(`❌ Error: Archivo no encontrado en: ${resolved}`);
+        process.exit(1);
+      }
+
+      const content = fs.readFileSync(resolved, 'utf-8');
+      const lines = content.split(/\r?\n/).filter(l => l.trim().length > 0);
+      if (lines.length < 2) {
+        console.error('❌ Error: El archivo CSV debe contener encabezados y al menos una fila de datos.');
+        process.exit(1);
+      }
+
+      const headers = lines[0].toLowerCase().split(/[,;\t]/).map(h => h.trim().replace(/^["']|["']$/g, ''));
+      const nameIdx = headers.findIndex(h => h.includes('name') || h.includes('empresa') || h.includes('razon') || h.includes('cliente'));
+      const phoneIdx = headers.findIndex(h => h.includes('phone') || h.includes('tel') || h.includes('cel') || h.includes('movil'));
+      const websiteIdx = headers.findIndex(h => h.includes('web') || h.includes('site') || h.includes('url'));
+      const categoryIdx = headers.findIndex(h => h.includes('cat') || h.includes('rubro') || h.includes('giro'));
+
+      if (phoneIdx === -1) {
+        console.error('❌ Error: No se encontró una columna de teléfono ("phone", "telefono", "celular") en el encabezado del CSV.');
+        process.exit(1);
+      }
+
+      const leadsToImport: any[] = [];
+      for (let i = 1; i < lines.length; i++) {
+        const parts = lines[i].split(/[,;\t]/).map(p => p.trim().replace(/^["']|["']$/g, ''));
+        const phone = parts[phoneIdx] || '';
+        const name = nameIdx !== -1 && parts[nameIdx] ? parts[nameIdx] : 'Empresa B2B';
+        const website = websiteIdx !== -1 ? parts[websiteIdx] : undefined;
+        const category = categoryIdx !== -1 ? parts[categoryIdx] : undefined;
+
+        if (phone) {
+          leadsToImport.push({ name, phone, website, category });
+        }
+      }
+
+      console.log(`\n📥 Procesando ${leadsToImport.length} registros del CSV para la campaña "${serviceId}"...`);
+      const result = await OutreachRepo.importLeads(serviceId, leadsToImport);
+
+      console.log('\n======================================================');
+      console.log('✅ IMPORTACIÓN FINALIZADA');
+      console.log('======================================================');
+      console.log(`• Nuevos insertados:        ${result.inserted}`);
+      console.log(`• Duplicados omitidos:      ${result.skipped}`);
+      console.log(`• Teléfonos inválidos:      ${result.invalid}`);
+      console.log('======================================================\n');
+      process.exit(0);
+      break;
+    }
+
+    case 'document':
+    case 'send-doc': {
+      const phone = positional[0];
+      const filePath = positional[1];
+      const fileName = (flags.name as string) || 'Documento.pdf';
+      const caption = flags.caption as string;
+
+      if (!phone || !filePath) {
+        console.error('❌ Error: Formato: qp-outreach document <telefono> <ruta_archivo> [--name="Dictamen.pdf"] [--caption="..."]');
+        process.exit(1);
+      }
+
+      const wa = BaileysEngine.getInstance();
+      await wa.init();
+      await new Promise(r => setTimeout(r, 2000));
+
+      const res = await wa.sendDocument(phone, filePath, fileName, caption);
+      if (res.success) {
+        console.log(`✅ Documento "${fileName}" entregado exitosamente a ${phone}!`);
+      } else {
+        console.error(`❌ Error entregando documento: ${res.error}`);
+      }
+      process.exit(0);
+      break;
+    }
+
+    case 'blueprints': {
+      const blueprints = BlueprintsManager.listBlueprints();
+      console.log('\n======================================================');
+      console.log('📚 QP OUTREACH | BLUEPRINTS DE NICHO DISPONIBLES');
+      console.log('======================================================');
+      blueprints.forEach(b => {
+        console.log(`\n• ID:             ${b.id}`);
+        console.log(`  Nombre:         ${b.nicheName}`);
+        console.log(`  Cierre:         ${b.recommendedClosingMode}`);
+        console.log(`  Descripción:    ${b.description}`);
+        console.log(`  Queries (Apify): ${b.defaultApifyQueries.slice(0, 2).join(', ')}...`);
+      });
+      console.log('\n======================================================\n');
+      process.exit(0);
+      break;
+    }
+
+    case 'fleet': {
+      const health = await ClientRegistry.getFleetHealth();
+      console.log('\n======================================================');
+      console.log('🌐 QP OUTREACH MASTER | ESTADO DE LA FLOTA DE CLIENTES');
+      console.log('======================================================');
+      console.log(`Total Clientes:      ${health.totalClients}`);
+      console.log(`WhatsApp Conectados: ${health.activeClients} activos, ${health.disconnectedClients} desconectados`);
+      console.log(`Leads Contactados:   ${health.totalLeadsContacted}`);
+      console.log(`Oportunidades Handoff: ${health.totalQualifiedOpportunities}`);
+      console.log(`Citas Agendadas:     ${health.totalMeetingsBooked}`);
+      console.log('\n--- Clientes Registrados ---');
+      health.clients.forEach(c => {
+        const waStatus = c.isWhatsAppConnected ? '🟢 ONLINE' : '🔴 OFFLINE';
+        console.log(`• [${c.clientId}] ${c.companyName} | Rubro: ${c.niche} | WA: ${waStatus} | PIN: ${c.clientPin}`);
+        console.log(`  Dashboard: ${c.dashboardUrl}`);
+        console.log(`  Vendedores: ${c.salesReps.map(r => r.name).join(', ')}`);
+      });
+      console.log('\n======================================================\n');
+      process.exit(0);
+      break;
+    }
+
+    case 'provision': {
+      const name = flags['name'] as string;
+      const niche = (flags['niche'] as string) || 'inmobiliarias';
+      const admin = (flags['admin'] as string) || '51902105668';
+      const repsRaw = (flags['reps'] as string) || 'Kenneth:51902105668';
+      const target = ((flags['target'] as string) || 'railway') as 'railway' | 'vps';
+      const pin = flags['pin'] as string | undefined;
+
+      if (!name) {
+        console.error('❌ Error: Debe especificar el nombre de la empresa con --name="Nombre"');
+        process.exit(1);
+      }
+
+      const salesReps = repsRaw.split(',').map(part => {
+        const [rName, rPhone] = part.split(':');
+        return { name: rName?.trim() || 'Vendedor', phone: (rPhone || admin).replace(/[^0-9]/g, '') };
+      });
+
+      console.log(`🚀 Aprovisionando cliente "${name}"...`);
+      const result = await Deployer.provisionClient({
+        companyName: name,
+        niche,
+        adminPhone: admin,
+        salesReps,
+        deployTarget: target,
+        clientPin: pin
+      });
+
+      console.log('\n======================================================');
+      console.log('✅ CLIENTE APROVISIONADO EXITOSAMENTE');
+      console.log('======================================================');
+      console.log(`Empresa:     ${result.companyName} (${result.clientId})`);
+      console.log(`PIN Acceso:  ${result.clientPin}`);
+      console.log(`Dashboard:   ${result.dashboardUrl}`);
+      console.log(`Destino:     ${result.deployTarget}`);
+      console.log(`Archivos:    ${result.configDir}`);
+      console.log('======================================================\n');
+      process.exit(0);
+      break;
+    }
+
+    case 'clone': {
+      const source = flags['source'] as string;
+      const name = flags['name'] as string;
+      const admin = (flags['admin'] as string) || '51902105668';
+      const repsRaw = (flags['reps'] as string) || 'Kenneth:51902105668';
+      const target = ((flags['target'] as string) || 'railway') as 'railway' | 'vps';
+
+      if (!source || !name) {
+        console.error('❌ Error: Debe especificar --source="id-cliente-fuente" y --name="Nuevo Cliente"');
+        process.exit(1);
+      }
+
+      const salesReps = repsRaw.split(',').map(part => {
+        const [rName, rPhone] = part.split(':');
+        return { name: rName?.trim() || 'Vendedor', phone: (rPhone || admin).replace(/[^0-9]/g, '') };
+      });
+
+      console.log(`🐑 Clonando cliente "${source}" para "${name}"...`);
+      const result = await Deployer.cloneClient({
+        sourceClientId: source,
+        newCompanyName: name,
+        newAdminPhone: admin,
+        newSalesReps: salesReps,
+        deployTarget: target
+      });
+
+      console.log('\n======================================================');
+      console.log('✅ CLIENTE CLONADO EXITOSAMENTE');
+      console.log('======================================================');
+      console.log(`Nueva Empresa: ${result.companyName} (${result.clientId})`);
+      console.log(`PIN Acceso:    ${result.clientPin}`);
+      console.log(`Dashboard:     ${result.dashboardUrl}`);
+      console.log('======================================================\n');
+      process.exit(0);
+      break;
+    }
+
+    case 'scrape': {
+      const source = ((flags['source'] as string) || 'google_maps') as any;
+      const query = (flags['query'] as string) || positional[0];
+      const location = (flags['location'] as string) || 'Lima, Peru';
+      const countryCode = (flags['country'] as string) || (flags['countryCode'] as string) || 'pe';
+      const maxResults = flags['max'] ? parseInt(flags['max'] as string, 10) : 15;
+      const serviceId = (flags['service'] as string) || (flags['serviceId'] as string) || 'custom-service';
+
+      if (!query) {
+        console.error('❌ Error: Debe especificar la búsqueda: qp-outreach scrape --query="nicho" [--source=meta_ads|instagram|apollo_b2b|google_search|google_maps]');
+        process.exit(1);
+      }
+
+      console.log(`\n🔍 [CLI Scraper] Iniciando extracción multicanal [${source}]...`);
+      console.log(`Query: "${query}" | País: "${countryCode}" | Max: ${maxResults} | Campaña: ${serviceId}`);
+
+      try {
+        const leads = await ApifyScraper.scrapeMultiSource({
+          source,
+          query,
+          location,
+          countryCode,
+          maxResults,
+          serviceId
+        });
+
+        const { inserted, skipped } = await OutreachRepo.saveLeadsFromScraper(serviceId, leads);
+        console.log('\n======================================================');
+        console.log('✅ EXTRACCIÓN MULTICANAL COMPLETADA');
+        console.log('======================================================');
+        console.log(`Canal:       ${source}`);
+        console.log(`Total Leads: ${leads.length}`);
+        console.log(`Nuevos en BD: ${inserted}`);
+        console.log(`Duplicados:  ${skipped}`);
+        console.log('======================================================\n');
+      } catch (err: any) {
+        console.error(`❌ Error en extracción: ${err.message}`);
+      }
+
+      process.exit(0);
+      break;
+    }
+
     case 'help':
     default: {
       console.log(`
@@ -319,6 +574,9 @@ USO:
 COMANDOS:
   status                     Muestra el estado de WhatsApp y métricas del embudo
   launch                     Inicia una campaña con scraping Apify y prospección
+  scrape                     Scraping multicanal (--source=meta_ads|instagram|apollo_b2b|google_search|google_maps)
+  import <archivo.csv>       Importa prospectos masivamente a una campaña (--service=...)
+  document <tel> <archivo>   Envía un documento PDF o archivo nativo por WhatsApp
   leads                      Lista prospectos (--status=REPLIED, --search=...)
   chat <telefono>            Muestra la conversación completa con un prospecto
   send <tel> "<mensaje>"     Envía un mensaje manual por WhatsApp (activa Takeover)
@@ -329,6 +587,8 @@ COMANDOS:
 EJEMPLOS:
   npx qp-outreach status
   npx qp-outreach launch --name="Agentes IA" --query="clinicas lima" --max=30
+  npx qp-outreach import prospectos.csv --service=licitaciones-qp
+  npx qp-outreach document 51987654321 storage/assets/dictamen.pdf --name="Dictamen_QP.pdf"
   npx qp-outreach leads --status=QUALIFIED
   npx qp-outreach chat 51987654321
   npx qp-outreach send 51987654321 "Buenas tardes, ¿coordinamos la reunión?"

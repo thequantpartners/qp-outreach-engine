@@ -8,7 +8,7 @@
   },
   "type": "module",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node -e \"const fs=require('fs'), path=require('path'); const src=path.resolve('src/master/blueprints'), dest=path.resolve('dist/master/blueprints'); if(fs.existsSync(src)){ fs.mkdirSync(dest, {recursive:true}); fs.readdirSync(src).forEach(f => fs.copyFileSync(path.join(src,f), path.join(dest,f))); }\"",
     "start": "node dist/gateway/server.js",
     "dev": "tsx watch src/gateway/server.ts",
     "cli": "tsx src/cli/index.ts",
@@ -29,9 +29,11 @@
   "dependencies": {
     "@hapi/boom": "^10.0.1",
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "@types/pdfkit": "^0.17.6",
     "@whiskeysockets/baileys": "^7.0.0-rc14",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "pdfkit": "^0.20.2",
     "pg": "^8.23.0",
     "pino": "^9.6.0",
     "qrcode": "^1.5.4",

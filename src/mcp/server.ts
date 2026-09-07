@@ -11,6 +11,9 @@ import { BaileysEngine } from '../whatsapp/baileys_engine.js';
 import { ApifyScraper } from '../scraper/apify_scraper.js';
 import { AutonomousPipeline } from '../pipeline/autonomous_pipeline.js';
 import { ServiceDefinition, ClosingType } from '../types/index.js';
+import { ClientRegistry } from '../master/client_registry.js';
+import { Deployer } from '../master/deployer.js';
+import { BlueprintsManager } from '../master/blueprints_manager.js';
 import type { Request, Response } from 'express';
 
 const TOOLS: Tool[] = [
@@ -187,25 +190,134 @@ const TOOLS: Tool[] = [
   },
   {
     name: 'trigger_scraping',
-    description: 'Ejecuta un scraping ad-hoc en Google Maps vía Apify, guardando y deduplicando automáticamente los prospectos en la base de datos.',
+    description: 'Ejecuta scraping multicanal (Google Maps, Meta Ads Library, Instagram, Apollo B2B o Google Search) vía Apify, guardando y deduplicando automáticamente los prospectos en la base de datos.',
     inputSchema: {
       type: 'object',
       properties: {
         query: {
           type: 'string',
-          description: 'Término de búsqueda (ej. "agencias de marketing lima", "inmobiliarias miraflores")'
+          description: 'Término de búsqueda o nicho (ej. "agencias de marketing lima", "inmobiliarias miraflores", "clinicas esteticas")'
+        },
+        source: {
+          type: 'string',
+          enum: ['google_maps', 'meta_ads', 'instagram', 'apollo_b2b', 'google_search'],
+          description: 'Canal o fuente de prospección (default: "google_maps")'
         },
         location: {
           type: 'string',
-          description: 'Ubicación (default: "Lima, Peru")'
+          description: 'Ubicación para Google Maps/Apollo (default: "Lima, Peru")'
+        },
+        country_code: {
+          type: 'string',
+          description: 'Código de país ISO de 2 letras (ej. "pe", "co", "mx", "cl")'
         },
         max_results: {
           type: 'number',
-          description: 'Cantidad máxima de lugares a raspar (default: 15)'
+          description: 'Cantidad máxima de prospectos a raspar (default: 15)'
         },
         service_id: {
           type: 'string',
           description: 'ID del servicio al que se asignarán los prospectos'
+        }
+      },
+      required: ['query', 'service_id']
+    }
+  },
+  {
+    name: 'scrape_meta_ads',
+    description: 'Extrae empresas que pagan publicidad activa en Meta Ads Library (Facebook/Instagram), capturando su presupuesto activo y número de WhatsApp en anuncios.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Nicho o palabra clave del anuncio (ej. "clinica dental", "abogados corporativos", "departamentos surco")'
+        },
+        country_code: {
+          type: 'string',
+          description: 'Código de país ISO de 2 letras (default: "PE")'
+        },
+        max_results: {
+          type: 'number',
+          description: 'Cantidad máxima de anuncios a analizar (default: 15)'
+        },
+        service_id: {
+          type: 'string',
+          description: 'ID de la campaña o servicio para guardar los prospectos'
+        }
+      },
+      required: ['query', 'service_id']
+    }
+  },
+  {
+    name: 'scrape_instagram',
+    description: 'Extrae perfiles comerciales de Instagram Business con número de WhatsApp/teléfono de contacto público en biografía o botón de contacto.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Término de búsqueda o nicho (ej. "estetica lima", "odontologia surco", "joyeria peru")'
+        },
+        max_results: {
+          type: 'number',
+          description: 'Cantidad máxima de perfiles a raspar (default: 15)'
+        },
+        service_id: {
+          type: 'string',
+          description: 'ID de la campaña para guardar los prospectos'
+        }
+      },
+      required: ['query', 'service_id']
+    }
+  },
+  {
+    name: 'scrape_apollo_b2b',
+    description: 'Extrae decisores C-Level, directores comerciales y empresas B2B mediante la base de datos empresarial de Apollo.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Industria o cargo B2B (ej. "Software Lima", "Logistica Callao", "Gerentes de Operaciones")'
+        },
+        country_code: {
+          type: 'string',
+          description: 'País objetivo (default: "pe")'
+        },
+        max_results: {
+          type: 'number',
+          description: 'Cantidad máxima de decisores a raspar (default: 15)'
+        },
+        service_id: {
+          type: 'string',
+          description: 'ID de la campaña para guardar los prospectos'
+        }
+      },
+      required: ['query', 'service_id']
+    }
+  },
+  {
+    name: 'scrape_google_search',
+    description: 'Extrae sitios corporativos y números telefónicos/WhatsApp públicos indexados en los resultados de Google Search.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Búsqueda en Google (ej. "distribuidora medica lima whatsapp", "proveedor construccion piura")'
+        },
+        country_code: {
+          type: 'string',
+          description: 'Código de país (default: "pe")'
+        },
+        max_results: {
+          type: 'number',
+          description: 'Cantidad máxima de resultados (default: 15)'
+        },
+        service_id: {
+          type: 'string',
+          description: 'ID de la campaña para guardar los prospectos'
         }
       },
       required: ['query', 'service_id']
@@ -355,6 +467,61 @@ const TOOLS: Tool[] = [
     }
   },
   {
+    name: 'import_leads',
+    description: 'Importa una lista de prospectos (ej. extraídos de bases de OSCE, SEACE, Sunat o directorios en Excel/CSV) a una campaña específica con sanitización de celulares peruanos (519XXXXXXXX) y deduplicación automática.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        service_id: {
+          type: 'string',
+          description: 'ID de la campaña o servicio al que se asignarán los prospectos'
+        },
+        leads: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Nombre de la empresa o contacto' },
+              phone: { type: 'string', description: 'Teléfono (con o sin prefijo 51)' },
+              website: { type: 'string', description: 'Sitio web opcional' },
+              address: { type: 'string', description: 'Dirección física opcional' },
+              category: { type: 'string', description: 'Rubro o categoría de la empresa' }
+            },
+            required: ['name', 'phone']
+          },
+          description: 'Lista de prospectos a importar'
+        }
+      },
+      required: ['service_id', 'leads']
+    }
+  },
+  {
+    name: 'send_document',
+    description: 'Envía un documento PDF o archivo nativo por WhatsApp a cualquier prospecto o cliente.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        to: {
+          type: 'string',
+          description: 'Número de WhatsApp de destino (ej. 51999999999)'
+        },
+        file_path_or_url: {
+          type: 'string',
+          description: 'Ruta local (ej. storage/assets/dictamen.pdf) o URL pública descargable del documento'
+        },
+        file_name: {
+          type: 'string',
+          description: 'Nombre visible del archivo (ej. Dictamen_Licitaciones_QP.pdf)'
+        },
+        caption: {
+          type: 'string',
+          description: 'Mensaje de texto opcional que acompaña al documento'
+        }
+      },
+      required: ['to', 'file_path_or_url', 'file_name']
+    }
+  },
+  {
     name: 'configure_settings',
     description: 'Modifica la configuración operativa global del motor: límites diarios, pausas anti-ban, horario operativo y teléfono del admin.',
     inputSchema: {
@@ -384,11 +551,103 @@ const TOOLS: Tool[] = [
           type: 'string',
           description: 'Número de WhatsApp de Kenneth para recibir alertas comerciales de cierre'
         },
+        alert_webhook_url: {
+          type: 'string',
+          description: 'Webhook externo (Discord / Telegram / Slack) para alertas si WhatsApp se desconecta'
+        },
         is_autonomous_active: {
           type: 'boolean',
           description: 'Activar o pausar el despacho de mensajes en segundo plano'
         }
       }
+    }
+  }
+];
+
+const MASTER_TOOLS: Tool[] = [
+  {
+    name: 'list_fleet_clients',
+    description: '[Master Núcleo] Lista todos los clientes y nodos satélite aprovisionados en la flota, su estado de WhatsApp, métricas agregadas y URL del dashboard.',
+    inputSchema: {
+      type: 'object',
+      properties: {}
+    }
+  },
+  {
+    name: 'provision_client',
+    description: '[Master Núcleo] Aprovisiona una nueva infraestructura satélite para un cliente B2B (crea .env.production, docker-compose, PIN de acceso y registra en la flota).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        company_name: { type: 'string', description: 'Nombre de la empresa cliente' },
+        niche: { type: 'string', description: 'Nicho de mercado (inmobiliarias, clinicas_salud, estudios_abogados, construccion_b2b o custom)' },
+        admin_phone: { type: 'string', description: 'Celular del Gerente/Responsable (ej. 51902105668)' },
+        sales_reps: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              phone: { type: 'string' }
+            },
+            required: ['name', 'phone']
+          },
+          description: 'Lista de vendedores para distribución Round-Robin'
+        },
+        closing_mode: {
+          type: 'string',
+          enum: ['MEETING_LINK', 'PHONE_HANDOFF', 'HYBRID_SMART'],
+          description: 'Modo de cierre (default: HYBRID_SMART)'
+        },
+        meeting_url: { type: 'string', description: 'URL de Cal.com si aplica' },
+        service_name: { type: 'string', description: 'Nombre de la solución u oferta' },
+        deploy_target: { type: 'string', enum: ['railway', 'vps'], description: 'Destino de despliegue (railway o vps)' },
+        client_pin: { type: 'string', description: 'PIN de 4 dígitos para que el cliente ingrese a su dashboard' }
+      },
+      required: ['company_name', 'niche', 'admin_phone', 'sales_reps']
+    }
+  },
+  {
+    name: 'clone_client',
+    description: '[Master Núcleo] Clona la configuración, prompts y nicho de un cliente existente para un nuevo cliente en 1 clic.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        source_client_id: { type: 'string', description: 'ID o slug del cliente a duplicar' },
+        new_company_name: { type: 'string', description: 'Nombre de la nueva empresa cliente' },
+        new_admin_phone: { type: 'string', description: 'Celular del nuevo Gerente' },
+        new_sales_reps: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              phone: { type: 'string' }
+            },
+            required: ['name', 'phone']
+          },
+          description: 'Lista de nuevos vendedores para Round-Robin'
+        },
+        new_client_pin: { type: 'string', description: 'Nuevo PIN de acceso opcional' },
+        deploy_target: { type: 'string', enum: ['railway', 'vps'] }
+      },
+      required: ['source_client_id', 'new_company_name', 'new_admin_phone', 'new_sales_reps']
+    }
+  },
+  {
+    name: 'list_niche_blueprints',
+    description: '[Master Núcleo] Lista las plantillas predefinidas por nicho (Inmobiliarias, Clínicas, Abogados, Construcción) con sus queries y copys en 2 pasos.',
+    inputSchema: {
+      type: 'object',
+      properties: {}
+    }
+  },
+  {
+    name: 'get_fleet_health',
+    description: '[Master Núcleo] Reporte consolidado de salud de toda la flota: clientes activos, desconectados, leads contactados y citas generadas.',
+    inputSchema: {
+      type: 'object',
+      properties: {}
     }
   }
 ];
@@ -417,9 +676,11 @@ export class McpServerManager {
       }
     );
 
-    // 1. Listar herramientas
+    // 1. Listar herramientas (Aislar herramientas maestras si corre en MODE=client)
     server.setRequestHandler(ListToolsRequestSchema, async () => {
-      return { tools: TOOLS };
+      const isClientNode = process.env.MODE === 'client';
+      const activeTools = isClientNode ? TOOLS : [...TOOLS, ...MASTER_TOOLS];
+      return { tools: activeTools };
     });
 
     // 2. Ejecución de herramientas
@@ -664,13 +925,24 @@ export class McpServerManager {
           }
 
           case 'trigger_scraping': {
-            const { query, location = 'Lima, Peru', max_results = 15, service_id } = args as any;
-            const scraped = await ApifyScraper.scrapeGoogleMaps({
+            const {
+              query,
+              source = 'google_maps',
+              location = 'Lima, Peru',
+              country_code = 'pe',
+              max_results = 15,
+              service_id
+            } = args as any;
+
+            const scraped = await ApifyScraper.scrapeMultiSource({
+              source,
               query,
               location,
+              countryCode: country_code,
               maxResults: max_results,
-              scrapeContacts: true
+              serviceId: service_id
             });
+
             const { inserted, skipped } = await OutreachRepo.saveLeadsFromScraper(service_id, scraped);
 
             return {
@@ -680,15 +952,134 @@ export class McpServerManager {
                   text: JSON.stringify(
                     {
                       success: true,
+                      source,
                       query,
                       location,
                       totalFound: scraped.length,
                       insertedNewLeads: inserted,
-                      skippedDuplicates: skipped
+                      skippedDuplicates: skipped,
+                      leads: scraped.slice(0, 10).map(l => ({
+                        title: l.title,
+                        phone: l.phoneClean || l.phone,
+                        source: l.source,
+                        website: l.website
+                      }))
                     },
                     null,
                     2
                   )
+                }
+              ]
+            };
+          }
+
+          case 'scrape_meta_ads': {
+            const { query, country_code = 'PE', max_results = 15, service_id } = args as any;
+            const scraped = await ApifyScraper.scrapeMetaAds({
+              query,
+              countryCode: country_code,
+              maxResults: max_results,
+              serviceId: service_id
+            });
+            const { inserted, skipped } = await OutreachRepo.saveLeadsFromScraper(service_id, scraped);
+
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    success: true,
+                    source: 'meta_ads',
+                    query,
+                    countryCode: country_code,
+                    totalAdsFound: scraped.length,
+                    insertedNewLeads: inserted,
+                    skippedDuplicates: skipped,
+                    sampleLeads: scraped.slice(0, 5)
+                  }, null, 2)
+                }
+              ]
+            };
+          }
+
+          case 'scrape_instagram': {
+            const { query, max_results = 15, service_id } = args as any;
+            const scraped = await ApifyScraper.scrapeInstagram({
+              query,
+              maxResults: max_results,
+              serviceId: service_id
+            });
+            const { inserted, skipped } = await OutreachRepo.saveLeadsFromScraper(service_id, scraped);
+
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    success: true,
+                    source: 'instagram',
+                    query,
+                    totalFound: scraped.length,
+                    insertedNewLeads: inserted,
+                    skippedDuplicates: skipped,
+                    sampleLeads: scraped.slice(0, 5)
+                  }, null, 2)
+                }
+              ]
+            };
+          }
+
+          case 'scrape_apollo_b2b': {
+            const { query, country_code = 'pe', max_results = 15, service_id } = args as any;
+            const scraped = await ApifyScraper.scrapeApollo({
+              query,
+              countryCode: country_code,
+              maxResults: max_results,
+              serviceId: service_id
+            });
+            const { inserted, skipped } = await OutreachRepo.saveLeadsFromScraper(service_id, scraped);
+
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    success: true,
+                    source: 'apollo_b2b',
+                    query,
+                    totalFound: scraped.length,
+                    insertedNewLeads: inserted,
+                    skippedDuplicates: skipped,
+                    sampleLeads: scraped.slice(0, 5)
+                  }, null, 2)
+                }
+              ]
+            };
+          }
+
+          case 'scrape_google_search': {
+            const { query, country_code = 'pe', max_results = 15, service_id } = args as any;
+            const scraped = await ApifyScraper.scrapeGoogleSearch({
+              query,
+              countryCode: country_code,
+              maxResults: max_results,
+              serviceId: service_id
+            });
+            const { inserted, skipped } = await OutreachRepo.saveLeadsFromScraper(service_id, scraped);
+
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    success: true,
+                    source: 'google_search',
+                    query,
+                    totalFound: scraped.length,
+                    insertedNewLeads: inserted,
+                    skippedDuplicates: skipped,
+                    sampleLeads: scraped.slice(0, 5)
+                  }, null, 2)
                 }
               ]
             };
@@ -835,6 +1226,64 @@ export class McpServerManager {
             };
           }
 
+          case 'import_leads': {
+            const { service_id, leads } = args as any;
+            if (!service_id || !leads || !Array.isArray(leads)) {
+              throw new Error('Debe proporcionar service_id y un array de leads.');
+            }
+
+            const result = await OutreachRepo.importLeads(service_id, leads);
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    success: true,
+                    service_id,
+                    imported: result.inserted,
+                    skipped_duplicates: result.skipped,
+                    invalid_numbers: result.invalid,
+                    total_processed: leads.length,
+                    message: `Importación completada: ${result.inserted} prospectos agregados, ${result.skipped} duplicados omitidos, ${result.invalid} números inválidos.`
+                  }, null, 2)
+                }
+              ]
+            };
+          }
+
+          case 'send_document': {
+            const { to, file_path_or_url, file_name, caption } = args as any;
+            if (!to || !file_path_or_url || !file_name) {
+              throw new Error('Debe proporcionar to, file_path_or_url y file_name.');
+            }
+
+            const whatsapp = BaileysEngine.getInstance();
+            const result = await whatsapp.sendDocument(to, file_path_or_url, file_name, caption);
+
+            if (result.success) {
+              await OutreachRepo.addChatMessage(to, 'human_agent', `[DOCUMENTO ENVIADO: ${file_name}] ${caption || ''}`);
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: JSON.stringify({
+                      success: true,
+                      to,
+                      fileName: file_name,
+                      jid: result.jid,
+                      message: `Documento ${file_name} despachado exitosamente a ${to}.`
+                    }, null, 2)
+                  }
+                ]
+              };
+            } else {
+              return {
+                isError: true,
+                content: [{ type: 'text', text: `Error enviando documento: ${result.error}` }]
+              };
+            }
+          }
+
           case 'configure_settings': {
             const {
               daily_limit,
@@ -843,6 +1292,7 @@ export class McpServerManager {
               start_hour,
               end_hour,
               admin_whatsapp_phone,
+              alert_webhook_url,
               is_autonomous_active
             } = args as any;
 
@@ -853,6 +1303,7 @@ export class McpServerManager {
             if (start_hour !== undefined) updatePayload.startHour = start_hour;
             if (end_hour !== undefined) updatePayload.endHour = end_hour;
             if (admin_whatsapp_phone !== undefined) updatePayload.adminWhatsAppPhone = admin_whatsapp_phone;
+            if (alert_webhook_url !== undefined) updatePayload.alertWebhookUrl = alert_webhook_url;
             if (is_autonomous_active !== undefined) updatePayload.isAutonomousActive = is_autonomous_active;
 
             await OutreachRepo.updateSettings(updatePayload);
@@ -867,6 +1318,121 @@ export class McpServerManager {
                     message: 'Configuración del motor actualizada exitosamente.',
                     settings: current
                   }, null, 2)
+                }
+              ]
+            };
+          }
+
+          // ==========================================
+          // MASTER HUB ORCHESTRATION TOOLS
+          // ==========================================
+          case 'list_fleet_clients': {
+            if (process.env.MODE === 'client') {
+              throw new Error('Herramienta exclusiva del plano Master Nucleus.');
+            }
+            const clients = await ClientRegistry.listClients();
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(clients, null, 2)
+                }
+              ]
+            };
+          }
+
+          case 'provision_client': {
+            if (process.env.MODE === 'client') {
+              throw new Error('Herramienta exclusiva del plano Master Nucleus.');
+            }
+            const {
+              company_name,
+              niche,
+              admin_phone,
+              sales_reps,
+              closing_mode = 'HYBRID_SMART',
+              meeting_url,
+              service_name,
+              deploy_target = 'railway',
+              client_pin
+            } = args as any;
+
+            const res = await Deployer.provisionClient({
+              companyName: company_name,
+              niche,
+              adminPhone: admin_phone,
+              salesReps: sales_reps,
+              closingMode: closing_mode,
+              meetingUrl: meeting_url,
+              serviceName: service_name,
+              deployTarget: deploy_target,
+              clientPin: client_pin
+            });
+
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(res, null, 2)
+                }
+              ]
+            };
+          }
+
+          case 'clone_client': {
+            if (process.env.MODE === 'client') {
+              throw new Error('Herramienta exclusiva del plano Master Nucleus.');
+            }
+            const {
+              source_client_id,
+              new_company_name,
+              new_admin_phone,
+              new_sales_reps,
+              new_client_pin,
+              deploy_target
+            } = args as any;
+
+            const res = await Deployer.cloneClient({
+              sourceClientId: source_client_id,
+              newCompanyName: new_company_name,
+              newAdminPhone: new_admin_phone,
+              newSalesReps: new_sales_reps,
+              newClientPin: new_client_pin,
+              deployTarget: deploy_target
+            });
+
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(res, null, 2)
+                }
+              ]
+            };
+          }
+
+          case 'list_niche_blueprints': {
+            const blueprints = BlueprintsManager.listBlueprints();
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(blueprints, null, 2)
+                }
+              ]
+            };
+          }
+
+          case 'get_fleet_health': {
+            if (process.env.MODE === 'client') {
+              throw new Error('Herramienta exclusiva del plano Master Nucleus.');
+            }
+            const health = await ClientRegistry.getFleetHealth();
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(health, null, 2)
                 }
               ]
             };

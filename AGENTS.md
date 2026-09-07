@@ -74,13 +74,20 @@ Agrega esto a tu configuración MCP (`.cursor/mcp.json`, `claude_desktop_config.
 | `list_leads` | Leads | Filtra prospectos por estado (`DISCOVERED`, `OUTREACH_SENT`, `REPLIED`, `QUALIFIED`, `CLOSED_WON`, `HUMAN_TAKEOVER`). |
 | `update_lead_status` | Leads | Actualiza manualmente el estado comercial de un prospecto por su número de teléfono. |
 | `delete_leads` | Leads | Elimina prospectos según filtros (`service_id`, `status`, `phone` o `all: true`). |
+| `import_leads` | Leads | Ingesta masiva de prospectos (bases de OSCE, SEACE, Sunat, CSVs) con sanitización telefónica y deduplicación. |
+| `send_document` | Leads | Despacha un PDF o documento nativo por WhatsApp a cualquier prospecto. |
 | `get_chat_history` | Leads | Lee la transcripción completa de la conversación de WhatsApp con un prospecto. |
 | `send_whatsapp_message` | Leads | Envío manual inmediato a cualquier número (silencia a la IA en Human Takeover). |
 | `toggle_human_takeover` | Leads | Pausa (`active: true`) o reanuda (`active: false`) el bot de IA para un lead. |
 | `trigger_scraping` | Scraping | Ejecuta scraping en Apify ad-hoc para un término y ciudad con deduplicación en PostgreSQL. |
 | `outreach_status` | Sistema | Verifica conexión de WhatsApp, salud del servicio, métricas globales del embudo y pipeline. |
 | `get_whatsapp_qr` | Sistema | Obtiene el código QR actual de WhatsApp si la sesión requiere escaneo. |
-| `configure_settings` | Sistema | Ajusta delays anti-ban (min/max), límite diario, horarios y teléfono de alertas admin. |
+| `configure_settings` | Sistema | Ajusta delays anti-ban (min/max), límite diario, horarios, webhook de desconexión y teléfono admin. |
+| `list_fleet_clients` | Master Hub | **(Master)** Lista todos los clientes y nodos satélite aprovisionados, estado de WhatsApp, leads y dashboard URLs. |
+| `provision_client` | Master Hub | **(Master)** Aprovisiona una nueva infraestructura satélite en 60s desde una plantilla de nicho o custom. |
+| `clone_client` | Master Hub | **(Master)** Duplica la configuración y prompts de un cliente existente para uno nuevo en 1 clic. |
+| `list_niche_blueprints` | Master Hub | **(Master)** Lista las plantillas predefinidas por nicho (Inmobiliarias, Clínicas, Abogados, Construcción). |
+| `get_fleet_health` | Master Hub | **(Master)** Métricas consolidadas de salud de toda la flota de clientes. |
 
 ### Ejemplo de Invocación MCP para `launch_campaign`:
 ```json
