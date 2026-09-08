@@ -153,6 +153,25 @@ export class OutreachRepo {
       ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_customer_message_at TIMESTAMP WITH TIME ZONE;
     `);
 
+    // Asegurar que el servicio base para Inbound General exista siempre
+    await pool.query(`
+      INSERT INTO services (id, name, description, target_persona, apify_queries, target_locations, outreach_template, closing_type, ai_system_prompt, is_active, type)
+      VALUES (
+        'inbound-general',
+        'Atención Inbound & Consulta General',
+        'Recepción de mensajes entrantes directos de WhatsApp y consultas generales.',
+        'Clientes potenciales y contactos directos',
+        '[]'::jsonb,
+        '[]'::jsonb,
+        '',
+        'HUMAN_TAKEOVER',
+        'Eres Kenneth de The Quant Partners. Atiendes con calidez, profesionalismo y actitud consultiva.',
+        true,
+        'INBOUND_ADS'
+      )
+      ON CONFLICT (id) DO NOTHING;
+    `);
+
     // Comprobar si no hay servicios registrados
     const isClientMode = process.env.MODE === 'client';
     const checkServices = await pool.query("SELECT COUNT(*) FROM services");
@@ -1542,13 +1561,62 @@ export class OutreachRepo {
    * Ingesta inteligente de mensajes entrantes de WhatsApp (Click-to-WhatsApp / Meta Ads)
    * Detecta si coincide con palabras clave de algún anuncio, auto-etiqueta y asigna Round Robin.
    */
+  public static async updateLeadPhone(oldPhone: string, newPhone: string, lid?: string): Promise<void> {
+    const cleanOld = oldPhone.replace(/[^0-9]/g, '');
+    const cleanNew = newPhone.replace(/[^0-9]/g, '');
+    if (!cleanOld || !cleanNew || cleanOld === cleanNew) return;
+
+    if (DbConnection.isPg()) {
+      const pool = DbConnection.getPool();
+      await pool.query(
+        `UPDATE chat_messages SET lead_phone = $1 WHERE lead_phone = $2`,
+        [cleanNew, cleanOld]
+      );
+      await pool.query(
+        `UPDATE leads 
+         SET phone = $1, 
+             service_id = CASE WHEN service_id = 'licitaciones-qp' THEN 'inbound-general' ELSE service_id END,
+             category = CASE WHEN category = '#WhatsApp-Directo' THEN '#Inbound-Orgánico' ELSE category END,
+             custom_fields = jsonb_set(COALESCE(custom_fields, '{}'::jsonb), '{lid}', to_jsonb($3::text)),
+             updated_at = NOW() 
+         WHERE phone = $2`,
+        [cleanNew, cleanOld, lid || cleanOld]
+      );
+    } else {
+      const data = DbConnection.getFallbackData();
+      if (data.leads) {
+        const lead = data.leads.find((l: any) => l.phone === cleanOld);
+        if (lead) {
+          lead.phone = cleanNew;
+          lead.customFields = { ...(lead.customFields || {}), lid: lid || cleanOld };
+          if (lead.serviceId === 'licitaciones-qp') lead.serviceId = 'inbound-general';
+          if (lead.category === '#WhatsApp-Directo') lead.category = '#Inbound-Orgánico';
+        }
+      }
+      if (data.messages) {
+        data.messages.forEach((m: any) => {
+          if (m.leadPhone === cleanOld) m.leadPhone = cleanNew;
+        });
+      }
+      DbConnection.saveFallbackData(data);
+    }
+  }
+
   public static async ingestInboundLead(data: {
     phone: string;
     pushName?: string;
     incomingText: string;
+    lid?: string;
   }): Promise<{ lead: Lead; isNew: boolean; matchedService?: ServiceDefinition }> {
     const cleanPhone = data.phone.replace(/[^0-9]/g, '');
     let existing = await OutreachRepo.getLeadByPhone(cleanPhone);
+    if (!existing && data.lid) {
+      existing = await OutreachRepo.getLeadByPhone(data.lid);
+      if (existing) {
+        await OutreachRepo.updateLeadPhone(existing.phone, cleanPhone, data.lid);
+        existing.phone = cleanPhone;
+      }
+    }
     if (existing) {
       return { lead: existing, isNew: false };
     }
@@ -1569,9 +1637,9 @@ export class OutreachRepo {
       }
     }
 
-    // 2. Si no coincide con palabras clave específicas, buscar servicio INBOUND_ADS general o el activo
+    // 2. Si no coincide con palabras clave específicas, buscar servicio INBOUND_ADS general (sin forzar outbound)
     if (!matchedService) {
-      matchedService = services.find(s => s.isActive && s.type === 'INBOUND_ADS') || (await OutreachRepo.getActiveService()) || undefined;
+      matchedService = services.find(s => s.isActive && s.type === 'INBOUND_ADS');
     }
 
     const isMetaAd = !!(
@@ -1584,11 +1652,12 @@ export class OutreachRepo {
 
     const source: LeadSource = isMetaAd ? 'meta_ads' : 'direct_whatsapp';
     const serviceId = matchedService?.id || 'inbound-general';
-    const serviceName = matchedService?.name || 'Inbound Directo';
+    const serviceName = matchedService?.name || (isMetaAd ? 'Meta Ads Inbound' : 'Atención Inbound & Consulta General');
     const category = isMetaAd
       ? (matchedService ? `#MetaAds-${matchedService.name.slice(0, 20)}` : '#MetaAds')
-      : '#WhatsApp-Directo';
+      : '#Inbound-Orgánico';
     const companyName = data.pushName?.trim() || `Contacto +${cleanPhone}`;
+    const customFields = data.lid ? { lid: data.lid } : {};
 
     let nextRep = await OutreachRepo.getNextSalesRep().catch(() => null);
 
@@ -1597,9 +1666,9 @@ export class OutreachRepo {
       const res = await pool.query(
         `INSERT INTO leads (
            service_id, company_name, phone, status, source, category,
-           assigned_rep_name, assigned_rep_phone, created_at, updated_at
+           assigned_rep_name, assigned_rep_phone, custom_fields, created_at, updated_at
          )
-         VALUES ($1, $2, $3, 'REPLIED', $4, $5, $6, $7, NOW(), NOW())
+         VALUES ($1, $2, $3, 'REPLIED', $4, $5, $6, $7, $8, NOW(), NOW())
          ON CONFLICT (phone) DO UPDATE SET updated_at = NOW()
          RETURNING *`,
         [
@@ -1609,7 +1678,8 @@ export class OutreachRepo {
           source,
           category,
           nextRep?.name || null,
-          nextRep?.phone || null
+          nextRep?.phone || null,
+          JSON.stringify(customFields)
         ]
       );
       const lead = OutreachRepo.mapLeadRow(res.rows[0]);
@@ -1626,6 +1696,7 @@ export class OutreachRepo {
         status: 'REPLIED',
         source,
         category,
+        customFields,
         assignedRepName: nextRep?.name,
         assignedRepPhone: nextRep?.phone,
         createdAt: new Date().toISOString(),

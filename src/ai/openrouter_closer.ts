@@ -405,18 +405,25 @@ RESPONDE ESTRICTAMENTE EN FORMATO JSON VÁLIDO:
 
       const lastClientMsg = [...history].reverse().find(m => m.role === 'user')?.content || '';
       const isMetaAd = lead.source === 'meta_ads' || (lead.category && lead.category.includes('MetaAds'));
+      const isInboundGeneral = lead.serviceId === 'inbound-general' || lead.source === 'direct_whatsapp';
 
       const adContextNotice = isMetaAd 
         ? `🔥 CANAL DE ORIGEN: META ADS (Click-to-WhatsApp). Este prospecto hizo clic en un anuncio de Facebook/Instagram y escribió voluntariamente. Tiene interés directo y alta intención de compra; requiere respuesta rápida, empatía y cualificación.`
-        : `CANAL DE ORIGEN: Prospección Comercial B2B.`;
+        : (isInboundGeneral 
+            ? `💬 CANAL DE ORIGEN: INBOUND ORGÁNICO / CONTACTO DIRECTO. Este prospecto escribió por primera vez a la línea de WhatsApp de la empresa de forma independiente. NO viene de una campaña de prospección en frío ni de licitaciones. Requiere un saludo profesional, cálido y consultivo para identificar su interés o necesidad.`
+            : `CANAL DE ORIGEN: Prospección Comercial B2B.`);
 
       const optionsDirective = isMetaAd
         ? `1. "💬 Empatía + Cualificación Inmediata": Agradece su mensaje del anuncio, responde a lo que pregunta de forma directa y haz 1 pregunta de filtro (ej. requerimiento, presupuesto o distrito).
 2. "🎯 Cierre y Agendamiento": Invita a una breve llamada de 10 min o demostración para cotizarle a su medida.
 3. "📄 Envío de Catálogo / Folleto": Ofrece compartir el folleto/catálogo técnico en PDF o ficha comercial con 1 clic.`
-        : `1. "🎯 Cierre y Agendamiento": Para avanzar hacia una llamada breve (10 min), reunión o confirmación formal de fecha/hora.
+        : (isInboundGeneral
+            ? `1. "💬 Saludo & Diagnóstico": Saluda con calidez y cortesía, agradécele por comunicarse con The Quant Partners y haz una pregunta abierta para conocer en qué solución o servicio desea información.
+2. "💼 Presentación & Filtro": Preséntate brevemente como parte del equipo de The Quant Partners (soluciones de IA y adquisición B2B) y consulta el requerimiento puntual de su empresa.
+3. "🎯 Agendar Llamada Breve": Ofrece coordinar una breve llamada de 10 minutos para conocer su caso o resolver sus dudas directamente.`
+            : `1. "🎯 Cierre y Agendamiento": Para avanzar hacia una llamada breve (10 min), reunión o confirmación formal de fecha/hora.
 2. "📄 Entrega de Valor / Documento": Para compartir un dictamen pericial, PDF técnico, video o resolver una duda técnica con solvencia.
-3. "🤝 Seguimiento Cortés": Breve, educado, de bajo compromiso (ideal si el cliente fue escueto como "ok gracias" o si no queremos atosigarlo).`;
+3. "🤝 Seguimiento Cortés": Breve, educado, de bajo compromiso (ideal si el cliente fue escueto como "ok gracias" o si no queremos atosigarlo).`);
 
       const systemPrompt = `
 Eres QPartner, el Co-Piloto de Asistencia Comercial en Vivo para el equipo de ventas de The Quant Partners.
@@ -427,7 +434,7 @@ ${adContextNotice}
 DATOS DEL PROSPECTO:
 - Empresa/Contacto: ${lead.companyName}
 - Teléfono: +${lead.phone}
-- Campaña / Solución: ${serviceName} (${serviceDesc})
+- Campaña / Solución: ${isInboundGeneral ? 'The Quant Partners (Atención General)' : `${serviceName} (${serviceDesc})`}
 - Perfil: ${targetPersona}
 - Etiqueta: ${lead.category || 'General'}
 
@@ -440,25 +447,25 @@ ${optionsDirective}
 REGLAS DE ORO:
 - Respuestas naturales para WhatsApp en Perú (tono profesional, cálido, directo, sin párrafos eternos: máximo 1 a 3 oraciones cortas).
 - No inventes precios ni enlaces ficticios.
-- Si el cliente saludó por primera vez por un anuncio, sé cortés y dale la bienvenida inmediatamente.
+- Si el cliente saludó por primera vez, sé cortés y dale la bienvenida inmediatamente.
 
 FORMATO DE RESPUESTA:
 Devuelve ÚNICAMENTE un JSON array con 3 elementos:
 [
   {
-    "label": "${isMetaAd ? '💬 Empatía & Filtro' : '🎯 Cierre y Agendamiento'}",
+    "label": "${isMetaAd ? '💬 Empatía & Filtro' : (isInboundGeneral ? '💬 Saludo & Diagnóstico' : '🎯 Cierre y Agendamiento')}",
     "badgeColor": "amber",
     "text": "Texto del mensaje para WhatsApp",
     "explanation": "Por qué es efectiva esta opción"
   },
   {
-    "label": "${isMetaAd ? '🎯 Agendar Llamada' : '📄 Entrega de Dictamen'}",
+    "label": "${isMetaAd ? '🎯 Agendar Llamada' : (isInboundGeneral ? '💼 Presentación & Filtro' : '📄 Entrega de Dictamen')}",
     "badgeColor": "sky",
     "text": "Texto del mensaje para WhatsApp",
     "explanation": "Por qué es efectiva esta opción"
   },
   {
-    "label": "${isMetaAd ? '📄 Enviar Catálogo' : '🤝 Seguimiento Cortés'}",
+    "label": "${isMetaAd ? '📄 Enviar Catálogo' : (isInboundGeneral ? '🎯 Agendar Llamada' : '🤝 Seguimiento Cortés')}",
     "badgeColor": "emerald",
     "text": "Texto del mensaje para WhatsApp",
     "explanation": "Por qué es efectiva esta opción"
@@ -578,6 +585,30 @@ Devuelve ÚNICAMENTE un JSON array con 3 elementos:
           badgeColor: 'emerald',
           text: `¡Hola! Con mucho gusto. Tenemos una ficha técnica y catálogo preparado con los detalles de ${serviceName}. ¿Me permites compartírtelo por aquí para que lo revises?`,
           explanation: 'Técnica de permiso de 2 pasos para compartir información de alto valor.'
+        }
+      ];
+    }
+
+    const isInboundGeneral = lead.serviceId === 'inbound-general' || lead.source === 'direct_whatsapp';
+    if (isInboundGeneral && history.length <= 3) {
+      return [
+        {
+          label: '💬 Saludo & Diagnóstico',
+          badgeColor: 'amber',
+          text: `¡Hola! 👋 Un gusto saludarte. Le escribe el equipo de The Quant Partners. ¿En qué podemos asesorarte hoy o qué solución estás buscando para tu negocio?`,
+          explanation: 'Saludo cálido y pregunta de diagnóstico abierta para conocer la necesidad real del contacto.'
+        },
+        {
+          label: '💼 Presentación & Filtro',
+          badgeColor: 'sky',
+          text: `¡Hola! Gracias por comunicarte con The Quant Partners. Desarrollamos motores de adquisición B2B e IA aplicada para empresas. ¿Tienes algún requerimiento comercial puntual que te gustaría revisar?`,
+          explanation: 'Presentación ejecutiva de alto nivel y filtro amigable para orientar la conversación.'
+        },
+        {
+          label: '🎯 Agendar Llamada Breve',
+          badgeColor: 'emerald',
+          text: `¡Hola! Con mucho gusto te atendemos. Si gustas podemos coordinar una breve llamada de 10 minutos para conocer tu caso puntual y orientarte con el especialista indicado. ¿Te vendría bien hoy?`,
+          explanation: 'Propuesta de avance directo a llamada de 10 minutos sin presiones.'
         }
       ];
     }

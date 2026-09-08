@@ -1,0 +1,16 @@
+{
+  "name": "demo-video",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx --yes hyperframes@0.8.31 preview",
+    "check": "npx --yes hyperframes@0.8.31 check",
+    "render": "npx --yes hyperframes@0.8.31 render",
+    "publish": "npx --yes hyperframes@0.8.31 publish"
+  },
+  "dependencies": {
+    "ffmpeg-static": "^5.3.0",
+    "ffprobe-static": "^3.1.0",
+    "puppeteer": "^25.10.0"
+  }
+}

@@ -191,7 +191,33 @@ export class BaileysEngine {
           continue;
         }
 
-        const senderPhone = remoteJid.replace(/@s\.whatsapp\.net/, '').replace(/[^0-9]/g, '');
+        // Resolución de número telefónico real (soporta @s.whatsapp.net y WhatsApp LIDs @lid)
+        let resolvedPhone = '';
+        let senderLid = '';
+
+        if (remoteJid.endsWith('@lid')) {
+          senderLid = remoteJid.replace(/[^0-9]/g, '');
+          // 1. Prioridad: remoteJidAlt o participantAlt en el key del mensaje
+          const altJid = (m.key as any).remoteJidAlt || (m.key as any).participantAlt || '';
+          if (altJid && altJid.includes('@s.whatsapp.net')) {
+            resolvedPhone = altJid.replace(/@s\.whatsapp\.net/, '').replace(/[^0-9]/g, '');
+          }
+          // 2. Si no viene en el key, consultar el mapeo en memoria de Baileys signalRepository
+          if (!resolvedPhone && (this.sock as any)?.signalRepository?.lidMapping?.getPNForLID) {
+            try {
+              const mapped = await (this.sock as any).signalRepository.lidMapping.getPNForLID(remoteJid);
+              if (mapped) {
+                resolvedPhone = mapped.replace(/@s\.whatsapp\.net/, '').replace(/[^0-9]/g, '');
+              }
+            } catch {}
+          }
+        }
+
+        if (!resolvedPhone) {
+          resolvedPhone = remoteJid.replace(/@[^]+$/, '').replace(/[^0-9]/g, '');
+        }
+
+        const senderPhone = resolvedPhone;
         if (!senderPhone) continue;
 
         // Extraer texto del mensaje soportando mensajes efímeros y multimedia
@@ -274,7 +300,8 @@ export class BaileysEngine {
         const { lead, isNew, matchedService } = await OutreachRepo.ingestInboundLead({
           phone: senderPhone,
           pushName: m.pushName || undefined,
-          incomingText
+          incomingText,
+          lid: senderLid || undefined
         });
 
         if (!lead) continue;
@@ -369,7 +396,7 @@ export class BaileysEngine {
           `📱 Teléfono: *+${senderPhone}*\n` +
           `💬 Mensaje: "${incomingText}"\n\n` +
           `💡 *QPartner Co-Pilot* ha generado 3 sugerencias tácticas en tu Dashboard para responder con 1 clic:\n` +
-          `👉 https://qp-outreach-engine.vercel.app/dashboard`;
+          `👉 https://qp-outreach-engine.vercel.app/#chat=${senderPhone}`;
 
         if (targetPhone) {
           await this.notifyPhone(targetPhone, alertMsg);

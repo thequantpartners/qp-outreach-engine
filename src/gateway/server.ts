@@ -1435,6 +1435,22 @@ app.post('/api/client/leads/direct', authenticateClientPin, async (req: Request,
   }
 });
 
+// Migrar / unificar teléfono de un lead (ej. de LID de WhatsApp a número real)
+app.post('/api/client/leads/migrate-phone', authenticateClientPin, requireOwnerRole, async (req: Request, res: Response) => {
+  try {
+    const { oldPhone, newPhone, lid } = req.body || {};
+    if (!oldPhone || !newPhone) {
+      res.status(400).json({ error: 'oldPhone y newPhone son requeridos' });
+      return;
+    }
+    await OutreachRepo.updateLeadPhone(oldPhone, newPhone, lid);
+    broadcastDashboardEvent({ type: 'lead_updated', phone: newPhone });
+    res.json({ success: true, message: `Lead migrado exitosamente de ${oldPhone} a ${newPhone}` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Eliminar prospecto y sus mensajes
 app.delete('/api/client/leads/:phone', authenticateClientPin, async (req: Request, res: Response) => {
   try {
@@ -2647,6 +2663,9 @@ app.listen(PORT, async () => {
 
   // 1. Inicializar Base de Datos (PostgreSQL o fallback)
   await OutreachRepo.init();
+
+  // Auto-migración de leads con identificador LID de WhatsApp
+  OutreachRepo.updateLeadPhone('269363907195002', '51902105668', '269363907195002').catch(() => {});
 
   // 2. Inicializar WhatsApp Baileys
   await whatsapp.init();

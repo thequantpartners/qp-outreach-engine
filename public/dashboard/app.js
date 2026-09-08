@@ -24,12 +24,73 @@ let currentWizardStep = 1;
 let wizardQrPollInterval = null;
 let currentFleetData = null;
 let eventSource = null;
+let isPhoneMaskingActive = false;
+
+function formatDisplayPhone(phone) {
+  if (!phone) return '---';
+  const clean = String(phone).replace(/[^0-9]/g, '');
+  const shouldMask = currentUserRole === 'sales_rep' || isPhoneMaskingActive;
+  if (shouldMask) {
+    if (clean.length >= 9) {
+      const prefix = clean.length > 9 ? `+${clean.slice(0, clean.length - 6)}` : `+51 ${clean.slice(0, 3)}`;
+      return `${prefix} ••• •••`;
+    }
+    return `+${clean.slice(0, 3)} •••••`;
+  }
+  return `+${clean}`;
+}
+
+function togglePhoneMasking() {
+  if (currentUserRole !== 'owner') return;
+  isPhoneMaskingActive = !isPhoneMaskingActive;
+  renderLeadsStream();
+  if (activeLeadPhone) {
+    const phoneEl = document.getElementById('detailLeadPhone');
+    if (phoneEl) phoneEl.textContent = formatDisplayPhone(activeLeadPhone);
+  }
+  updatePhoneMaskingToggleUI();
+}
+
+function updatePhoneMaskingToggleUI() {
+  const btn = document.getElementById('btnTogglePhoneMasking');
+  if (!btn) return;
+  if (currentUserRole !== 'owner') {
+    btn.classList.add('hidden');
+    return;
+  }
+  btn.classList.remove('hidden');
+  if (isPhoneMaskingActive) {
+    btn.innerHTML = '<i data-lucide="eye-off" class="w-3 h-3 text-amber-400"></i><span class="text-[9px] text-amber-300 font-mono">Oculto</span>';
+    btn.title = "Haz clic para revelar números completos";
+  } else {
+    btn.innerHTML = '<i data-lucide="eye" class="w-3 h-3 text-slate-400"></i><span class="text-[9px] text-slate-400 font-mono">Ver</span>';
+    btn.title = "Haz clic para enmascarar números por seguridad";
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+function checkUrlHashForChat() {
+  const hash = window.location.hash || '';
+  if (hash.startsWith('#chat=')) {
+    const raw = hash.replace('#chat=', '').replace(/[^0-9]/g, '');
+    if (raw) return raw;
+  }
+  return null;
+}
 
 // Initialization
 document.addEventListener('DOMContentLoaded', () => {
   if (window.lucide) lucide.createIcons();
   checkAuth();
   setupVoiceRecorder();
+
+  window.addEventListener('hashchange', () => {
+    const phone = checkUrlHashForChat();
+    if (phone) {
+      if (typeof switchMainView === 'function') switchMainView('workspace');
+      selectLeadForDetail(phone);
+    }
+  });
 });
 
 // 1. Autenticación por PIN y Roles
@@ -221,12 +282,16 @@ async function fetchOverview() {
     renderMetrics(data);
     updateOnboardingBanner(data);
 
-    // Si hay un lead activo, refrescar su detalle; si no, seleccionar el primero disponible en PC
+    // Si hay un lead activo, refrescar su detalle; si no, verificar hash de URL o seleccionar el primero disponible en PC
     if (activeLeadPhone) {
       updateActiveLeadHeader();
     } else {
+      const hashPhone = checkUrlHashForChat();
       const allLeads = getConsolidatedLeads();
-      if (allLeads.length > 0 && window.innerWidth >= 1024) {
+      const targetLead = hashPhone ? allLeads.find(l => l.phone === hashPhone) : null;
+      if (targetLead) {
+        selectLeadForDetail(targetLead.phone);
+      } else if (allLeads.length > 0 && window.innerWidth >= 1024) {
         selectLeadForDetail(allLeads[0].phone);
       }
     }
@@ -711,7 +776,7 @@ function renderLeadsStream() {
         </span>
       </div>
       <div class="flex items-center justify-between gap-2 mb-1.5 text-[11px] font-mono">
-        <span class="text-gold font-medium">+${escapeHtml(lead.phone)}</span>
+        <span class="text-gold font-medium">${formatDisplayPhone(lead.phone)}</span>
         <span class="text-[10px] text-slate-500 font-mono">${timeFormatted}</span>
       </div>
       <div class="flex items-center gap-1.5 flex-wrap mb-1.5">
@@ -862,7 +927,8 @@ async function selectLeadForDetail(phone) {
   const avatarEl = document.getElementById('detailLeadAvatar');
 
   if (nameEl) nameEl.textContent = lead.companyName || 'Prospecto';
-  if (phoneEl) phoneEl.textContent = `+${lead.phone}`;
+  if (phoneEl) phoneEl.textContent = formatDisplayPhone(lead.phone);
+  updatePhoneMaskingToggleUI();
   if (tagEl) {
     tagEl.textContent = lead.status;
     tagEl.classList.remove('hidden');
@@ -2092,6 +2158,9 @@ function useCopilotSuggestion(idx) {
   const input = document.getElementById('chatManualInput');
   if (input) {
     input.value = suggestion.text;
+    if (typeof handleChatInputChange === 'function') {
+      handleChatInputChange(input.value);
+    }
     input.focus();
   }
 }

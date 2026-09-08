@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+    
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html, body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #030407;
+        color: #f1f5f9;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+      .font-serif {
+        font-family: 'Playfair Display', Georgia, serif;
+      }
+      .font-mono {
+        font-family: 'JetBrains Mono', monospace;
+      }
+      
+      /* Luxury Obsidian Precision Theme */
+      .bg-obsidian {
+        background-color: #030407;
+      }
+      .bg-surface {
+        background-color: #090b11;
+      }
+      .bg-card {
+        background: linear-gradient(145deg, rgba(16, 20, 31, 0.92) 0%, rgba(9, 11, 17, 0.98) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .border-gold {
+        border-color: rgba(212, 175, 55, 0.4);
+      }
+      .text-gold {
+        color: #e6ca65;
+      }
+      .gold-gradient-text {
+        background: linear-gradient(135deg, #fff2b2 0%, #d4af37 50%, #aa820a 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .ambient-radial {
+        background: radial-gradient(circle at 50% 30%, rgba(212, 175, 55, 0.12) 0%, rgba(3, 4, 7, 0) 70%);
+      }
+      .grid-pattern {
+        background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+        background-size: 32px 32px;
+      }
+
+      /* Realistic Browser Mockup */
+      .browser-window {
+        background: #090b11;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 14px;
+        overflow: hidden;
+        box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.9), 0 0 40px rgba(212, 175, 55, 0.12);
+      }
+      .browser-header {
+        background: #0d1117;
+        padding: 10px 18px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .browser-dots {
+        display: flex;
+        gap: 7px;
+      }
+      .dot {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+      }
+      .dot-red { background: #ff5f56; }
+      .dot-yellow { background: #ffbd2e; }
+      .dot-green { background: #27c93f; }
+      .browser-url-bar {
+        flex: 1;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        padding: 5px 14px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 12px;
+        color: #94a3b8;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .browser-content {
+        position: relative;
+        overflow: hidden;
+        background: #000;
+      }
+      .browser-img {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+
+      /* Callout Badges */
+      .badge-callout {
+        position: absolute;
+        background: rgba(10, 14, 23, 0.94);
+        backdrop-filter: blur(16px);
+        border: 1px solid rgba(212, 175, 55, 0.4);
+        border-radius: 12px;
+        padding: 14px 20px;
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7), 0 0 25px rgba(212, 175, 55, 0.15);
+        z-index: 30;
+      }
+      .badge-callout h4 {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #e6ca65;
+        margin-bottom: 4px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .badge-callout p {
+        font-size: 13px;
+        color: #e2e8f0;
+        line-height: 1.4;
+        font-weight: 500;
+      }
+
+      /* Scene Positioning */
+      .scene-container {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 40px 80px;
+        opacity: 0;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body class="bg-obsidian text-slate-100 antialiased">
+
+    <!-- Ambient Grid & Glow Layer -->
+    <div class="absolute inset-0 ambient-radial pointer-events-none"></div>
+    <div class="absolute inset-0 grid-pattern pointer-events-none"></div>
+
+    <!-- Top Status Header (Global) -->
+    <header style="position: absolute; top: 0; left: 0; right: 0; height: 64px; border-bottom: 1px solid rgba(255,255,255,0.08); background: rgba(3,4,7,0.85); backdrop-filter: blur(12px); padding: 0 56px; display: flex; align-items: center; justify-content: space-between; z-index: 50;">
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <div style="width: 34px; height: 34px; border-radius: 8px; background: linear-gradient(135deg, #fcd34d, #b45309); display: flex; align-items: center; justify-content: center; font-family: 'Playfair Display', serif; color: #000; font-weight: bold; font-size: 16px; box-shadow: 0 0 15px rgba(212,175,55,0.4);">
+          QP
+        </div>
+        <div>
+          <span style="font-family: 'Playfair Display', serif; font-size: 18px; letter-spacing: 0.05em; font-weight: 600; color: #fff;">THE QUANT PARTNERS</span>
+          <span style="font-size: 12px; font-family: 'JetBrains Mono', monospace; color: #64748b; margin-left: 8px;">/ OUTREACH ENGINE</span>
+        </div>
+      </div>
+      
+      <div style="display: flex; align-items: center; gap: 24px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #94a3b8;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 8px #34d399;"></span>
+          <span style="color: #34d399; font-weight: 600;">SISTEMA EN PRODUCCIÓN</span>
+        </div>
+        <span style="color: #475569;">|</span>
+        <span style="color: #cbd5e1;">ARQUITECTURA SAAR DESACOPLABLE</span>
+        <span style="color: #475569;">|</span>
+        <span style="color: #fde68a; font-weight: 500;">BAILEYS NATAL + GEMINI 2.5 FLASH</span>
+      </div>
+    </header>
+
+    <!-- Global Video Progress Bar -->
+    <div style="position: absolute; top: 64px; left: 0; right: 0; height: 3px; background: rgba(255,255,255,0.06); z-index: 50;">
+      <div id="videoProgressBar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #f59e0b, #fef08a, #d97706); box-shadow: 0 0 12px #d4af37;"></div>
+    </div>
+
+    <!-- MAIN SCENES CONTAINER -->
+    <main style="position: relative; width: 100%; height: 100%; padding-top: 64px;">
+
+      <!-- ==========================================
+           ESCENA 1: PORTADA & ACCESO MAESTRO (0s - 8s)
+           ========================================== -->
+      <section id="scene1" class="scene-container">
+        <div style="text-align: center; max-width: 900px; margin-bottom: 24px;">
+          <div style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 16px; border-radius: 9999px; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.25); color: #fde68a; font-family: 'JetBrains Mono', monospace; font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 16px;">
+            <span>DEMO OFICIAL DEL SISTEMA</span>
+            <span>&bull;</span>
+            <span>ARQUITECTURA SAAR 2026</span>
+          </div>
+          <h1 style="font-size: 48px; font-family: 'Playfair Display', serif; font-weight: 700; color: #fff; line-height: 1.15; margin-bottom: 12px;">
+            QP Outreach Engine
+          </h1>
+          <p style="font-size: 18px; color: #cbd5e1; font-weight: 300; max-width: 680px; margin: 0 auto;">
+            Motor headless de prospección B2B, WhatsApp nativo y cierre asistido por IA para agencias y consultores.
+          </p>
+        </div>
+
+        <!-- Real Screenshot 1: Login Screen -->
+        <div class="browser-window" style="width: 1000px;">
+          <div class="browser-header">
+            <div class="browser-dots">
+              <span class="dot dot-red"></span>
+              <span class="dot dot-yellow"></span>
+              <span class="dot dot-green"></span>
+            </div>
+            <div class="browser-url-bar">
+              <span style="color: #34d399;">https://</span>
+              <span>qp-outreach-engine.vercel.app</span>
+              <span style="margin-left: auto; font-size: 10px; color: #fcd34d; background: rgba(245,158,11,0.12); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(245,158,11,0.25);">ACCESO MAESTRO AISLADO</span>
+            </div>
+          </div>
+          <div class="browser-content" style="max-height: 480px;">
+            <img src="assets/01_login.png" alt="Pantalla de Acceso Maestro" class="browser-img" />
+          </div>
+        </div>
+
+        <!-- Floating Feature Badges -->
+        <div id="scene1Badge1" class="badge-callout" style="bottom: 80px; left: 140px;">
+          <h4>SEGURIDAD ZERO-TRUST</h4>
+          <p>Infraestructura virgen por cliente.<br>Sin exponer API Keys maestras ni bases ajenas.</p>
+        </div>
+
+        <div id="scene1Badge2" class="badge-callout" style="bottom: 80px; right: 140px;">
+          <h4>CLONABLE EN 1 CLIC</h4>
+          <p>Se despliega en Railway + Vercel en 60s<br>listo para operar con su propio WhatsApp.</p>
+        </div>
+      </section>
+
+
+      <!-- ============================================================
+           ESCENA 2: WORKSPACE 3 COLUMNAS & FICHA COMERCIAL (8s - 19s)
+           ============================================================ -->
+      <section id="scene2" class="scene-container">
+        <div style="text-align: center; max-width: 900px; margin-bottom: 16px;">
+          <div style="display: inline-flex; align-items: center; gap: 8px; padding: 4px 14px; border-radius: 9999px; background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.25); color: #6ee7b7; font-family: 'JetBrains Mono', monospace; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px;">
+            <span>TRIPLE COLUMNA DE CONTROL OPERATIVO</span>
+          </div>
+          <h2 style="font-size: 38px; font-family: 'Playfair Display', serif; font-weight: 700; color: #fff; margin-bottom: 6px;">
+            Workspace Omnicanal de Alta Retención
+          </h2>
+          <p style="color: #cbd5e1; font-size: 15px; font-weight: 300;">
+            Inbox con filtrado de estados + Chat en vivo con WhatsApp Baileys + Ficha técnica comercial.
+          </p>
+        </div>
+
+        <!-- Real Screenshot 2: Full Workspace -->
+        <div id="scene2Browser" class="browser-window" style="width: 1420px;">
+          <div class="browser-header">
+            <div class="browser-dots">
+              <span class="dot dot-red"></span>
+              <span class="dot dot-yellow"></span>
+              <span class="dot dot-green"></span>
+            </div>
+            <div class="browser-url-bar">
+              <span style="color: #34d399;">https://</span>
+              <span>qp-outreach-engine.vercel.app/#workspace</span>
+              <span style="margin-left: auto; font-size: 10px; color: #34d399; background: rgba(16,185,129,0.12); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(16,185,129,0.25);">SOCKET CONECTADO (51902105668)</span>
+            </div>
+          </div>
+          <div class="browser-content" style="max-height: 600px;">
+            <img id="scene2Img" src="assets/02_workspace.png" alt="Workspace 3 Columnas" class="browser-img" />
+          </div>
+        </div>
+
+        <!-- Floating Feature Badges for Scene 2 -->
+        <div id="scene2Badge1" class="badge-callout" style="top: 240px; left: 50px;">
+          <h4>1. INBOX EN TIEMPO REAL</h4>
+          <p>Segmentación activa:<br><span style="color: #fcd34d; font-weight: bold;">Calificado</span>, <span style="color: #93c5fd; font-weight: bold;">En Negociación</span> o <span style="color: #6ee7b7; font-weight: bold;">Cerrado</span>.</p>
+        </div>
+
+        <div id="scene2Badge2" class="badge-callout" style="top: 240px; right: 50px;">
+          <h4>3. FICHA TÉCNICA COMERCIAL</h4>
+          <p>Scoring de conversión, decisor,<br>notas internas y sincronización inmediata.</p>
+        </div>
+      </section>
+
+
+      <!-- ============================================================
+           ESCENA 3: COPILOTO IA & SUGERENCIAS TÁCTICAS (19s - 31s)
+           ============================================================ -->
+      <section id="scene3" class="scene-container">
+        <div style="text-align: center; max-width: 900px; margin-bottom: 16px;">
+          <div style="display: inline-flex; align-items: center; gap: 8px; padding: 4px 14px; border-radius: 9999px; background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.25); color: #fde68a; font-family: 'JetBrains Mono', monospace; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px;">
+            <span>QPARTNER COPILOT & HUMAN TAKEOVER</span>
+          </div>
+          <h2 style="font-size: 38px; font-family: 'Playfair Display', serif; font-weight: 700; color: #fff; margin-bottom: 6px;">
+            Copiloto de Cierre Táctico con IA
+          </h2>
+          <p style="color: #cbd5e1; font-size: 15px; font-weight: 300;">
+            Respuestas sugeridas en 1 clic según el chat + Round Robin de Asesores + Control manual o autónomo.
+          </p>
+        </div>
+
+        <!-- Real Screenshot 3: Zoomed Detail of Chat & Copilot Suggestions -->
+        <div id="scene3Browser" class="browser-window" style="width: 1360px;">
+          <div class="browser-header">
+            <div class="browser-dots">
+              <span class="dot dot-red"></span>
+              <span class="dot dot-yellow"></span>
+              <span class="dot dot-green"></span>
+            </div>
+            <div class="browser-url-bar">
+              <span style="color: #34d399;">https://</span>
+              <span>qp-outreach-engine.vercel.app/api/client/chat/51993346759</span>
+              <span style="margin-left: auto; font-size: 10px; color: #fcd34d; background: rgba(245,158,11,0.12); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(245,158,11,0.25);">COPILOTO IA ACTIVO</span>
+            </div>
+          </div>
+          <div class="browser-content" style="max-height: 600px; overflow: hidden;">
+            <img id="scene3Img" src="assets/06_workspace_detail.png" alt="Detalle del Copiloto" class="browser-img" />
+          </div>
+        </div>
+
+        <!-- Floating Badges for Scene 3 -->
+        <div id="scene3Badge1" class="badge-callout" style="top: 250px; left: 60px;">
+          <h4>SUGERENCIAS EN 1 CLIC</h4>
+          <p>La IA redacta respuestas tácticas<br>para invitar a llamada o despejar dudas.</p>
+        </div>
+
+        <div id="scene3Badge2" class="badge-callout" style="bottom: 100px; left: 60px;">
+          <h4>ROUND ROBIN ASESORES</h4>
+          <p>Distribuye prospectos automáticamente<br>entre los cerradores de tu equipo.</p>
+        </div>
+
+        <div id="scene3Badge3" class="badge-callout" style="top: 250px; right: 60px;">
+          <h4>HUMAN TAKEOVER</h4>
+          <p>Silencia la IA de inmediato cuando un asesor<br>humano toma el mando del prospecto.</p>
+        </div>
+      </section>
+
+
+      <!-- ============================================================
+           ESCENA 4: MOTOR DE PROSPECCIÓN & DRIP ANTI-BAN (31s - 42s)
+           ============================================================ -->
+      <section id="scene4" class="scene-container">
+        <div style="text-align: center; max-width: 900px; margin-bottom: 16px;">
+          <div style="display: inline-flex; align-items: center; gap: 8px; padding: 4px 14px; border-radius: 9999px; background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.25); color: #93c5fd; font-family: 'JetBrains Mono', monospace; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px;">
+            <span>PROSPECCIÓN MULTI-CANAL B2B</span>
+          </div>
+          <h2 style="font-size: 38px; font-family: 'Playfair Display', serif; font-weight: 700; color: #fff; margin-bottom: 6px;">
+            Campañas Escalonadas con Drip Anti-Baneo
+          </h2>
+          <p style="color: #cbd5e1; font-size: 15px; font-weight: 300;">
+            Scraping de Google Maps, Meta Ads, Apollo e Instagram + Cadencia humana controlada por PostgreSQL.
+          </p>
+        </div>
+
+        <!-- Real Screenshot 4: Campaigns View -->
+        <div id="scene4Browser" class="browser-window" style="width: 1400px;">
+          <div class="browser-header">
+            <div class="browser-dots">
+              <span class="dot dot-red"></span>
+              <span class="dot dot-yellow"></span>
+              <span class="dot dot-green"></span>
+            </div>
+            <div class="browser-url-bar">
+              <span style="color: #34d399;">https://</span>
+              <span>qp-outreach-engine.vercel.app/#campaigns</span>
+              <span style="margin-left: auto; font-size: 10px; color: #93c5fd; background: rgba(59,130,246,0.12); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(59,130,246,0.25);">DRIP ENGINE RUNNING</span>
+            </div>
+          </div>
+          <div class="browser-content" style="max-height: 600px;">
+            <img id="scene4Img" src="assets/03_campaigns.png" alt="Campañas de Prospección" class="browser-img" />
+          </div>
+        </div>
+
+        <!-- Floating Badges for Scene 4 -->
+        <div id="scene4Badge1" class="badge-callout" style="top: 240px; left: 50px;">
+          <h4>CADENCIA HUMANA (ANTI-BAN)</h4>
+          <p>Delays inteligentes de 180s a 240s.<br>Emula mecanografía y navegación real.</p>
+        </div>
+
+        <div id="scene4Badge2" class="badge-callout" style="bottom: 100px; right: 50px;">
+          <h4>4 FUENTES INTEGRADAS</h4>
+          <p>Extrae de Google Maps, Meta Ads Library,<br>Apollo B2B e Instagram sin APIs externas.</p>
+        </div>
+      </section>
+
+
+      <!-- ============================================================
+           ESCENA 5: ARQUITECTURA FINANCIERA SAAR (42s - 50s)
+           ============================================================ -->
+      <section id="scene5" class="scene-container">
+        <div style="text-align: center; max-width: 900px; margin-bottom: 16px;">
+          <div style="display: inline-flex; align-items: center; gap: 8px; padding: 4px 14px; border-radius: 9999px; background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.25); color: #fde68a; font-family: 'JetBrains Mono', monospace; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px;">
+            <span>MODELO SAAR: SOFTWARE AS A RESULT</span>
+          </div>
+          <h2 style="font-size: 38px; font-family: 'Playfair Display', serif; font-weight: 700; color: #fff; margin-bottom: 6px;">
+            Finanzas y Métricas de Rendimiento
+          </h2>
+          <p style="color: #cbd5e1; font-size: 15px; font-weight: 300;">
+            Retainer Base + Pago por Lead Cualificado (PPQM) + Liquidación periódica auditable.
+          </p>
+        </div>
+
+        <!-- Real Screenshot 5: Finances Modal & Settings -->
+        <div id="scene5Browser" class="browser-window" style="width: 1200px;">
+          <div class="browser-header">
+            <div class="browser-dots">
+              <span class="dot dot-red"></span>
+              <span class="dot dot-yellow"></span>
+              <span class="dot dot-green"></span>
+            </div>
+            <div class="browser-url-bar">
+              <span style="color: #34d399;">https://</span>
+              <span>qp-outreach-engine.vercel.app/#settings-finances</span>
+              <span style="margin-left: auto; font-size: 10px; color: #fcd34d; background: rgba(245,158,11,0.12); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(245,158,11,0.25);">RETAINER S/. 2,800 + PPQM S/. 200</span>
+            </div>
+          </div>
+          <div class="browser-content" style="max-height: 570px;">
+            <img id="scene5Img" src="assets/05_finances_modal.png" alt="Finanzas SaaR" class="browser-img" />
+          </div>
+        </div>
+
+        <!-- Floating Badges for Scene 5 -->
+        <div id="scene5Badge1" class="badge-callout" style="top: 250px; left: 70px;">
+          <h4>COBRO HÍBRIDO SAAR</h4>
+          <p>Fijo mensual asegurado para tu agencia<br>+ bonificación por cada lead calificado.</p>
+        </div>
+
+        <div id="scene5Badge2" class="badge-callout" style="bottom: 100px; right: 70px;">
+          <h4>LIQUIDACIÓN AUDITABLE</h4>
+          <p>Tu cliente visualiza exactamente qué leads<br>calificaron y el total liquidado en tiempo real.</p>
+        </div>
+      </section>
+
+
+      <!-- ============================================================
+           ESCENA 6: CIERRE & LLAMADO A LA ACCIÓN (50s - 55s)
+           ============================================================ -->
+      <section id="scene6" class="scene-container" style="text-align: center;">
+        <div style="width: 80px; height: 80px; border-radius: 20px; background: linear-gradient(135deg, #fcd34d, #f59e0b, #b45309); display: flex; align-items: center; justify-content: center; font-family: 'Playfair Display', serif; color: #000; font-weight: bold; font-size: 36px; box-shadow: 0 0 50px rgba(212,175,55,0.45); margin: 0 auto 24px;">
+          QP
+        </div>
+
+        <div style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 18px; border-radius: 9999px; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); color: #fde68a; font-family: 'JetBrains Mono', monospace; font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 16px;">
+          DISPONIBLE PARA DESPLIEGUE INMEDIATO
+        </div>
+
+        <h2 style="font-size: 52px; font-family: 'Playfair Display', serif; font-weight: 700; color: #fff; margin-bottom: 16px;">
+          Despliega Tu Propio Engine en 24h
+        </h2>
+
+        <p style="color: #cbd5e1; font-size: 18px; max-width: 650px; margin: 0 auto 36px; font-weight: 300;">
+          Infraestructura dedicada, aislada y configurada para el nicho específico de tu empresa o de tus clientes.
+        </p>
+
+        <!-- CTA Box -->
+        <div class="bg-card" style="padding: 28px 56px; border-radius: 20px; border: 1px solid rgba(212,175,55,0.4); box-shadow: 0 25px 50px rgba(0,0,0,0.8); display: flex; align-items: center; gap: 50px; text-align: left;">
+          <div>
+            <div style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #fcd34d; text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; margin-bottom: 4px;">Contacto Directo con Kenneth</div>
+            <div style="font-size: 26px; font-weight: 700; color: #fff; font-family: 'JetBrains Mono', monospace;">+51 902 105 668</div>
+          </div>
+
+          <div style="height: 50px; width: 1px; background: rgba(255,255,255,0.1);"></div>
+
+          <div>
+            <div style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 4px;">Demo Interactiva en Vivo</div>
+            <div style="font-size: 22px; font-family: 'JetBrains Mono', monospace; color: #fde68a; font-weight: 600;">qp-outreach-engine.vercel.app</div>
+          </div>
+        </div>
+
+        <div style="margin-top: 36px; font-size: 12px; font-family: 'JetBrains Mono', monospace; color: #64748b; letter-spacing: 0.15em; text-transform: uppercase;">
+          THE QUANT PARTNERS &bull; SOFTWARE AS A RESULT &bull; PERÚ 2026
+        </div>
+      </section>
+
+    </main>
+
+    <!-- GSAP TIMELINE SCRIPT -->
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      // Barra de progreso global del video (0 a 55 segundos)
+      tl.to("#videoProgressBar", { width: "100%", ease: "none", duration: 55 }, 0);
+
+      // ==========================================
+      // ESCENA 1 (0s a 8s): Portada & Acceso
+      // ==========================================
+      tl.fromTo("#scene1", 
+        { opacity: 0, scale: 0.95, y: 30 }, 
+        { opacity: 1, scale: 1, y: 0, duration: 1.2, ease: "power2.out" }, 0.2
+      );
+      tl.fromTo("#scene1Badge1",
+        { opacity: 0, x: -40 },
+        { opacity: 1, x: 0, duration: 0.8, ease: "back.out(1.4)" }, 1.5
+      );
+      tl.fromTo("#scene1Badge2",
+        { opacity: 0, x: 40 },
+        { opacity: 1, x: 0, duration: 0.8, ease: "back.out(1.4)" }, 2.2
+      );
+      tl.to("#scene1", 
+        { opacity: 0, scale: 1.05, y: -20, duration: 0.8, ease: "power2.in" }, 7.2
+      );
+
+      // ==========================================
+      // ESCENA 2 (8s a 19s): Workspace 3 Columnas
+      // ==========================================
+      tl.fromTo("#scene2", 
+        { opacity: 0, scale: 0.95, y: 30 }, 
+        { opacity: 1, scale: 1, y: 0, duration: 1.0, ease: "power2.out" }, 8.0
+      );
+      tl.fromTo("#scene2Badge1",
+        { opacity: 0, x: -30, scale: 0.9 },
+        { opacity: 1, x: 0, scale: 1, duration: 0.8, ease: "back.out(1.5)" }, 9.5
+      );
+      tl.fromTo("#scene2Badge2",
+        { opacity: 0, x: 30, scale: 0.9 },
+        { opacity: 1, x: 0, scale: 1, duration: 0.8, ease: "back.out(1.5)" }, 12.0
+      );
+      tl.to("#scene2Img", { scale: 1.03, y: -15, duration: 7, ease: "sine.inOut" }, 9.5);
+      tl.to("#scene2", 
+        { opacity: 0, scale: 1.05, y: -20, duration: 0.8, ease: "power2.in" }, 18.2
+      );
+
+      // ==========================================
+      // ESCENA 3 (19s a 31s): Copiloto & Takeover
+      // ==========================================
+      tl.fromTo("#scene3", 
+        { opacity: 0, scale: 0.95, y: 30 }, 
+        { opacity: 1, scale: 1, y: 0, duration: 1.0, ease: "power2.out" }, 19.0
+      );
+      tl.fromTo("#scene3Badge1",
+        { opacity: 0, x: -30, scale: 0.9 },
+        { opacity: 1, x: 0, scale: 1, duration: 0.8, ease: "back.out(1.4)" }, 20.5
+      );
+      tl.fromTo("#scene3Badge2",
+        { opacity: 0, y: 30, scale: 0.9 },
+        { opacity: 1, y: 0, scale: 1, duration: 0.8, ease: "back.out(1.4)" }, 22.5
+      );
+      tl.fromTo("#scene3Badge3",
+        { opacity: 0, x: 30, scale: 0.9 },
+        { opacity: 1, x: 0, scale: 1, duration: 0.8, ease: "back.out(1.4)" }, 24.5
+      );
+      tl.to("#scene3Img", { scale: 1.08, transformOrigin: "center 40%", duration: 7, ease: "sine.inOut" }, 20.5);
+      tl.to("#scene3", 
+        { opacity: 0, scale: 1.05, y: -20, duration: 0.8, ease: "power2.in" }, 30.2
+      );
+
+      // ==========================================
+      // ESCENA 4 (31s a 42s): Campañas & Drip
+      // ==========================================
+      tl.fromTo("#scene4", 
+        { opacity: 0, scale: 0.95, y: 30 }, 
+        { opacity: 1, scale: 1, y: 0, duration: 1.0, ease: "power2.out" }, 31.0
+      );
+      tl.fromTo("#scene4Badge1",
+        { opacity: 0, x: -30, scale: 0.9 },
+        { opacity: 1, x: 0, scale: 1, duration: 0.8, ease: "back.out(1.4)" }, 32.5
+      );
+      tl.fromTo("#scene4Badge2",
+        { opacity: 0, x: 30, scale: 0.9 },
+        { opacity: 1, x: 0, scale: 1, duration: 0.8, ease: "back.out(1.4)" }, 34.5
+      );
+      tl.to("#scene4Img", { scale: 1.04, y: -20, duration: 7, ease: "sine.inOut" }, 32.5);
+      tl.to("#scene4", 
+        { opacity: 0, scale: 1.05, y: -20, duration: 0.8, ease: "power2.in" }, 41.2
+      );
+
+      // ==========================================
+      // ESCENA 5 (42s a 50s): Finanzas SaaR
+      // ==========================================
+      tl.fromTo("#scene5", 
+        { opacity: 0, scale: 0.95, y: 30 }, 
+        { opacity: 1, scale: 1, y: 0, duration: 1.0, ease: "power2.out" }, 42.0
+      );
+      tl.fromTo("#scene5Badge1",
+        { opacity: 0, x: -30, scale: 0.9 },
+        { opacity: 1, x: 0, scale: 1, duration: 0.8, ease: "back.out(1.4)" }, 43.5
+      );
+      tl.fromTo("#scene5Badge2",
+        { opacity: 0, x: 30, scale: 0.9 },
+        { opacity: 1, x: 0, scale: 1, duration: 0.8, ease: "back.out(1.4)" }, 45.5
+      );
+      tl.to("#scene5", 
+        { opacity: 0, scale: 1.05, y: -20, duration: 0.8, ease: "power2.in" }, 49.2
+      );
+
+      // ==========================================
+      // ESCENA 6 (50s a 55s): Cierre & CTA
+      // ==========================================
+      tl.fromTo("#scene6", 
+        { opacity: 0, scale: 0.95, y: 30 }, 
+        { opacity: 1, scale: 1, y: 0, duration: 1.0, ease: "power2.out" }, 50.0
+      );
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>
