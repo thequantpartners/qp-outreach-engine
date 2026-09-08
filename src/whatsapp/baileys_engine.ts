@@ -32,6 +32,9 @@ export class BaileysEngine {
   public static lidToPhoneCache = new Map<string, string>();
   public static phoneToLidCache = new Map<string, string>();
 
+  // IDs de mensajes emitidos por el motor para filtrar ecos de Baileys (fromMe)
+  public static outgoingEngineMsgIds = new Set<string>();
+
   private constructor() {
     this.storageDir = path.resolve(process.env.STORAGE_DIR || './storage');
     this.authDir = path.join(this.storageDir, 'whatsapp_auth');
@@ -305,6 +308,25 @@ export class BaileysEngine {
         // 1. Mensaje saliente manual enviado desde el teléfono del dueño (fromMe)
         if (m.key.fromMe) {
           SlaAlertManager.getInstance().cancelSlaTimer(senderPhone);
+
+          // Si este mensaje fue despachado por el propio motor (outreach/batch/IA), ignorar el eco de Baileys
+          if (m.key.id && BaileysEngine.outgoingEngineMsgIds.has(m.key.id)) {
+            BaileysEngine.outgoingEngineMsgIds.delete(m.key.id);
+            continue;
+          }
+
+          // Verificación de redundancia: si el último mensaje registrado en la conversación
+          // tiene el mismo contenido enviado hace menos de 25 segundos, es un eco idéntico
+          const recentHistory = await OutreachRepo.getChatHistory(senderPhone, 2);
+          const lastMsg = recentHistory[recentHistory.length - 1];
+          if (lastMsg && lastMsg.content === incomingText.trim()) {
+            const timeDiff = Date.now() - new Date(lastMsg.createdAt).getTime();
+            if (timeDiff < 25000) {
+              console.log(`[BaileysEngine] Eco saliente duplicado omitido para ${senderPhone}.`);
+              continue;
+            }
+          }
+
           const adminClean = settings.adminWhatsAppPhone ? settings.adminWhatsAppPhone.replace(/[^0-9]/g, '') : '';
           if (senderPhone && senderPhone !== adminClean) {
             console.log(`[BaileysEngine] Mensaje saliente manual detectado en chat con ${senderPhone}. Registrando como human_agent.`);
@@ -584,6 +606,10 @@ export class BaileysEngine {
 
       console.log(`[BaileysEngine] Enviando mensaje a ${limpio}...`);
       const sentMsg = await this.sock.sendMessage(jid, { text: mensaje });
+      if (sentMsg?.key?.id) {
+        BaileysEngine.outgoingEngineMsgIds.add(sentMsg.key.id);
+        setTimeout(() => BaileysEngine.outgoingEngineMsgIds.delete(sentMsg.key.id!), 60000);
+      }
       SlaAlertManager.getInstance().cancelSlaTimer(limpio);
       console.log(`✅ [BaileysEngine] Mensaje entregado a ${limpio}!`);
 
