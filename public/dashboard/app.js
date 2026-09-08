@@ -30,13 +30,24 @@ document.addEventListener('DOMContentLoaded', () => {
 // 1. Autenticación por PIN y Roles
 function checkAuth() {
   const pinModal = document.getElementById('pinModal');
+  const appHeader = document.getElementById('appHeader') || document.querySelector('header');
+  const viewWorkspace = document.getElementById('viewWorkspace');
+  const viewDiscovery = document.getElementById('viewDiscovery');
+  const viewMetrics = document.getElementById('viewMetrics');
+
   if (currentPin) {
-    pinModal.classList.add('hidden');
+    if (pinModal) pinModal.classList.add('hidden');
+    if (appHeader) appHeader.classList.remove('hidden');
+    if (viewWorkspace && currentMainView === 'workspace') viewWorkspace.classList.remove('hidden');
     applyRolePermissions();
     fetchOverview();
     initSSE();
   } else {
-    pinModal.classList.remove('hidden');
+    if (pinModal) pinModal.classList.remove('hidden');
+    if (appHeader) appHeader.classList.add('hidden');
+    if (viewWorkspace) viewWorkspace.classList.add('hidden');
+    if (viewDiscovery) viewDiscovery.classList.add('hidden');
+    if (viewMetrics) viewMetrics.classList.add('hidden');
     const input = document.getElementById('pinInput');
     if (input) input.focus();
   }

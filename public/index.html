@@ -152,7 +152,7 @@
   <!-- ============================================== -->
   <!-- MODAL DE ACCESO POR PIN (AUTH) -->
   <!-- ============================================== -->
-  <div id="pinModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+  <div id="pinModal" class="fixed inset-0 z-[100] w-full h-full flex items-center justify-center bg-[#030407]/95 backdrop-blur-2xl p-4">
     <div class="bg-surface border border-white/[0.08] rounded-2xl p-8 max-w-sm w-full shadow-2xl relative">
       <div class="text-center mb-8">
         <div class="inline-flex w-10 h-10 items-center justify-center rounded-xl bg-gold/10 border border-gold/20 text-gold mb-4">
@@ -182,7 +182,7 @@
         <button 
           type="submit" 
           id="pinBtn"
-          class="w-full py-3 btn-gold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-gold/10"
+          class="w-full py-3 btn-gold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-gold/10 font-sans font-semibold"
         >
           <span>Acceder al Centro de Mando</span>
           <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
@@ -197,7 +197,7 @@
   <!-- ============================================== -->
   <!-- BARRA SUPERIOR EDITORIAL (HEADER) -->
   <!-- ============================================== -->
-  <header class="h-14 border-b border-white/[0.06] bg-surface/80 backdrop-blur-md px-5 flex items-center justify-between flex-shrink-0 z-20">
+  <header id="appHeader" class="h-14 border-b border-white/[0.06] bg-surface/80 backdrop-blur-md px-5 flex items-center justify-between flex-shrink-0 z-20">
     <div class="flex items-center gap-4">
       <div class="w-8 h-8 rounded-lg bg-gold/15 border border-gold/30 flex items-center justify-center text-gold font-serif font-bold text-sm">
         QP
@@ -848,8 +848,6 @@
         </div>
 
         </div>
-
-      </div>
 
     </aside>
 
