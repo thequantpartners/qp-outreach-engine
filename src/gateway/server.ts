@@ -1609,6 +1609,9 @@ interface BatchJob {
   currentLeadPhone?: string;
   nextRunAt?: number;
   timeoutId?: any;
+  invalidCount?: number;
+  pendingCount?: number;
+  processedCount?: number;
 }
 
 let activeBatchJob: BatchJob = {
@@ -1620,6 +1623,36 @@ let activeBatchJob: BatchJob = {
   status: 'IDLE',
   delaySeconds: 180
 };
+
+async function enrichBatchJobWithCampaignStats(job: BatchJob): Promise<BatchJob> {
+  if (!job.serviceId || !DbConnection.isPg()) return job;
+  try {
+    const statsRes = await DbConnection.getPool().query(
+      `SELECT 
+        COUNT(*) as total, 
+        COUNT(*) FILTER (WHERE status = 'OUTREACH_SENT') as sent, 
+        COUNT(*) FILTER (WHERE status = 'INVALID_PHONE') as invalid, 
+        COUNT(*) FILTER (WHERE status IN ('DISCOVERED', 'QUEUED')) as pending 
+      FROM leads WHERE service_id = $1`,
+      [job.serviceId]
+    );
+    const row = statsRes.rows[0];
+    const total = parseInt(row?.total || '0', 10);
+    const sent = parseInt(row?.sent || '0', 10);
+    const invalid = parseInt(row?.invalid || '0', 10);
+    const pending = parseInt(row?.pending || '0', 10);
+    return {
+      ...job,
+      totalLeads: total > 0 ? total : job.totalLeads,
+      sentCount: sent,
+      failedCount: invalid,
+      pendingCount: pending,
+      processedCount: total - pending
+    };
+  } catch (e) {
+    return job;
+  }
+}
 
 async function runNextBatchStep() {
   if (activeBatchJob.status !== 'RUNNING') return;
@@ -1643,7 +1676,8 @@ async function runNextBatchStep() {
       activeBatchJob.status = 'COMPLETED';
       activeBatchJob.currentLeadName = undefined;
       activeBatchJob.currentLeadPhone = undefined;
-      broadcastDashboardEvent({ type: 'batch_dispatch_update', job: { ...activeBatchJob, timeoutId: undefined } });
+      const enriched = await enrichBatchJobWithCampaignStats(activeBatchJob);
+      broadcastDashboardEvent({ type: 'batch_dispatch_update', job: { ...enriched, timeoutId: undefined } });
       return;
     }
 
@@ -1680,7 +1714,8 @@ async function runNextBatchStep() {
     const delayMs = Math.max(30, activeBatchJob.delaySeconds) * 1000;
     activeBatchJob.nextRunAt = Date.now() + delayMs;
 
-    broadcastDashboardEvent({ type: 'batch_dispatch_update', job: { ...activeBatchJob, timeoutId: undefined } });
+    const enrichedRunning = await enrichBatchJobWithCampaignStats(activeBatchJob);
+    broadcastDashboardEvent({ type: 'batch_dispatch_update', job: { ...enrichedRunning, timeoutId: undefined } });
 
     if (activeBatchJob.status === 'RUNNING') {
       activeBatchJob.timeoutId = setTimeout(() => {
@@ -1690,7 +1725,8 @@ async function runNextBatchStep() {
   } catch (err: any) {
     console.error('Error en runNextBatchStep:', err.message);
     activeBatchJob.status = 'STOPPED';
-    broadcastDashboardEvent({ type: 'batch_dispatch_update', job: { ...activeBatchJob, timeoutId: undefined } });
+    const enrichedErr = await enrichBatchJobWithCampaignStats(activeBatchJob);
+    broadcastDashboardEvent({ type: 'batch_dispatch_update', job: { ...enrichedErr, timeoutId: undefined } });
   }
 }
 
@@ -1740,39 +1776,44 @@ app.post('/api/client/campaign/batch-dispatch', authenticateClientPin, requireOw
     // Iniciar el primer despacho inmediatamente
     runNextBatchStep();
 
-    res.json({ success: true, job: { ...activeBatchJob, timeoutId: undefined } });
+    const enrichedStart = await enrichBatchJobWithCampaignStats(activeBatchJob);
+    res.json({ success: true, job: { ...enrichedStart, timeoutId: undefined } });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.post('/api/client/campaign/batch-dispatch/pause', authenticateClientPin, (_req: Request, res: Response) => {
+app.post('/api/client/campaign/batch-dispatch/pause', authenticateClientPin, async (_req: Request, res: Response) => {
   if (activeBatchJob.timeoutId) clearTimeout(activeBatchJob.timeoutId);
   activeBatchJob.status = 'PAUSED';
-  broadcastDashboardEvent({ type: 'batch_dispatch_update', job: { ...activeBatchJob, timeoutId: undefined } });
-  res.json({ success: true, job: { ...activeBatchJob, timeoutId: undefined } });
+  const enriched = await enrichBatchJobWithCampaignStats(activeBatchJob);
+  broadcastDashboardEvent({ type: 'batch_dispatch_update', job: { ...enriched, timeoutId: undefined } });
+  res.json({ success: true, job: { ...enriched, timeoutId: undefined } });
 });
 
-app.post('/api/client/campaign/batch-dispatch/resume', authenticateClientPin, (_req: Request, res: Response) => {
+app.post('/api/client/campaign/batch-dispatch/resume', authenticateClientPin, async (_req: Request, res: Response) => {
   if (activeBatchJob.status === 'PAUSED') {
     activeBatchJob.status = 'RUNNING';
     runNextBatchStep();
   }
-  broadcastDashboardEvent({ type: 'batch_dispatch_update', job: { ...activeBatchJob, timeoutId: undefined } });
-  res.json({ success: true, job: { ...activeBatchJob, timeoutId: undefined } });
+  const enriched = await enrichBatchJobWithCampaignStats(activeBatchJob);
+  broadcastDashboardEvent({ type: 'batch_dispatch_update', job: { ...enriched, timeoutId: undefined } });
+  res.json({ success: true, job: { ...enriched, timeoutId: undefined } });
 });
 
-app.post('/api/client/campaign/batch-dispatch/stop', authenticateClientPin, (_req: Request, res: Response) => {
+app.post('/api/client/campaign/batch-dispatch/stop', authenticateClientPin, async (_req: Request, res: Response) => {
   if (activeBatchJob.timeoutId) clearTimeout(activeBatchJob.timeoutId);
   activeBatchJob.status = 'STOPPED';
   activeBatchJob.currentLeadName = undefined;
   activeBatchJob.currentLeadPhone = undefined;
-  broadcastDashboardEvent({ type: 'batch_dispatch_update', job: { ...activeBatchJob, timeoutId: undefined } });
-  res.json({ success: true, job: { ...activeBatchJob, timeoutId: undefined } });
+  const enriched = await enrichBatchJobWithCampaignStats(activeBatchJob);
+  broadcastDashboardEvent({ type: 'batch_dispatch_update', job: { ...enriched, timeoutId: undefined } });
+  res.json({ success: true, job: { ...enriched, timeoutId: undefined } });
 });
 
-app.get('/api/client/campaign/batch-dispatch/status', authenticateClientPin, (_req: Request, res: Response) => {
-  res.json({ success: true, job: { ...activeBatchJob, timeoutId: undefined } });
+app.get('/api/client/campaign/batch-dispatch/status', authenticateClientPin, async (_req: Request, res: Response) => {
+  const enriched = await enrichBatchJobWithCampaignStats(activeBatchJob);
+  res.json({ success: true, job: { ...enriched, timeoutId: undefined } });
 });
 
 app.post('/api/client/leads/import', authenticateClientPin, async (req: Request, res: Response) => {

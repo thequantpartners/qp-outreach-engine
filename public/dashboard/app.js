@@ -4843,9 +4843,15 @@ function updateBatchUI(job) {
   const progressBar = document.getElementById('batchProgressBar');
   const pauseBtn = document.getElementById('btnPauseBatch');
 
-  if (countsText) countsText.textContent = `${sent} / ${total}`;
+  const invalid = Number(job.failedCount ?? job.invalidCount ?? 0);
+  const processed = Number(job.processedCount ?? (sent + invalid));
+
+  if (countsText) {
+    const invalidInfo = invalid > 0 ? ` (${invalid} fijos)` : '';
+    countsText.textContent = `${sent} / ${total} contactados${invalidInfo}`;
+  }
   
-  const pct = total > 0 ? Math.min(100, Math.round((sent / total) * 100)) : 0;
+  const pct = total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0;
   if (progressBar) progressBar.style.width = `${pct}%`;
 
   if (currentLead) {
