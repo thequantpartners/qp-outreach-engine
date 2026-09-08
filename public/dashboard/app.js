@@ -3102,12 +3102,12 @@ function switchSettingsTab(tabName) {
 
     if (t === tabName) {
       if (btn) {
-        btn.className = 'px-4 py-2.5 text-xs font-mono border-b-2 border-gold text-gold font-medium flex items-center gap-2 transition flex-shrink-0';
+        btn.className = 'px-3.5 py-2.5 text-xs font-sans border-b-2 border-gold text-gold font-medium flex items-center gap-1.5 transition flex-shrink-0';
       }
       if (content) content.classList.remove('hidden');
     } else {
       if (btn) {
-        btn.className = 'px-4 py-2.5 text-xs font-mono border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-2 transition flex-shrink-0';
+        btn.className = 'px-3.5 py-2.5 text-xs font-sans border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-1.5 transition flex-shrink-0';
       }
       if (content) content.classList.add('hidden');
     }
@@ -3633,11 +3633,34 @@ async function loadSettingsData() {
     }
     
     // Poblado Scraping & Apify
-    const useCustomApify = !!settings.useCustomApify;
-    selectApifyMode(useCustomApify ? 'custom' : 'managed');
     const apifyTokenEl = document.getElementById('settingApifyToken');
+    const apifyStatusBadge = document.getElementById('apifyKeyStatusBadge');
+    const aiTabApifyStatusBadge = document.getElementById('aiTabApifyStatusBadge');
+
     if (apifyTokenEl) {
       apifyTokenEl.value = settings.apifyToken || '';
+    }
+
+    const isApifyActive = !!(settings.apifyToken || settings.hasServerApifyToken || settings.apifyConfigured);
+
+    if (apifyStatusBadge) {
+      if (isApifyActive) {
+        apifyStatusBadge.className = 'text-[11px] font-sans font-medium text-emerald-400 flex items-center gap-1.5';
+        apifyStatusBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span><span>Apify Conectado</span>`;
+      } else {
+        apifyStatusBadge.className = 'text-[11px] font-sans font-medium text-slate-400 flex items-center gap-1.5';
+        apifyStatusBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span><span>Sin Configurar</span>`;
+      }
+    }
+
+    if (aiTabApifyStatusBadge) {
+      if (isApifyActive) {
+        aiTabApifyStatusBadge.className = 'text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+        aiTabApifyStatusBadge.textContent = '🟢 Conectado';
+      } else {
+        aiTabApifyStatusBadge.className = 'text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-400 border border-slate-500/20';
+        aiTabApifyStatusBadge.textContent = '⚪ Sin Configurar';
+      }
     }
 
     // Poblado SaaR & Finanzas

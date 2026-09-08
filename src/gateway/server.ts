@@ -534,10 +534,12 @@ app.get('/api/client/settings', authenticateClientPin, async (_req: Request, res
         metaPhoneNumberId: settings.metaPhoneNumberId || '',
         metaWabaId: settings.metaWabaId || '',
         metaAccessToken: settings.metaAccessToken ? (settings.metaAccessToken.length > 8 ? '••••••••' + settings.metaAccessToken.slice(-4) : '••••••••') : '',
-        metaWebhookVerifyToken: settings.metaWebhookVerifyToken || '',
-        useCustomApify: settings.useCustomApify ?? false,
-        apifyToken: settings.apifyToken ? (settings.apifyToken.length > 8 ? '••••••••' + settings.apifyToken.slice(-4) : '••••••••') : '',
-        hasServerApifyToken: !!process.env.APIFY_TOKEN
+        useCustomApify: settings.useCustomApify ?? (!!settings.apifyToken),
+        apifyToken: settings.apifyToken 
+          ? (settings.apifyToken.length > 8 ? '••••••••' + settings.apifyToken.slice(-4) : '••••••••') 
+          : (process.env.APIFY_TOKEN ? '••••••••' + process.env.APIFY_TOKEN.slice(-4) : ''),
+        hasServerApifyToken: !!process.env.APIFY_TOKEN,
+        apifyConfigured: !!(settings.apifyToken || process.env.APIFY_TOKEN)
       },
       whatsapp: waStatus
     });

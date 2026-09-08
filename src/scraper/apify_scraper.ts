@@ -19,7 +19,7 @@ export class ApifyScraper {
     }
     try {
       const settings = await OutreachRepo.getSettings();
-      if (settings.useCustomApify && settings.apifyToken && settings.apifyToken.trim().length > 0) {
+      if (settings.apifyToken && settings.apifyToken.trim().length > 0) {
         return settings.apifyToken.trim();
       }
     } catch {

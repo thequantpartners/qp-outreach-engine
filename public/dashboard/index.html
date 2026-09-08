@@ -1704,7 +1704,7 @@
   <!-- MODAL CENTRAL DE CONFIGURACIÓN & ANTI-BANEO -->
   <!-- ============================================== -->
   <div id="settingsModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 hidden">
-    <div class="bg-surface border border-white/[0.08] rounded-2xl max-w-xl w-full flex flex-col shadow-2xl overflow-hidden max-h-[90vh]">
+    <div class="bg-surface border border-white/[0.08] rounded-2xl max-w-3xl w-full flex flex-col shadow-2xl overflow-hidden max-h-[90vh]">
       
       <!-- Modal Header -->
       <div class="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between flex-shrink-0">
@@ -1714,7 +1714,7 @@
           </div>
           <div>
             <h3 class="font-serif text-base font-medium text-white">Configuración del Sistema</h3>
-            <p class="text-xs text-slate-400 font-light">WhatsApp satélite, políticas anti-baneo y derivación comercial</p>
+            <p class="text-xs text-slate-400 font-light">WhatsApp satélite, credenciales de IA, scraping y políticas comerciales</p>
           </div>
         </div>
         <button onclick="closeSettingsModal()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/[0.05] transition">
@@ -1723,35 +1723,35 @@
       </div>
 
       <!-- Settings Tabs Navigation -->
-      <div class="flex border-b border-white/[0.06] bg-obsidian/60 px-6 pt-2 overflow-x-auto custom-scroll">
+      <div class="flex border-b border-white/[0.06] bg-obsidian/60 px-4 sm:px-6 pt-2 overflow-x-auto custom-scroll gap-1">
         <button 
           id="settingsTabBtnWhatsapp" 
           onclick="switchSettingsTab('whatsapp')" 
-          class="px-4 py-2.5 text-xs font-sans border-b-2 border-gold text-gold font-medium flex items-center gap-2 transition flex-shrink-0"
+          class="px-3.5 py-2.5 text-xs font-sans border-b-2 border-gold text-gold font-medium flex items-center gap-1.5 transition flex-shrink-0"
         >
           <i data-lucide="smartphone" class="w-3.5 h-3.5"></i>
-          <span>Conexión WhatsApp</span>
+          <span>WhatsApp</span>
         </button>
         <button 
           id="settingsTabBtnTeam" 
           onclick="switchSettingsTab('team')" 
-          class="px-4 py-2.5 text-xs font-sans border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-2 transition flex-shrink-0"
+          class="px-3.5 py-2.5 text-xs font-sans border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-1.5 transition flex-shrink-0"
         >
           <i data-lucide="users" class="w-3.5 h-3.5"></i>
-          <span>Equipo & Round Robin</span>
+          <span>Equipo</span>
         </button>
         <button 
           id="settingsTabBtnAi" 
           onclick="switchSettingsTab('ai')" 
-          class="px-4 py-2.5 text-xs font-sans border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-2 transition flex-shrink-0"
+          class="px-3.5 py-2.5 text-xs font-sans border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-1.5 transition flex-shrink-0"
         >
           <i data-lucide="sparkles" class="w-3.5 h-3.5 text-gold"></i>
-          <span>IA & Proveedores (LLM)</span>
+          <span>IA & LLMs</span>
         </button>
         <button 
           id="settingsTabBtnScraping" 
           onclick="switchSettingsTab('scraping')" 
-          class="px-4 py-2.5 text-xs font-sans border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-2 transition flex-shrink-0"
+          class="px-3.5 py-2.5 text-xs font-sans border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-1.5 transition flex-shrink-0"
         >
           <i data-lucide="scan-search" class="w-3.5 h-3.5 text-gold"></i>
           <span>Scraping & Apify</span>
@@ -1759,18 +1759,18 @@
         <button 
           id="settingsTabBtnAntiban" 
           onclick="switchSettingsTab('antiban')" 
-          class="px-4 py-2.5 text-xs font-sans border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-2 transition flex-shrink-0"
+          class="px-3.5 py-2.5 text-xs font-sans border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-1.5 transition flex-shrink-0"
         >
           <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
-          <span>Anti-Baneo & Cadencia</span>
+          <span>Anti-Baneo</span>
         </button>
         <button 
           id="settingsTabBtnSaar" 
           onclick="switchSettingsTab('saar')" 
-          class="px-4 py-2.5 text-xs font-sans border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-2 transition flex-shrink-0"
+          class="px-3.5 py-2.5 text-xs font-sans border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-1.5 transition flex-shrink-0"
         >
           <i data-lucide="calculator" class="w-3.5 h-3.5 text-gold"></i>
-          <span>Modelo SaaR & Finanzas</span>
+          <span>Finanzas SaaR</span>
         </button>
       </div>
 
@@ -2052,7 +2052,7 @@
             </select>
           </div>
 
-          <!-- Botón Probar Conexión -->
+          <!-- Botón Probar Conexión IA -->
           <div class="pt-2 flex items-center justify-between">
             <button 
               type="button" 
@@ -2065,9 +2065,33 @@
             </button>
             <div id="aiTestResultBadge" class="text-xs font-sans hidden"></div>
           </div>
+
+          <!-- Acceso Directo a Token de Apify (Scraping) -->
+          <div class="mt-4 p-3.5 rounded-xl bg-obsidian/80 border border-white/[0.08] flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-lg bg-gold/15 text-gold flex items-center justify-center flex-shrink-0">
+                <i data-lucide="scan-search" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <div class="text-xs font-sans font-medium text-white flex items-center gap-2">
+                  <span>¿Buscabas la API Key de Apify para Scraping?</span>
+                  <span id="aiTabApifyStatusBadge" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">🟢 Conectado</span>
+                </div>
+                <div class="text-[11px] text-slate-400 font-light">Se encuentra en la pestaña <strong>Scraping & Apify</strong> del menú superior.</div>
+              </div>
+            </div>
+            <button 
+              type="button" 
+              onclick="switchSettingsTab('scraping')" 
+              class="px-3 py-1.5 rounded-lg bg-gold/15 hover:bg-gold/25 border border-gold/30 text-gold text-xs font-sans font-medium transition flex items-center gap-1.5 flex-shrink-0"
+            >
+              <span>Ir a Apify</span>
+              <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
         </div>
 
-        <!-- TAB: SCRAPING & APIFY (BYOK) -->
+        <!-- TAB: SCRAPING & APIFY -->
         <div id="settingsTabContentScraping" class="space-y-4 hidden">
           <div class="p-3.5 bg-gold/10 border border-gold/20 rounded-xl text-xs space-y-1 text-slate-200 font-sans">
             <div class="flex items-center gap-2 font-medium text-gold">
@@ -2075,50 +2099,20 @@
               <span>Motor de Prospección Multicanal (Google Maps, Meta Ads & Instagram)</span>
             </div>
             <p class="text-[11px] text-slate-300 font-light leading-relaxed">
-              El motor extrae automáticamente empresas y teléfonos calificados desde fuentes B2B. Puedes utilizar la infraestructura gestionada de la plataforma o conectar tu propia cuenta de Apify para imputar el consumo a tu facturación corporativa.
+              El motor extrae automáticamente empresas, decisores y teléfonos calificados desde fuentes B2B. Configura tu Token de Apify para alimentar las campañas de prospección.
             </p>
           </div>
 
-          <!-- Selector de Modo de Scraping -->
-          <div class="p-3.5 bg-surface/80 rounded-xl border border-white/[0.08] space-y-2">
-            <label class="block text-xs font-sans font-medium text-slate-300">Modo de Extracción y Scraping</label>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <button 
-                type="button" 
-                id="btnApifyModeManaged"
-                onclick="selectApifyMode('managed')" 
-                class="p-3 rounded-xl border border-gold/40 bg-gold/10 text-left transition flex items-start gap-2.5"
-              >
-                <div class="w-7 h-7 rounded-lg bg-gold/20 text-gold flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <i data-lucide="server" class="w-4 h-4"></i>
-                </div>
-                <div>
-                  <div class="text-xs font-sans font-semibold text-white">Infraestructura QP (Gestionada)</div>
-                  <div class="text-[11px] text-slate-400 font-light">Créditos de prospección cubiertos por la plataforma. Sin configuración técnica requerida.</div>
-                </div>
-              </button>
-
-              <button 
-                type="button" 
-                id="btnApifyModeCustom"
-                onclick="selectApifyMode('custom')" 
-                class="p-3 rounded-xl border border-white/[0.08] bg-card hover:border-gold/30 text-left transition flex items-start gap-2.5"
-              >
-                <div class="w-7 h-7 rounded-lg bg-purple-500/15 text-purple-400 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <i data-lucide="key" class="w-4 h-4"></i>
-                </div>
-                <div>
-                  <div class="text-xs font-sans font-semibold text-white">Clave Propia (BYOK)</div>
-                  <div class="text-[11px] text-slate-400 font-light">Conecta tu propio token de Apify para consumir tu saldo y límites dedicados.</div>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          <!-- Sección BYOK: Configuración de Token Personal -->
-          <div id="apifyCustomKeySection" class="space-y-3 hidden p-4 rounded-xl bg-card border border-white/[0.08]">
+          <!-- Token de Apify Card (Siempre Visible) -->
+          <div class="space-y-3 p-4 rounded-xl bg-card border border-white/[0.08]">
             <div class="flex items-center justify-between">
-              <label class="text-xs font-sans font-medium text-slate-300">Token de API de Apify (APIFY_TOKEN)</label>
+              <div class="flex items-center gap-2">
+                <label class="text-xs font-sans font-medium text-slate-300">Token de API de Apify (APIFY_TOKEN)</label>
+                <span id="apifyKeyStatusBadge" class="text-[11px] font-sans font-medium text-emerald-400 flex items-center gap-1.5">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span>Apify Conectado</span>
+                </span>
+              </div>
               <a 
                 href="https://console.apify.com/account/integrations" 
                 target="_blank" 
@@ -2159,6 +2153,11 @@
                 <span id="testApifyBtnText">Probar Conexión & Saldo</span>
               </button>
               <div id="apifyTestResultBadge" class="text-xs font-sans hidden"></div>
+            </div>
+
+            <div class="text-[11px] text-slate-400 font-light flex items-center gap-1.5 pt-1">
+              <i data-lucide="info" class="w-3.5 h-3.5 text-gold flex-shrink-0"></i>
+              <span>El token se guarda de forma segura y se aplica automáticamente en todas las extracciones de prospectos.</span>
             </div>
           </div>
         </div>
