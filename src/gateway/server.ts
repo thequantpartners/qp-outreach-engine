@@ -62,6 +62,16 @@ app.get(['/', '/dashboard'], (_req: Request, res: Response) => {
   res.sendFile(path.join(publicDashboardDir, 'index.html'));
 });
 
+// Montar Consola Maestra de SuperAdmin (/master)
+const publicMasterDir = fs.existsSync(path.resolve('public/master'))
+  ? path.resolve('public/master')
+  : path.resolve(__dirname, '../../public/master');
+
+app.use('/master', express.static(publicMasterDir));
+app.get('/master', (_req: Request, res: Response) => {
+  res.sendFile(path.join(publicMasterDir, 'index.html'));
+});
+
 // Suscriptores SSE para tiempo real en el Dashboard
 const clientSseSubscribers = new Set<Response>();
 

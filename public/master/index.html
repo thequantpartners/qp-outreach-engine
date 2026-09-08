@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Quant Partners · Consola Maestra de SuperAdmin</title>
+  
+  <!-- Obsidian Precision Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            serif: ['"Playfair Display"', 'Georgia', 'serif'],
+            sans: ['Inter', '-apple-system', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            obsidian: '#05070B',
+            surface: '#0B0F19',
+            subsurface: '#111625',
+            card: '#0E1322',
+            gold: {
+              DEFAULT: '#D4AF37',
+              light: '#F3E5AB',
+              dark: '#997A15'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #05070B;
+      color: #E2E8F0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 4px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb:hover {
+      background: rgba(212, 175, 55, 0.3);
+    }
+    .text-gold-gradient {
+      background: linear-gradient(135deg, #F3E5AB 0%, #D4AF37 50%, #997A15 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .btn-gold {
+      background: linear-gradient(135deg, #F3E5AB 0%, #D4AF37 50%, #997A15 100%);
+      color: #05070B;
+      font-weight: 600;
+      transition: all 0.15s ease;
+      box-shadow: 0 2px 10px rgba(212, 175, 55, 0.15);
+    }
+    .btn-gold:hover {
+      filter: brightness(1.06);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(212, 175, 55, 0.25);
+    }
+    .input-luxury {
+      background-color: rgba(14, 19, 34, 0.75) !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      color: #F8FAFC !important;
+      border-radius: 0.75rem !important;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+      transition: all 0.15s ease-in-out !important;
+    }
+    .input-luxury:hover {
+      border-color: rgba(255, 255, 255, 0.16) !important;
+      background-color: rgba(18, 24, 43, 0.85) !important;
+    }
+    .input-luxury:focus {
+      outline: none !important;
+      border-color: rgba(212, 175, 55, 0.45) !important;
+      box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.08) !important;
+      background-color: #0E1322 !important;
+    }
+    select.input-luxury {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394A3B8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.75rem center;
+      background-size: 1rem;
+      padding-right: 2.25rem !important;
+    }
+    .card-luxury {
+      background-color: #0B0F19;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 1rem;
+    }
+    .card-luxury:hover {
+      border-color: rgba(212, 175, 55, 0.25);
+    }
+  </style>
+</head>
+<body class="bg-obsidian min-h-screen flex flex-col selection:bg-gold selection:text-black">
+
+  <!-- ============================================== -->
+  <!-- HEADER SUPERADMIN CONSOLA MAESTRA -->
+  <!-- ============================================== -->
+  <header class="h-16 border-b border-white/[0.06] bg-surface/80 backdrop-blur-md px-6 flex items-center justify-between flex-shrink-0 sticky top-0 z-30">
+    <div class="flex items-center gap-4">
+      <div class="w-9 h-9 rounded-xl bg-gold/15 border border-gold/30 flex items-center justify-center text-gold font-serif font-bold text-sm shadow-md shadow-gold/10">
+        QP
+      </div>
+      <div>
+        <div class="flex items-center gap-2.5">
+          <h1 class="font-serif text-sm font-semibold tracking-tight text-white leading-tight">The Quant Partners</h1>
+          <span class="text-[9px] font-mono uppercase tracking-widest text-gold bg-gold/10 border border-gold/25 px-2 py-0.5 rounded font-bold">
+            ⚡ SuperAdmin
+          </span>
+          <span class="hidden md:inline text-[9px] font-mono uppercase tracking-widest text-slate-500 border border-white/[0.06] px-1.5 py-0.5 rounded">
+            Fleet Decoupled Engine
+          </span>
+        </div>
+        <p class="text-[10px] font-mono text-slate-400">Consola Maestra de Nodos Satélite & Monitoreo de Facturación</p>
+      </div>
+    </div>
+
+    <!-- ACCIONES Y NAVEGACIÓN SUPERADMIN -->
+    <div class="flex items-center gap-3">
+      <!-- Botón Volver al Workspace / Dashboard -->
+      <a 
+        href="/" 
+        class="px-3.5 py-1.5 rounded-xl bg-surface hover:bg-white/[0.06] text-slate-300 hover:text-white border border-white/[0.08] text-xs font-sans font-medium flex items-center gap-2 transition"
+        title="Volver al panel comercial del cliente"
+      >
+        <i data-lucide="arrow-left" class="w-3.5 h-3.5 text-gold"></i>
+        <span>Volver a Mi Workspace</span>
+      </a>
+
+      <!-- Telemetría en Vivo -->
+      <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-mono">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span>Flota Conectada</span>
+      </div>
+
+      <!-- Badge Perfil Director -->
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.08] text-xs font-sans">
+        <span class="w-2 h-2 rounded-full bg-gold"></span>
+        <span class="text-slate-200 font-medium">Kenneth (Director)</span>
+      </div>
+
+      <!-- Botón Cerrar Sesión -->
+      <button 
+        type="button" 
+        onclick="handleMasterLogout()" 
+        title="Cerrar sesión de SuperAdmin"
+        class="p-2 rounded-lg bg-surface hover:bg-rose-500/10 border border-white/[0.06] text-slate-400 hover:text-rose-400 transition"
+      >
+        <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+      </button>
+
+      <!-- Botón Refrescar Telemetría -->
+      <button 
+        type="button" 
+        onclick="loadFleetData()" 
+        title="Actualizar telemetría de todos los nodos satélite"
+        class="p-2 rounded-lg bg-surface hover:bg-white/[0.06] border border-white/[0.06] text-slate-400 hover:text-white transition"
+      >
+        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- ============================================== -->
+  <!-- CUERPO PRINCIPAL DE LA CONSOLA SUPERADMIN -->
+  <!-- ============================================== -->
+  <main class="flex-1 overflow-y-auto custom-scroll p-6 md:p-8">
+    <div class="max-w-7xl mx-auto space-y-8">
+
+      <!-- Top Banner / Header -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/[0.06] pb-6">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-gold/15 text-gold border border-gold/30 uppercase tracking-widest">
+              SaaR Decoupled Fleet Engine
+            </span>
+            <span class="text-xs text-slate-500 font-mono">Zero Leakage Architecture</span>
+          </div>
+          <h2 class="text-2xl md:text-3xl font-serif font-medium text-white tracking-tight mt-1">
+            Flota de Nodos Satélite Desacoplados
+          </h2>
+          <p class="text-xs text-slate-400 font-sans mt-1 max-w-3xl">
+            Monitoreo en tiempo real de nodos clientes independientes, telemetría silenciosa de WhatsApp, asignación de números y cálculo automatizado de facturación mensual (Retainer base + Success Fee por Citas agendadas).
+          </p>
+        </div>
+
+        <div class="flex items-center gap-2.5 flex-wrap">
+          <button 
+            type="button" 
+            onclick="openBlueprintsModal()" 
+            class="px-3.5 py-2 rounded-xl bg-surface hover:bg-white/[0.05] border border-white/[0.08] text-slate-300 hover:text-white text-xs font-sans font-medium flex items-center gap-2 transition"
+            title="Ver catálogo de plantillas por nicho"
+          >
+            <i data-lucide="layers" class="w-3.5 h-3.5 text-gold"></i>
+            <span>Blueprints de Nicho</span>
+          </button>
+
+          <button 
+            type="button" 
+            onclick="openProvisionModal()" 
+            class="px-4 py-2 rounded-xl btn-gold text-xs font-sans font-semibold flex items-center gap-2 shadow-lg shadow-gold/15 transition"
+          >
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            <span>+ Desplegar Nuevo Satélite (60s)</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI Fleet Cards (4 Bento Luxury Cards) -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Card 1: Nodos Satélite -->
+        <div class="card-luxury p-5 relative overflow-hidden group">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-sans text-slate-400 font-medium uppercase tracking-wider">Satélites Desplegados</span>
+            <div class="w-8 h-8 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center text-gold">
+              <i data-lucide="server" class="w-4 h-4"></i>
+            </div>
+          </div>
+          <div class="mt-3 flex items-baseline gap-2">
+            <h3 id="fleetStatTotalClients" class="text-2xl font-serif font-semibold text-white">0</h3>
+            <span id="fleetStatActiveRatio" class="text-xs font-mono text-emerald-400">0 online</span>
+          </div>
+          <p class="text-[11px] text-slate-500 font-sans mt-1">Instancias 100% aisladas con BD propia</p>
+        </div>
+
+        <!-- Card 2: Leads en la Flota -->
+        <div class="card-luxury p-5 relative overflow-hidden group">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-sans text-slate-400 font-medium uppercase tracking-wider">Leads en la Flota</span>
+            <div class="w-8 h-8 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center text-gold">
+              <i data-lucide="users" class="w-4 h-4"></i>
+            </div>
+          </div>
+          <div class="mt-3 flex items-baseline gap-2">
+            <h3 id="fleetStatTotalLeads" class="text-2xl font-serif font-semibold text-white">0</h3>
+            <span id="fleetStatQualified" class="text-xs font-mono text-blue-400">0 calificados</span>
+          </div>
+          <p class="text-[11px] text-slate-500 font-sans mt-1">Volumen total de prospección gestionado</p>
+        </div>
+
+        <!-- Card 3: Citas Agendadas -->
+        <div class="card-luxury p-5 relative overflow-hidden group">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-sans text-slate-400 font-medium uppercase tracking-wider">Citas Agendadas</span>
+            <div class="w-8 h-8 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center text-gold">
+              <i data-lucide="calendar" class="w-4 h-4"></i>
+            </div>
+          </div>
+          <div class="mt-3 flex items-baseline gap-2">
+            <h3 id="fleetStatMeetings" class="text-2xl font-serif font-semibold text-gold">0</h3>
+            <span class="text-xs font-mono text-slate-400">citas cerradas</span>
+          </div>
+          <p class="text-[11px] text-slate-500 font-sans mt-1">Base del Success Fee variable de la agencia</p>
+        </div>
+
+        <!-- Card 4: Facturación Mensual Consolidada -->
+        <div class="card-luxury p-5 relative overflow-hidden group">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-sans text-slate-400 font-medium uppercase tracking-wider">Facturación Consolidada</span>
+            <div class="w-8 h-8 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center text-gold">
+              <i data-lucide="dollar-sign" class="w-4 h-4"></i>
+            </div>
+          </div>
+          <div class="mt-3 flex items-baseline gap-2">
+            <h3 id="fleetStatTotalRevenue" class="text-2xl font-serif font-semibold text-white">S/. 0</h3>
+            <span class="text-xs font-mono text-emerald-400">mes activo</span>
+          </div>
+          <p id="fleetStatRevenueBreakdown" class="text-[10px] text-slate-500 font-mono mt-1">Retainers + Success Fees</p>
+        </div>
+      </div>
+
+      <!-- Barra de Filtrado y Búsqueda de Clientes -->
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-xl bg-surface border border-white/[0.06]">
+        <div class="flex items-center gap-3 w-full sm:w-auto">
+          <div class="relative flex-1 sm:w-72">
+            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+            <input 
+              type="text" 
+              id="searchFleetInput" 
+              oninput="filterFleetClients(this.value)" 
+              placeholder="Buscar cliente, ID o nicho..." 
+              class="w-full input-luxury pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500"
+            >
+          </div>
+          <span id="fleetClientCountBadge" class="text-xs font-mono text-slate-400 bg-obsidian px-2.5 py-1 rounded-lg border border-white/[0.04] whitespace-nowrap">
+            0 clientes
+          </span>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button 
+            type="button" 
+            onclick="filterFleetByStatus('ALL')" 
+            id="filterBtnAll"
+            class="px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition bg-white/[0.08] text-gold border border-gold/30"
+          >
+            Todos
+          </button>
+          <button 
+            type="button" 
+            onclick="filterFleetByStatus('ONLINE')" 
+            id="filterBtnOnline"
+            class="px-2.5 py-1 rounded-lg text-xs font-mono font-medium text-slate-400 hover:text-white transition"
+          >
+            Online
+          </button>
+          <button 
+            type="button" 
+            onclick="filterFleetByStatus('OFFLINE')" 
+            id="filterBtnOffline"
+            class="px-2.5 py-1 rounded-lg text-xs font-mono font-medium text-slate-400 hover:text-white transition"
+          >
+            Desconectados
+          </button>
+        </div>
+      </div>
+
+      <!-- Grid de Clientes de la Flota -->
+      <div id="fleetClientsContainer" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+        <!-- Renderizado dinámico vía master.js -->
+      </div>
+
+      <!-- Estado Vacío -->
+      <div id="fleetEmptyState" class="hidden card-luxury p-12 text-center">
+        <div class="w-14 h-14 rounded-2xl bg-gold/10 border border-gold/20 text-gold flex items-center justify-center mx-auto mb-4">
+          <i data-lucide="server-off" class="w-7 h-7"></i>
+        </div>
+        <h4 class="text-lg font-serif font-medium text-white">Aún no has desplegado nodos satélite</h4>
+        <p class="text-xs text-slate-400 font-sans max-w-md mx-auto mt-2 leading-relaxed">
+          Cuando cierres tu primer cliente SaaR, haz clic en el botón superior para aprovisionar una infraestructura virgen completa en 60 segundos con PostgreSQL dedicado, WhatsApp independiente y cero fuga de datos.
+        </p>
+        <button 
+          type="button" 
+          onclick="openProvisionModal()" 
+          class="mt-6 px-5 py-2.5 rounded-xl btn-gold text-xs font-sans font-semibold inline-flex items-center gap-2 shadow-lg shadow-gold/15"
+        >
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          <span>Aprovisionar Mi Primer Cliente</span>
+        </button>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ============================================== -->
+  <!-- MODAL: APROVISIONAR NUEVO NODO SATÉLITE (60s) -->
+  <!-- ============================================== -->
+  <div id="provisionModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 hidden">
+    <div class="bg-surface border border-white/[0.08] rounded-2xl max-w-xl w-full flex flex-col shadow-2xl overflow-hidden max-h-[90vh]">
+      
+      <!-- Modal Header -->
+      <div class="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between flex-shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-gold/15 text-gold flex items-center justify-center border border-gold/20">
+            <i data-lucide="server" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="font-serif text-base font-semibold text-white">Aprovisionar Nodo Satélite</h3>
+            <p class="text-xs text-slate-400 font-light">Despliegue automatizado en 60s con BD aislada y cero fuga de datos</p>
+          </div>
+        </div>
+        <button onclick="closeProvisionModal()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/[0.05] transition">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body Form -->
+      <form id="provisionForm" onsubmit="handleProvisionSubmit(event)" class="p-6 overflow-y-auto custom-scroll space-y-4 flex-1">
+        <!-- Nombre de Empresa -->
+        <div>
+          <label class="block text-xs font-sans font-medium text-slate-300 uppercase tracking-wider mb-1.5">
+            Nombre de la Empresa o Cliente *
+          </label>
+          <input 
+            type="text" 
+            id="provCompanyName" 
+            required 
+            placeholder="ej. Inmobiliaria Miraflores SAC" 
+            oninput="handleProvCompanyInput(this.value)"
+            class="w-full input-luxury px-3.5 py-2.5 text-xs text-white placeholder-slate-500"
+          >
+        </div>
+
+        <!-- Teléfono Administrador para Derivación -->
+        <div>
+          <label class="block text-xs font-sans font-medium text-slate-300 uppercase tracking-wider mb-1.5">
+            WhatsApp del Administrador / Closer del Cliente *
+          </label>
+          <input 
+            type="text" 
+            id="provAdminPhone" 
+            required 
+            placeholder="51987654321" 
+            class="w-full input-luxury px-3.5 py-2.5 text-xs text-white placeholder-slate-500 font-mono"
+          >
+          <p class="text-[11px] text-slate-400 mt-1 font-sans">
+            A este número se le enviarán las notificaciones instantáneas de citas y pedidos de cotización.
+          </p>
+        </div>
+
+        <!-- Nicho / Plantilla de Campaña Predefinida -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-sans font-medium text-slate-300 uppercase tracking-wider mb-1.5">
+              Nicho / Plantilla Base
+            </label>
+            <select id="provNicheSelect" class="w-full input-luxury px-3.5 py-2.5 text-xs text-slate-200">
+              <option value="inmobiliarias">Inmobiliarias & Corredoras</option>
+              <option value="clinicas">Clínicas & Centros Odontológicos</option>
+              <option value="abogados">Estudios Jurídicos Corporativos</option>
+              <option value="construccion">Proveedores de Construcción</option>
+              <option value="custom">Personalizado (En blanco)</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-sans font-medium text-slate-300 uppercase tracking-wider mb-1.5">
+              Modo de Cierre IA
+            </label>
+            <select id="provClosingMode" class="w-full input-luxury px-3.5 py-2.5 text-xs text-slate-200">
+              <option value="HUMAN_TAKEOVER">Derivación Humana (Takeover)</option>
+              <option value="MEETING_LINK">Agendamiento Cal.com / Calendly</option>
+              <option value="DOCUMENT_DELIVERY">Envío de Dossier / PDF</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Clave PIN de Acceso del Cliente -->
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="block text-xs font-sans font-medium text-slate-300 uppercase tracking-wider">
+              Clave Maestra de Acceso (PIN)
+            </label>
+            <button type="button" onclick="generateRandomClientPin()" class="text-gold hover:text-white text-[11px] font-mono flex items-center gap-1 transition">
+              <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+              <span>Regenerar</span>
+            </button>
+          </div>
+          <input 
+            type="text" 
+            id="provClientPin" 
+            required 
+            placeholder="ClienteQP#2026" 
+            class="w-full input-luxury px-3.5 py-2.5 text-xs text-gold font-mono font-bold"
+          >
+          <p class="text-[11px] text-slate-400 mt-1 font-sans">
+            El cliente utilizará este PIN único para ingresar a su propio dashboard aislado.
+          </p>
+        </div>
+
+        <!-- Destino de Despliegue: Railway vs VPS -->
+        <div>
+          <label class="block text-xs font-sans font-medium text-slate-300 uppercase tracking-wider mb-2">
+            Infraestructura de Alojamiento
+          </label>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="cursor-pointer border border-white/[0.08] p-3 rounded-xl bg-card hover:bg-white/[0.02] flex items-start gap-2.5 transition">
+              <input type="radio" name="provDeployTarget" value="railway" checked class="mt-0.5 text-gold focus:ring-0">
+              <div>
+                <span class="text-xs font-sans font-semibold text-white block">Railway Cloud</span>
+                <span class="text-[10px] text-slate-400 font-sans block mt-0.5">Automático en la nube, cero mantenimiento</span>
+              </div>
+            </label>
+
+            <label class="cursor-pointer border border-white/[0.08] p-3 rounded-xl bg-card hover:bg-white/[0.02] flex items-start gap-2.5 transition">
+              <input type="radio" name="provDeployTarget" value="vps" class="mt-0.5 text-gold focus:ring-0">
+              <div>
+                <span class="text-xs font-sans font-semibold text-white block">VPS Dedicado</span>
+                <span class="text-[10px] text-slate-400 font-sans block mt-0.5">Hetzner / DigitalOcean con script en 1 línea</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div id="provErrorBox" class="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-400 font-sans hidden"></div>
+
+        <!-- Modal Footer -->
+        <div class="pt-4 border-t border-white/[0.06] flex items-center justify-between flex-shrink-0">
+          <button 
+            type="button" 
+            onclick="closeProvisionModal()" 
+            class="px-4 py-2 rounded-xl text-xs font-sans font-medium text-slate-400 hover:text-white bg-card border border-white/[0.06] transition"
+          >
+            Cancelar
+          </button>
+          <button 
+            type="submit" 
+            id="provSubmitBtn" 
+            class="px-5 py-2.5 btn-gold rounded-xl text-xs font-sans font-semibold flex items-center gap-2 shadow-md shadow-gold/10"
+          >
+            <i data-lucide="zap" class="w-4 h-4"></i>
+            <span id="provSubmitBtnText">Aprovisionar Nodo en 1 Clic</span>
+          </button>
+        </div>
+      </form>
+
+      <!-- Vista de Éxito al Aprovisionar -->
+      <div id="provSuccessView" class="p-6 space-y-4 hidden flex-1 overflow-y-auto custom-scroll">
+        <div class="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 flex items-center justify-center mx-auto">
+          <i data-lucide="check-circle" class="w-6 h-6"></i>
+        </div>
+        <div class="text-center">
+          <h4 class="text-base font-serif font-semibold text-white">¡Nodo Satélite Aprovisionado con Éxito!</h4>
+          <p id="provSuccessCompany" class="text-xs text-gold font-mono mt-1">Inmobiliaria Miraflores SAC</p>
+        </div>
+
+        <!-- Credenciales Box -->
+        <div class="p-4 bg-obsidian rounded-xl border border-white/[0.08] space-y-3 font-mono text-xs">
+          <div>
+            <span class="text-[10px] text-slate-400 uppercase block font-sans">URL del Dashboard Cliente:</span>
+            <div class="flex items-center justify-between gap-2 mt-1">
+              <a id="provSuccessUrl" href="#" target="_blank" class="text-blue-400 hover:underline truncate">https://...</a>
+              <button type="button" onclick="copyProvDashboardUrl()" class="text-slate-400 hover:text-white p-1"><i data-lucide="copy" class="w-3.5 h-3.5"></i></button>
+            </div>
+          </div>
+
+          <div class="pt-2 border-t border-white/[0.06]">
+            <span class="text-[10px] text-slate-400 uppercase block font-sans">Clave Maestra (PIN):</span>
+            <div class="flex items-center justify-between gap-2 mt-1">
+              <span id="provSuccessPin" class="text-gold font-bold font-mono">ClienteQP#2026</span>
+              <button type="button" onclick="copyProvPin()" class="text-slate-400 hover:text-white p-1"><i data-lucide="copy" class="w-3.5 h-3.5"></i></button>
+            </div>
+          </div>
+
+          <div id="provSuccessVpsBox" class="pt-2 border-t border-white/[0.06] hidden">
+            <span class="text-[10px] text-purple-400 uppercase block font-sans">Comando de Instalación VPS (1 Línea):</span>
+            <div class="flex items-center justify-between gap-2 mt-1 bg-surface p-2 rounded-lg border border-purple-500/20">
+              <code id="provSuccessCommand" class="text-[11px] text-purple-300 truncate">curl -fsSL ... | bash</code>
+              <button type="button" onclick="copyProvCommand()" class="text-slate-400 hover:text-white p-1"><i data-lucide="copy" class="w-3.5 h-3.5"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-3 border-t border-white/[0.06] flex items-center justify-between">
+          <button 
+            type="button" 
+            onclick="closeProvisionModal();" 
+            class="px-4 py-2 rounded-xl text-xs font-sans font-medium text-slate-400 hover:text-white bg-card border border-white/[0.06]"
+          >
+            Cerrar
+          </button>
+          <a 
+            id="provSuccessOpenBtn" 
+            href="#" 
+            target="_blank" 
+            class="px-5 py-2 btn-gold rounded-xl text-xs font-sans font-semibold flex items-center gap-1.5"
+          >
+            <span>Abrir Dashboard del Cliente</span>
+            <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+          </a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================== -->
+  <!-- MODAL: CLONAR NODO SATÉLITE -->
+  <!-- ============================================== -->
+  <div id="cloneModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 hidden">
+    <div class="bg-surface border border-white/[0.08] rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-gold/15 text-gold flex items-center justify-center">
+            <i data-lucide="copy" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="font-serif text-sm font-semibold text-white">Clonar Nodo Satélite</h3>
+            <p class="text-[11px] text-slate-400 font-sans">Duplicar configuración y prompts para un nuevo cliente</p>
+          </div>
+        </div>
+        <button onclick="closeCloneModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+
+      <form id="cloneForm" onsubmit="handleCloneSubmit(event)" class="space-y-3 font-sans text-xs">
+        <input type="hidden" id="cloneSourceClientId">
+        <div>
+          <span class="text-slate-400 font-sans block mb-1">Nodo Origen:</span>
+          <p id="cloneSourceLabel" class="font-mono text-gold bg-obsidian p-2 rounded-lg border border-white/[0.04] truncate">Cliente Origen</p>
+        </div>
+
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Nuevo Nombre de Empresa *</label>
+          <input type="text" id="cloneNewCompanyName" required placeholder="ej. Inmobiliaria Miraflores Norte" class="w-full input-luxury p-2.5 text-xs text-white">
+        </div>
+
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Nuevo WhatsApp de Alertas *</label>
+          <input type="text" id="cloneNewAdminPhone" required placeholder="51987654321" class="w-full input-luxury p-2.5 text-xs text-white font-mono">
+        </div>
+
+        <div id="cloneErrorBox" class="p-2.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg text-[11px] hidden"></div>
+
+        <div class="pt-3 border-t border-white/[0.06] flex items-center justify-between">
+          <button type="button" onclick="closeCloneModal()" class="px-3 py-1.5 rounded-lg bg-card text-slate-400 hover:text-white">Cancelar</button>
+          <button type="submit" id="cloneSubmitBtn" class="px-4 py-2 btn-gold rounded-lg font-semibold flex items-center gap-1.5">
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            <span>Clonar Satélite en 1 Clic</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================== -->
+  <!-- MODAL: BLUEPRINTS DE NICHO -->
+  <!-- ============================================== -->
+  <div id="blueprintsModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 hidden">
+    <div class="bg-surface border border-white/[0.08] rounded-2xl max-w-3xl w-full p-6 shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+      <div class="flex items-center justify-between pb-4 border-b border-white/[0.06]">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-gold/15 text-gold flex items-center justify-center">
+            <i data-lucide="layers" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="font-serif text-base font-semibold text-white">Catálogo de Blueprints por Nicho</h3>
+            <p class="text-xs text-slate-400 font-light">Estrategias probadas de prospección B2B listas para desplegar</p>
+          </div>
+        </div>
+        <button onclick="closeBlueprintsModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+
+      <div id="blueprintsListContainer" class="p-4 overflow-y-auto custom-scroll grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1">
+        <!-- Renderizado dinámico vía master.js -->
+      </div>
+
+      <div class="pt-4 border-t border-white/[0.06] flex justify-end">
+        <button type="button" onclick="closeBlueprintsModal()" class="px-4 py-2 rounded-xl bg-card border border-white/[0.06] text-xs font-sans text-slate-300 hover:text-white">
+          Cerrar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================== -->
+  <!-- MODAL: CREDENCIALES DEL NODO -->
+  <!-- ============================================== -->
+  <div id="credentialsModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 hidden">
+    <div class="bg-surface border border-white/[0.08] rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-gold/15 text-gold flex items-center justify-center">
+            <i data-lucide="key" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="font-serif text-sm font-semibold text-white">Credenciales del Satélite</h3>
+            <p id="credModalCompany" class="text-[11px] text-slate-400 font-sans truncate max-w-[260px]">Empresa</p>
+          </div>
+        </div>
+        <button onclick="closeCredentialsModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+
+      <div class="space-y-3 font-mono text-xs">
+        <div class="p-3 bg-obsidian rounded-xl border border-white/[0.04]">
+          <span class="text-[10px] text-slate-400 font-sans block mb-1">ID del Satélite:</span>
+          <span id="credModalId" class="text-white font-bold">id</span>
+        </div>
+
+        <div class="p-3 bg-obsidian rounded-xl border border-white/[0.04]">
+          <span class="text-[10px] text-slate-400 font-sans block mb-1">PIN de Acceso Maestra:</span>
+          <div class="flex items-center justify-between">
+            <span id="credModalPin" class="text-gold font-bold text-sm">ClienteQP#2026</span>
+            <button onclick="copyElementText('credModalPin')" class="text-slate-400 hover:text-white p-1"><i data-lucide="copy" class="w-3.5 h-3.5"></i></button>
+          </div>
+        </div>
+
+        <div class="p-3 bg-obsidian rounded-xl border border-white/[0.04]">
+          <span class="text-[10px] text-slate-400 font-sans block mb-1">URL del Dashboard:</span>
+          <div class="flex items-center justify-between">
+            <a id="credModalUrl" href="#" target="_blank" class="text-blue-400 hover:underline truncate mr-2">https://...</a>
+            <button onclick="copyElementText('credModalUrl')" class="text-slate-400 hover:text-white p-1"><i data-lucide="copy" class="w-3.5 h-3.5"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-white/[0.06] flex justify-end">
+        <button type="button" onclick="closeCredentialsModal()" class="px-4 py-1.5 rounded-xl bg-card text-xs font-sans text-slate-300 hover:text-white">
+          Entendido
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================== -->
+  <!-- MODAL: PIN AUTH EXCLUSIVO SUPERADMIN (SI EXPIRA) -->
+  <!-- ============================================== -->
+  <div id="masterPinModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 hidden">
+    <div class="bg-surface border border-white/[0.08] rounded-2xl p-8 max-w-sm w-full shadow-2xl text-center space-y-5">
+      <div class="w-12 h-12 rounded-2xl bg-gold/15 border border-gold/30 text-gold flex items-center justify-center mx-auto shadow-lg shadow-gold/10">
+        <i data-lucide="shield-alert" class="w-6 h-6"></i>
+      </div>
+      <div>
+        <h3 class="font-serif text-lg font-semibold text-white">Consola Maestra de SuperAdmin</h3>
+        <p class="text-xs text-slate-400 mt-1 font-sans">
+          Acceso exclusivo para Kenneth (Director). Ingresa tu Clave Maestra para autenticarte.
+        </p>
+      </div>
+
+      <form onsubmit="handleMasterPinSubmit(event)" class="space-y-4">
+        <input 
+          type="password" 
+          id="masterPinInput" 
+          required 
+          placeholder="KennethQP#2026" 
+          class="w-full input-luxury px-4 py-3 text-center text-sm font-mono tracking-widest text-gold"
+        >
+        <div id="masterPinError" class="p-2.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg text-xs font-sans hidden">
+          Clave incorrecta o no autorizada para SuperAdmin.
+        </div>
+        <button 
+          type="submit" 
+          id="masterPinSubmitBtn" 
+          class="w-full py-2.5 btn-gold rounded-xl text-xs font-sans font-semibold flex items-center justify-center gap-2"
+        >
+          <i data-lucide="unlock" class="w-4 h-4"></i>
+          <span>Autenticar SuperAdmin</span>
+        </button>
+        <a href="/" class="text-xs font-sans text-slate-500 hover:text-slate-300 block transition">
+          ← Volver al Workspace Principal
+        </a>
+      </form>
+    </div>
+  </div>
+
+  <script src="/master/master.js"></script>
+</body>
+</html>

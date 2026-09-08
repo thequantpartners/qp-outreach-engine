@@ -239,25 +239,7 @@
           <i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i>
           <span>Métricas SaaR</span>
         </button>
-        <button 
-          onclick="switchMainView('fleet')" 
-          id="tabBtnFleet" 
-          class="hidden px-3.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-white flex items-center gap-2 transition"
-        >
-          <i data-lucide="network" class="w-3.5 h-3.5 text-gold"></i>
-          <span>Flota SaaR</span>
-        </button>
       </div>
-
-      <!-- Botón de Carga Masiva (CSV / BBDD) -->
-      <button 
-        onclick="openImportModal()" 
-        id="btnOpenImport"
-        class="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-surface hover:bg-white/[0.05] border border-white/[0.08] hover:border-gold/40 flex items-center gap-1.5 transition"
-      >
-        <i data-lucide="upload-cloud" class="w-3.5 h-3.5 text-gold"></i>
-        <span>Carga Masiva (CSV)</span>
-      </button>
 
       <!-- Botón de Configuración del Sistema -->
       <button 
@@ -289,6 +271,17 @@
         <span class="w-2 h-2 rounded-full bg-gold"></span>
         <span id="userProfileName" class="text-slate-200 font-medium">Kenneth</span>
       </div>
+
+      <!-- Botón de Acceso a SuperAdmin (Solo Director/Owner) -->
+      <a 
+        href="/master" 
+        id="btnGoToMaster"
+        class="hidden px-2.5 py-1.5 rounded-lg bg-gold/10 hover:bg-gold/20 text-gold border border-gold/30 text-xs font-medium items-center gap-1.5 transition shadow-sm"
+        title="Abrir Consola Maestra de SuperAdmin (Flota de Nodos Satélite)"
+      >
+        <i data-lucide="zap" class="w-3.5 h-3.5"></i>
+        <span>SuperAdmin</span>
+      </a>
 
       <!-- Botón Cerrar Sesión -->
       <button 
@@ -971,6 +964,18 @@
             >
               <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
               <span>+ Nueva Campaña con IA</span>
+            </button>
+
+            <!-- Botón Carga Masiva (CSV / BBDD) -->
+            <button 
+              type="button" 
+              onclick="openImportModal()" 
+              id="btnOpenImport"
+              class="px-3.5 py-2 rounded-xl text-xs font-sans font-medium text-slate-300 hover:text-white bg-card hover:bg-white/[0.05] border border-white/[0.08] hover:border-gold/40 flex items-center gap-1.5 transition"
+              title="Importar lista de prospectos vía CSV o texto directo"
+            >
+              <i data-lucide="upload-cloud" class="w-3.5 h-3.5 text-gold"></i>
+              <span>Carga Masiva (CSV)</span>
             </button>
 
             <!-- Botón Eliminar Campaña -->

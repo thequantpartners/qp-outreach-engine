@@ -149,11 +149,22 @@ function applyRolePermissions() {
   const repFilterWrapper = document.getElementById('streamRepFilter')?.parentElement;
   const userProfileBadge = document.getElementById('userProfileBadge');
   const userProfileName = document.getElementById('userProfileName');
+  const btnGoToMaster = document.getElementById('btnGoToMaster');
 
   if (userProfileBadge && userProfileName) {
     userProfileName.textContent = currentUserName || (currentUserRole === 'owner' ? 'Kenneth (Director)' : 'Asesor');
     userProfileBadge.classList.remove('hidden');
     userProfileBadge.classList.add('flex');
+  }
+
+  if (btnGoToMaster) {
+    if (currentUserRole === 'owner') {
+      btnGoToMaster.classList.remove('hidden');
+      btnGoToMaster.classList.add('flex');
+    } else {
+      btnGoToMaster.classList.add('hidden');
+      btnGoToMaster.classList.remove('flex');
+    }
   }
 
   const tabFleet = document.getElementById('tabBtnFleet');
@@ -170,11 +181,7 @@ function applyRolePermissions() {
   } else {
     if (tabDiscovery) tabDiscovery.classList.remove('hidden');
     if (tabMetrics) tabMetrics.classList.remove('hidden');
-    if (currentMode !== 'client') {
-      if (tabFleet) tabFleet.classList.remove('hidden');
-    } else {
-      if (tabFleet) tabFleet.classList.add('hidden');
-    }
+    if (tabFleet) tabFleet.classList.add('hidden');
     if (btnImport) btnImport.classList.remove('hidden');
     if (btnSettings) btnSettings.classList.remove('hidden');
     if (repFilterWrapper) repFilterWrapper.classList.remove('hidden');

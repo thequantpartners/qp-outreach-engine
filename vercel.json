@@ -12,6 +12,10 @@
       "destination": "/dashboard/index.html"
     },
     {
+      "source": "/master",
+      "destination": "/master/index.html"
+    },
+    {
       "source": "/api/:match*",
       "destination": "https://gateway-production-2264.up.railway.app/api/:match*"
     },
