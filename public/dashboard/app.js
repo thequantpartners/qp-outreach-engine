@@ -284,6 +284,7 @@ async function fetchOverview() {
     }
 
     await loadAllCampaigns();
+    await fetchBatchStatus();
     renderHeader(data);
     renderLeadsStream();
     renderMetrics(data);
@@ -391,6 +392,7 @@ async function loadAllCampaigns() {
       }
       populateAllCampaignDropdowns();
       renderActiveCampaignDetails(activeCampaignId);
+      await fetchBatchStatus();
     }
   } catch (err) {
     console.warn('Error cargando campañas:', err);
@@ -4708,6 +4710,10 @@ async function handleCreateDirectChat() {
 // =================================================================
 // 18. CONSOLA DE DESPACHO EN LOTE (BATCH DISPATCH)
 // =================================================================
+// 21. DESPACHO SECUENCIAL EN LOTE ANTI-BAN (DISPATCH RUNNER)
+// =================================================================
+let batchSyncInterval = null;
+
 async function handleStartBatchDispatch() {
   const serviceId = document.getElementById('batchServiceSelect')?.value;
   const btn = document.getElementById('btnStartBatchDispatch');
@@ -4720,7 +4726,10 @@ async function handleStartBatchDispatch() {
     return;
   }
 
-  if (btn) btn.disabled = true;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping mr-1"></span><span>Iniciando...</span>';
+  }
 
   try {
     const res = await fetch('/api/client/campaign/batch-dispatch', {
@@ -4734,13 +4743,22 @@ async function handleStartBatchDispatch() {
     const data = await res.json();
     if (res.ok && data.success) {
       updateBatchUI(data.job);
+      startBatchSyncPolling();
     } else {
       alert(data.error || 'No se pudo iniciar el despacho en lote.');
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="play" class="w-4 h-4 fill-current"></i><span>Despachar Lote Ahora</span>';
+        if (window.lucide) lucide.createIcons();
+      }
     }
   } catch (err) {
     alert('Error al iniciar el despacho.');
-  } finally {
-    if (btn) btn.disabled = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="play" class="w-4 h-4 fill-current"></i><span>Despachar Lote Ahora</span>';
+      if (window.lucide) lucide.createIcons();
+    }
   }
 }
 
@@ -4764,7 +4782,10 @@ async function handleResumeBatchDispatch() {
       headers: { 'x-client-pin': currentPin }
     });
     const data = await res.json();
-    if (res.ok) updateBatchUI(data.job);
+    if (res.ok) {
+      updateBatchUI(data.job);
+      startBatchSyncPolling();
+    }
   } catch (err) {
     console.error('Error reanudando lote:', err);
   }
@@ -4786,18 +4807,33 @@ async function handleStopBatchDispatch() {
 
 function updateBatchUI(job) {
   const container = document.getElementById('batchProgressContainer');
-  if (!container || !job) return;
+  const startBtn = document.getElementById('btnStartBatchDispatch');
+  if (!job) return;
+
+  const sent = Number(job.sentCount ?? job.sent ?? 0);
+  const total = Number(job.totalLeads ?? job.total ?? 0);
 
   if (job.status === 'IDLE' || job.status === 'STOPPED') {
-    container.classList.add('hidden');
+    if (container) container.classList.add('hidden');
     if (batchCountdownInterval) {
       clearInterval(batchCountdownInterval);
       batchCountdownInterval = null;
     }
+    if (startBtn) {
+      startBtn.disabled = false;
+      startBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+      startBtn.innerHTML = '<i data-lucide="play" class="w-4 h-4 fill-current"></i><span>Despachar Lote Ahora</span>';
+    }
     return;
   }
 
-  container.classList.remove('hidden');
+  if (container) container.classList.remove('hidden');
+
+  // Sincronizar selector si hay una campaña activa en despacho
+  const batchSelect = document.getElementById('batchServiceSelect');
+  if (batchSelect && job.serviceId && batchSelect.value !== job.serviceId) {
+    batchSelect.value = job.serviceId;
+  }
 
   const statusDot = document.getElementById('batchStatusDot');
   const statusLabel = document.getElementById('batchStatusLabel');
@@ -4807,9 +4843,9 @@ function updateBatchUI(job) {
   const progressBar = document.getElementById('batchProgressBar');
   const pauseBtn = document.getElementById('btnPauseBatch');
 
-  if (countsText) countsText.textContent = `${job.sent || 0} / ${job.total || 0}`;
+  if (countsText) countsText.textContent = `${sent} / ${total}`;
   
-  const pct = job.total > 0 ? Math.min(100, Math.round(((job.sent || 0) / job.total) * 100)) : 0;
+  const pct = total > 0 ? Math.min(100, Math.round((sent / total) * 100)) : 0;
   if (progressBar) progressBar.style.width = `${pct}%`;
 
   if (currentLead) {
@@ -4817,6 +4853,11 @@ function updateBatchUI(job) {
   }
 
   if (job.status === 'RUNNING') {
+    if (startBtn) {
+      startBtn.disabled = true;
+      startBtn.classList.add('opacity-60', 'cursor-not-allowed');
+      startBtn.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping mr-1.5"></span><span>Despacho en marcha...</span>';
+    }
     if (statusDot) statusDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse';
     if (statusLabel) statusLabel.textContent = 'Despachando lote en vivo...';
     if (pauseBtn) {
@@ -4834,12 +4875,18 @@ function updateBatchUI(job) {
         }
         if (remainingSec <= 0 && batchCountdownInterval) {
           clearInterval(batchCountdownInterval);
+          setTimeout(() => fetchBatchStatus(), 2500);
         }
       };
       updateCountdown();
       batchCountdownInterval = setInterval(updateCountdown, 1000);
     }
   } else if (job.status === 'PAUSED') {
+    if (startBtn) {
+      startBtn.disabled = true;
+      startBtn.classList.add('opacity-60', 'cursor-not-allowed');
+      startBtn.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-400 mr-1.5"></span><span>Despacho en pausa</span>';
+    }
     if (statusDot) statusDot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400';
     if (statusLabel) statusLabel.textContent = 'Despacho en Pausa';
     if (countdownText) countdownText.textContent = '(En pausa)';
@@ -4852,6 +4899,11 @@ function updateBatchUI(job) {
       batchCountdownInterval = null;
     }
   } else if (job.status === 'COMPLETED') {
+    if (startBtn) {
+      startBtn.disabled = false;
+      startBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+      startBtn.innerHTML = '<i data-lucide="play" class="w-4 h-4 fill-current"></i><span>Despachar Lote Ahora</span>';
+    }
     if (statusDot) statusDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400';
     if (statusLabel) statusLabel.textContent = '¡Lote completado exitosamente!';
     if (countdownText) countdownText.textContent = '';
@@ -4862,6 +4914,42 @@ function updateBatchUI(job) {
   }
 
   if (window.lucide) lucide.createIcons();
+}
+
+async function fetchBatchStatus() {
+  if (!currentPin) return;
+  try {
+    const res = await fetch('/api/client/campaign/batch-dispatch/status', {
+      headers: { 'x-client-pin': currentPin }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.job) {
+        updateBatchUI(data.job);
+        if (data.job.status === 'RUNNING') {
+          startBatchSyncPolling();
+        } else if (data.job.status === 'IDLE' || data.job.status === 'COMPLETED' || data.job.status === 'STOPPED') {
+          stopBatchSyncPolling();
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Error sincronizando estado de lote:', err);
+  }
+}
+
+function startBatchSyncPolling() {
+  if (batchSyncInterval) return;
+  batchSyncInterval = setInterval(() => {
+    fetchBatchStatus();
+  }, 5000);
+}
+
+function stopBatchSyncPolling() {
+  if (batchSyncInterval) {
+    clearInterval(batchSyncInterval);
+    batchSyncInterval = null;
+  }
 }
 
 // =================================================================
