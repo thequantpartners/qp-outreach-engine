@@ -61,6 +61,9 @@ function handleLogout() {
   currentPin = '';
   currentUserRole = 'owner';
   currentUserName = '';
+  activeLeadPhone = null;
+  currentOverviewData = null;
+  currentMainView = 'workspace';
   localStorage.removeItem('qp_client_pin');
   sessionStorage.removeItem('qp_client_pin');
   localStorage.removeItem('qp_user_role');
@@ -146,7 +149,14 @@ async function handlePinSubmit(e) {
       sessionStorage.setItem('qp_client_pin', pin);
       localStorage.setItem('qp_user_role', currentUserRole);
       localStorage.setItem('qp_user_name', currentUserName);
-      document.getElementById('pinModal').classList.add('hidden');
+
+      // Desocultar interfaz principal y header inmediatamente
+      const pinModal = document.getElementById('pinModal');
+      const appHeader = document.getElementById('appHeader') || document.querySelector('header');
+      if (pinModal) pinModal.classList.add('hidden');
+      if (appHeader) appHeader.classList.remove('hidden');
+      switchMainView(currentMainView || 'workspace');
+
       applyRolePermissions();
       fetchOverview();
       initSSE();
@@ -803,6 +813,7 @@ function toggleMobileLeadInfo(forceState) {
 
 // 7. Seleccionar Prospecto y Abrir Detalle / Chat Directo
 async function selectLeadForDetail(phone) {
+  if (!currentPin || !phone) return;
   activeLeadPhone = phone;
   openMobileChat(phone);
   renderLeadsStream(); // Actualizar el resaltado en el stream izquierdo
@@ -1887,6 +1898,7 @@ function applyCopilotCollapseState() {
 }
 
 async function loadCopilotSuggestions(phone) {
+  if (!currentPin || !phone) return;
   const container = document.getElementById('copilotSuggestionsContainer');
   if (!container) return;
 
