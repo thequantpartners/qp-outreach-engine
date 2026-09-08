@@ -186,6 +186,11 @@ function applyRolePermissions() {
     if (btnSettings) btnSettings.classList.remove('hidden');
     if (repFilterWrapper) repFilterWrapper.classList.remove('hidden');
   }
+
+  // Garantizar que en móvil (< 1024px) los botones de administración se mantengan ocultos con desktop-only
+  [tabDiscovery, tabMetrics, tabFleet, btnSettings, btnGoToMaster, userProfileBadge].forEach(el => {
+    if (el) el.classList.add('desktop-only');
+  });
 }
 
 async function handlePinSubmit(e) {
@@ -778,8 +783,31 @@ function renderLeadsStream() {
     }
 
     const item = document.createElement('div');
-    item.className = `p-3.5 cursor-pointer transition border-l-2 border-transparent hover:bg-white/[0.02] ${isSelected ? 'active-lead-item' : ''}`;
-    item.onclick = () => selectLeadForDetail(lead.phone);
+    item.className = `p-3.5 cursor-pointer transition border-l-2 border-transparent hover:bg-white/[0.02] active:bg-white/[0.06] select-none touch-manipulation ${isSelected ? 'active-lead-item' : ''}`;
+    
+    let touchStartY = 0;
+    let touchMoved = false;
+    item.addEventListener('touchstart', (e) => {
+      touchStartY = e.touches[0].clientY;
+      touchMoved = false;
+    }, { passive: true });
+
+    item.addEventListener('touchmove', (e) => {
+      if (Math.abs(e.touches[0].clientY - touchStartY) > 10) {
+        touchMoved = true;
+      }
+    }, { passive: true });
+
+    item.addEventListener('touchend', (e) => {
+      if (!touchMoved) {
+        e.preventDefault();
+        selectLeadForDetail(lead.phone);
+      }
+    });
+
+    item.onclick = (e) => {
+      selectLeadForDetail(lead.phone);
+    };
 
     const repLabel = lead.assignedRepName || 'Sin asignar';
     const campLabel = lead.serviceName || (lead.serviceId ? lead.serviceId : 'Directo');
