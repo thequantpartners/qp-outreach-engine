@@ -1199,6 +1199,9 @@ export class OutreachRepo {
     const settings = await OutreachRepo.getSettings();
     const reps = (settings.salesReps || []).filter(r => r.isActive);
     if (reps.length === 0) {
+      // Fallback: Si no hay asesores activos, derivar al Dueño/Administrador principal
+      const owner = (settings.salesReps || []).find(r => r.isOwner) || (settings.salesReps || [])[0];
+      if (owner) return owner;
       return null;
     }
     if (reps.length === 1) {

@@ -81,6 +81,7 @@ export interface SalesRep {
   name: string;
   phone: string;
   pin?: string;
+  isOwner?: boolean;
   isActive: boolean;
   leadsAssignedCount: number;
   createdAt?: string;

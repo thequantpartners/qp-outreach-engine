@@ -19,7 +19,8 @@ import {
   GatewayStatusResponse,
   ImportLeadsRequestSchema,
   SendDocumentSchema,
-  ConfigureSettingsSchema
+  ConfigureSettingsSchema,
+  SalesRep
 } from '../types/index.js';
 import fs from 'fs';
 import path from 'path';
@@ -532,6 +533,22 @@ app.post('/api/client/settings', authenticateClientPin, requireOwnerRole, async 
       currency, monthlyRetainerFee, successFeePerMeeting,
       whatsappProvider, metaPhoneNumberId, metaWabaId, metaAccessToken, metaWebhookVerifyToken
     } = req.body || {};
+
+    let sanitizedSalesReps: SalesRep[] | undefined = undefined;
+    if (Array.isArray(salesReps)) {
+      sanitizedSalesReps = salesReps.map((r: any, idx: number) => {
+        const isOwner = idx === 0 || r.isOwner === true;
+        return {
+          id: r.id || (isOwner ? 'rep_owner' : `rep_${Date.now()}_${idx}`),
+          name: String(r.name || (isOwner ? 'Kenneth (Director)' : `Asesor ${idx + 1}`)).trim(),
+          phone: String(r.phone || '').replace(/[^0-9]/g, ''),
+          pin: isOwner ? '' : String(r.pin || '').trim(),
+          isOwner,
+          isActive: r.isActive !== false,
+          leadsAssignedCount: Number(r.leadsAssignedCount || 0)
+        };
+      });
+    }
     
     await OutreachRepo.updateSettings({
       ...(startHour !== undefined ? { startHour: parseInt(startHour, 10) } : {}),
@@ -540,7 +557,7 @@ app.post('/api/client/settings', authenticateClientPin, requireOwnerRole, async 
       ...(maxDelaySeconds !== undefined ? { maxDelaySeconds: parseInt(maxDelaySeconds, 10) } : {}),
       ...(dailyLimit !== undefined ? { dailyLimit: parseInt(dailyLimit, 10) } : {}),
       ...(adminWhatsAppPhone !== undefined ? { adminWhatsAppPhone: String(adminWhatsAppPhone).replace(/[^0-9]/g, '') } : {}),
-      ...(Array.isArray(salesReps) ? { salesReps } : {}),
+      ...(sanitizedSalesReps ? { salesReps: sanitizedSalesReps } : {}),
       ...(aiProvider !== undefined ? { aiProvider } : {}),
       ...(aiApiKey !== undefined && !aiApiKey.startsWith('••••') ? { aiApiKey } : {}),
       ...(aiModel !== undefined ? { aiModel } : {}),
@@ -574,7 +591,19 @@ app.post('/api/client/team', authenticateClientPin, requireOwnerRole, async (req
       res.status(400).json({ error: 'salesReps debe ser un array' });
       return;
     }
-    const saved = await OutreachRepo.saveSalesReps(salesReps);
+    const sanitizedSalesReps: SalesRep[] = salesReps.map((r: any, idx: number) => {
+      const isOwner = idx === 0 || r.isOwner === true;
+      return {
+        id: r.id || (isOwner ? 'rep_owner' : `rep_${Date.now()}_${idx}`),
+        name: String(r.name || (isOwner ? 'Kenneth (Director)' : `Asesor ${idx + 1}`)).trim(),
+        phone: String(r.phone || '').replace(/[^0-9]/g, ''),
+        pin: isOwner ? '' : String(r.pin || '').trim(),
+        isOwner,
+        isActive: r.isActive !== false,
+        leadsAssignedCount: Number(r.leadsAssignedCount || 0)
+      };
+    });
+    const saved = await OutreachRepo.saveSalesReps(sanitizedSalesReps);
     broadcastDashboardEvent({
       type: 'settings_updated',
       team: saved

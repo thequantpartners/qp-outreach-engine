@@ -3162,8 +3162,9 @@ function renderTeamRepsList() {
   }
 
   currentTeamReps.forEach((rep, index) => {
+    const isOwner = index === 0 || rep.isOwner === true;
     const row = document.createElement('div');
-    row.className = `p-3.5 rounded-xl border ${rep.isActive ? 'border-white/[0.08] bg-card' : 'border-white/[0.04] bg-card/40 opacity-60'} space-y-2.5 transition shadow-sm`;
+    row.className = `p-3.5 rounded-xl border ${rep.isActive ? (isOwner ? 'border-gold/30 bg-gold/[0.02]' : 'border-white/[0.08] bg-card') : 'border-white/[0.04] bg-card/40 opacity-60'} space-y-2.5 transition shadow-sm`;
 
     row.innerHTML = `
       <div class="flex items-center justify-between gap-2">
@@ -3177,35 +3178,48 @@ function renderTeamRepsList() {
             />
             <div class="w-8 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3.5 after:transition-all peer-checked:bg-gold"></div>
           </label>
-          <span class="text-xs font-sans font-medium text-white">${rep.isActive ? 'Activo (Recibe Leads)' : 'En Pausa'}</span>
+          <span class="text-xs font-sans font-medium text-white">${rep.isActive ? 'Activo (Recibe Leads)' : 'En Pausa (No recibe leads)'}</span>
         </div>
         <div class="flex items-center gap-2">
+          ${isOwner ? `
+            <span class="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md bg-gold/15 text-gold border border-gold/30 flex items-center gap-1">
+              <i data-lucide="crown" class="w-3 h-3"></i> Propietario / Director
+            </span>
+          ` : `
+            <span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-white/[0.06] text-slate-300 border border-white/[0.1] flex items-center gap-1">
+              <i data-lucide="user" class="w-3 h-3"></i> Asesor Comercial
+            </span>
+          `}
           <span class="text-[11px] font-sans font-medium text-slate-400 bg-white/[0.04] px-2.5 py-0.5 rounded-full border border-white/[0.06]">
             ${rep.leadsAssignedCount || 0} leads
           </span>
-          <button 
-            type="button" 
-            onclick="removeTeamRep(${index})" 
-            class="text-slate-500 hover:text-rose-400 p-1 rounded-lg transition hover:bg-rose-500/10" 
-            title="Eliminar asesor"
-          >
-            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-          </button>
+          ${isOwner ? `
+            <span class="text-[10px] text-slate-500 font-mono px-2 py-0.5 rounded bg-white/[0.02] border border-white/[0.04]" title="El Administrador no puede ser eliminado">Principal</span>
+          ` : `
+            <button 
+              type="button" 
+              onclick="removeTeamRep(${index})" 
+              class="text-slate-500 hover:text-rose-400 p-1 rounded-lg transition hover:bg-rose-500/10" 
+              title="Eliminar asesor"
+            >
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            </button>
+          `}
         </div>
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
         <div>
-          <label class="block text-[11px] font-sans font-medium text-slate-400 mb-1">Nombre del Asesor</label>
+          <label class="block text-[11px] font-sans font-medium text-slate-400 mb-1">${isOwner ? 'Nombre del Administrador' : 'Nombre del Asesor'}</label>
           <input 
             type="text" 
-            value="${escapeHtml(rep.name || '')}" 
-            placeholder="Ej: Kenneth (Director)"
+            value="${escapeHtml(rep.name || (isOwner ? 'Kenneth (Director)' : ''))}" 
+            placeholder="${isOwner ? 'Ej: Kenneth (Director)' : 'Ej: Carlos Asesor'}"
             oninput="updateTeamRepField(${index}, 'name', this.value)"
             class="w-full input-luxury px-3 py-1.5 text-xs text-white placeholder:text-slate-500 font-sans"
           />
         </div>
         <div>
-          <label class="block text-[11px] font-sans font-medium text-slate-400 mb-1">WhatsApp Alertas (519...)</label>
+          <label class="block text-[11px] font-sans font-medium text-slate-400 mb-1">${isOwner ? 'WhatsApp Notificaciones (519...)' : 'WhatsApp Alertas (519...)'}</label>
           <input 
             type="text" 
             value="${escapeHtml(rep.phone || '')}" 
@@ -3215,15 +3229,23 @@ function renderTeamRepsList() {
           />
         </div>
         <div>
-          <label class="block text-[11px] font-sans font-medium text-gold mb-1">PIN Acceso (4-6 dígitos)</label>
-          <input 
-            type="text" 
-            maxlength="6"
-            value="${escapeHtml(rep.pin || '')}" 
-            placeholder="Ej: 1234"
-            oninput="updateTeamRepField(${index}, 'pin', this.value)"
-            class="w-full input-luxury px-3 py-1.5 text-xs font-mono text-gold placeholder:text-slate-500 border-gold/30"
-          />
+          ${isOwner ? `
+            <label class="block text-[11px] font-sans font-medium text-slate-400 mb-1">Tipo de Acceso</label>
+            <div class="h-[31px] px-3 rounded-xl bg-obsidian border border-gold/30 flex items-center gap-2 text-gold text-xs font-mono font-medium select-none shadow-sm" title="El Administrador accede con la Clave Maestra de acceso">
+              <i data-lucide="key-round" class="w-3.5 h-3.5 text-gold flex-shrink-0"></i>
+              <span class="truncate">Clave Maestra (Admin)</span>
+            </div>
+          ` : `
+            <label class="block text-[11px] font-sans font-medium text-gold mb-1">PIN Operador (4-6 dígitos)</label>
+            <input 
+              type="text" 
+              maxlength="6"
+              value="${escapeHtml(rep.pin || '')}" 
+              placeholder="Ej: 1024"
+              oninput="updateTeamRepField(${index}, 'pin', this.value)"
+              class="w-full input-luxury px-3 py-1.5 text-xs font-mono text-gold placeholder:text-slate-500 border-gold/30"
+            />
+          `}
         </div>
       </div>
     `;
@@ -3234,11 +3256,14 @@ function renderTeamRepsList() {
 }
 
 function addTeamRepSlot() {
+  const nextNum = currentTeamReps.length + 1;
+  const defaultPin = String(Math.floor(1000 + Math.random() * 9000));
   currentTeamReps.push({
     id: 'rep_' + Date.now(),
-    name: '',
+    name: `Asesor ${nextNum}`,
     phone: '',
-    pin: '',
+    pin: defaultPin,
+    isOwner: false,
     isActive: true,
     leadsAssignedCount: 0
   });
@@ -3246,7 +3271,12 @@ function addTeamRepSlot() {
 }
 
 function removeTeamRep(index) {
-  if (confirm(`¿Deseas eliminar este asesor del equipo Round Robin?`)) {
+  if (index === 0 || currentTeamReps[index]?.isOwner) {
+    alert('El usuario Administrador / Propietario no puede ser eliminado de la configuración.');
+    return;
+  }
+  const repName = currentTeamReps[index]?.name || 'este asesor';
+  if (confirm(`¿Deseas eliminar a "${repName}" del equipo Round Robin?`)) {
     currentTeamReps.splice(index, 1);
     renderTeamRepsList();
   }
@@ -3278,18 +3308,24 @@ function setTeamRepsCount(n) {
     const toAdd = n - currentTeamReps.length;
     for (let i = 0; i < toAdd; i++) {
       const idx = currentTeamReps.length;
+      const defaultPin = String(Math.floor(1000 + Math.random() * 9000));
       currentTeamReps.push({
         id: 'rep_' + Date.now() + '_' + idx,
         name: defaultNames[idx] || `Asesor ${idx + 1}`,
         phone: '',
+        pin: defaultPin,
+        isOwner: false,
         isActive: true,
         leadsAssignedCount: 0
       });
     }
   } else if (currentTeamReps.length > n) {
     if (confirm(`Tienes ${currentTeamReps.length} asesores configurados. ¿Deseas ajustar la lista a ${n}?`)) {
-      currentTeamReps = currentTeamReps.slice(0, n);
+      currentTeamReps = currentTeamReps.slice(0, Math.max(1, n));
     }
+  }
+  if (currentTeamReps[0]) {
+    currentTeamReps[0].isOwner = true;
   }
   renderTeamRepsList();
 }
@@ -3426,10 +3462,25 @@ async function loadSettingsData() {
     if (adminPhoneEl) adminPhoneEl.value = settings.adminWhatsAppPhone || '';
 
     // Poblado Equipo Round Robin
-    if (settings.salesReps && Array.isArray(settings.salesReps)) {
+    if (settings.salesReps && Array.isArray(settings.salesReps) && settings.salesReps.length > 0) {
       currentTeamReps = settings.salesReps;
-    } else if (data.salesReps && Array.isArray(data.salesReps)) {
+    } else if (data.salesReps && Array.isArray(data.salesReps) && data.salesReps.length > 0) {
       currentTeamReps = data.salesReps;
+    } else {
+      currentTeamReps = [
+        {
+          id: 'rep_owner',
+          name: 'Kenneth (Director)',
+          phone: settings.adminWhatsAppPhone || '51902105668',
+          isOwner: true,
+          isActive: true,
+          leadsAssignedCount: 0
+        }
+      ];
+    }
+    // Asegurar que el primer elemento sea Propietario
+    if (currentTeamReps[0]) {
+      currentTeamReps[0].isOwner = true;
     }
     renderTeamRepsList();
 
@@ -3552,7 +3603,13 @@ async function handleSaveSettings() {
   }
 
   // Filtrar asesores válidos (con nombre)
-  const validReps = currentTeamReps.filter(r => r.name && r.name.trim().length > 0);
+  const validReps = currentTeamReps
+    .filter(r => r.name && r.name.trim().length > 0)
+    .map((r, idx) => ({
+      ...r,
+      isOwner: idx === 0 || r.isOwner === true,
+      pin: (idx === 0 || r.isOwner === true) ? '' : (r.pin || '').trim()
+    }));
 
   if (btn) btn.disabled = true;
   if (btnText) btnText.textContent = 'Guardando...';
