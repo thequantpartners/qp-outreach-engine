@@ -3097,6 +3097,8 @@ function switchSettingsTab(tabName) {
   }
 
   if (window.lucide) lucide.createIcons();
+}
+
 let currentWhatsAppProvider = 'direct_qr';
 
 function selectWhatsAppProvider(provider) {
@@ -3438,13 +3440,13 @@ async function loadSettingsData() {
     const aiKeyStatusBadge = document.getElementById('aiKeyStatusBadge');
 
     const defaultKey = '••••••••••••••••••••••••••••••••';
-    const effectiveProvider = settings.aiProvider || 'openrouter';
+    const effectiveAiProvider = settings.aiProvider || 'openrouter';
     const effectiveModel = settings.aiModel || 'google/gemini-2.5-flash';
     const effectiveKey = settings.aiApiKey || defaultKey;
 
     if (aiProviderEl) {
-      aiProviderEl.value = effectiveProvider;
-      handleAiProviderChange(effectiveProvider);
+      aiProviderEl.value = effectiveAiProvider;
+      handleAiProviderChange(effectiveAiProvider);
     }
     if (aiModelEl) {
       aiModelEl.value = effectiveModel;
@@ -3469,8 +3471,8 @@ async function loadSettingsData() {
     if (autoSwitchEl) autoSwitchEl.checked = !!data.isAutonomousActive;
 
     // Proveedor WhatsApp y Meta Cloud API
-    const effectiveProvider = settings.whatsappProvider || 'direct_qr';
-    selectWhatsAppProvider(effectiveProvider);
+    const effectiveWaProvider = settings.whatsappProvider || 'direct_qr';
+    selectWhatsAppProvider(effectiveWaProvider);
 
     const metaPhoneEl = document.getElementById('settingMetaPhoneId');
     const metaWabaEl = document.getElementById('settingMetaWabaId');
@@ -3487,7 +3489,7 @@ async function loadSettingsData() {
     const cardDisconnected = document.getElementById('settingsWaCardDisconnected');
     const phoneEl = document.getElementById('settingsWaConnectedPhone');
 
-    if (effectiveProvider === 'meta_cloud_api') {
+    if (effectiveWaProvider === 'meta_cloud_api') {
       const isConfigured = !!(settings.metaPhoneNumberId && settings.metaAccessToken);
       if (phoneEl) {
         phoneEl.textContent = isConfigured ? `Phone ID: ${settings.metaPhoneNumberId}` : 'Credenciales requeridas';
