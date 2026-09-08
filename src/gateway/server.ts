@@ -146,29 +146,14 @@ app.post('/api/webhook/whatsapp', async (req: Request, res: Response) => {
         const contactName = contact?.profile?.name || `Contacto +${rawPhone}`;
         console.log(`📩 [MetaWebhook] Mensaje entrante de ${contactName} (${rawPhone}): "${text}"`);
 
-        // Registrar o buscar Lead
-        let lead = await OutreachRepo.getLeadByPhone(rawPhone);
-        if (!lead) {
-          const activeService = await OutreachRepo.getActiveService();
-          await OutreachRepo.saveLeadsFromScraper(activeService?.id || 'custom-service', [{
-            title: contactName,
-            phone: rawPhone,
-            phoneClean: rawPhone
-          }]);
-          lead = await OutreachRepo.getLeadByPhone(rawPhone);
-        }
+        // Registrar o buscar Lead con atribución inteligente de Meta Ads
+        const { lead, isNew, matchedService } = await OutreachRepo.ingestInboundLead({
+          phone: rawPhone,
+          pushName: contactName,
+          incomingText: text
+        });
 
-        // Asignar vendedor Round Robin si no tenía
-        if (lead && !lead.assignedRepName) {
-          try {
-            const nextRep = await OutreachRepo.getNextSalesRep();
-            if (nextRep) {
-              await OutreachRepo.assignLeadToRep(rawPhone, nextRep.name, nextRep.phone);
-              lead.assignedRepName = nextRep.name;
-              lead.assignedRepPhone = nextRep.phone;
-            }
-          } catch {}
-        }
+        if (!lead) continue;
 
         // Registrar el mensaje en historial
         await OutreachRepo.addChatMessage(rawPhone, 'user', text);
@@ -1267,7 +1252,10 @@ app.get('/api/client/services', authenticateClientPin, async (_req: Request, res
 // Guardar o crear campaña desde el dashboard (Solo Dueño)
 app.post('/api/client/services', authenticateClientPin, requireOwnerRole, async (req: Request, res: Response) => {
   try {
-    const { id, name, description, outreachTemplate, followUpTemplate1, closingType, targetLocations, apifyQueries, isActive } = req.body || {};
+    const { 
+      id, name, description, outreachTemplate, followUpTemplate1, closingType, 
+      targetLocations, apifyQueries, isActive, aiInstructions, type, triggerKeywords, inboundMode 
+    } = req.body || {};
     if (!name || !String(name).trim()) {
       res.status(400).json({ error: 'El nombre de la campaña es requerido.' });
       return;
@@ -1288,8 +1276,11 @@ app.post('/api/client/services', authenticateClientPin, requireOwnerRole, async 
       followUpTemplate1: followUpTemplate1 || `Estimado equipo de {{name}}, ¿pudieron revisar la propuesta anterior? Quedo a su disposición.`,
       closingType: (closingType as any) || 'HUMAN_TAKEOVER',
       closingPayload: {},
-      aiSystemPrompt: `El bot no es autónomo para responder objeciones. Al responder el prospecto, la conversación se transfiere de inmediato al asesor asignado (Human Takeover).`,
-      isActive: isActive !== undefined ? !!isActive : true
+      aiSystemPrompt: aiInstructions || `El bot no es autónomo para responder objeciones. Al responder el prospecto, la conversación se transfiere de inmediato al asesor asignado (Human Takeover).`,
+      isActive: isActive !== undefined ? !!isActive : true,
+      type: (type === 'INBOUND_ADS' ? 'INBOUND_ADS' : 'OUTBOUND') as 'OUTBOUND' | 'INBOUND_ADS',
+      triggerKeywords: Array.isArray(triggerKeywords) ? triggerKeywords : [],
+      inboundMode: (inboundMode === 'QUALIFIER_BOT' ? 'QUALIFIER_BOT' : 'COPILOT_ONLY') as 'COPILOT_ONLY' | 'QUALIFIER_BOT'
     };
     await OutreachRepo.saveService(serviceDef);
     broadcastDashboardEvent({ type: 'campaign_updated', serviceId });
@@ -1309,7 +1300,10 @@ app.patch('/api/client/services/:id', authenticateClientPin, requireOwnerRole, a
       return;
     }
 
-    const { name, description, outreachTemplate, followUpTemplate1, closingType, targetLocations, apifyQueries, isActive } = req.body || {};
+    const { 
+      name, description, outreachTemplate, followUpTemplate1, closingType, 
+      targetLocations, apifyQueries, isActive, aiInstructions, type, triggerKeywords, inboundMode 
+    } = req.body || {};
     
     const updated = {
       ...service,
@@ -1317,9 +1311,13 @@ app.patch('/api/client/services/:id', authenticateClientPin, requireOwnerRole, a
       ...(description !== undefined ? { description: String(description).trim() } : {}),
       ...(outreachTemplate !== undefined ? { outreachTemplate: String(outreachTemplate).trim() } : {}),
       ...(followUpTemplate1 !== undefined ? { followUpTemplate1: String(followUpTemplate1).trim() } : {}),
+      ...(aiInstructions !== undefined ? { aiSystemPrompt: String(aiInstructions).trim() } : {}),
       ...(closingType !== undefined ? { closingType } : {}),
       ...(Array.isArray(targetLocations) ? { targetLocations } : {}),
       ...(Array.isArray(apifyQueries) ? { apifyQueries } : {}),
+      ...(type !== undefined ? { type: (type === 'INBOUND_ADS' ? 'INBOUND_ADS' : 'OUTBOUND') as 'OUTBOUND' | 'INBOUND_ADS' } : {}),
+      ...(Array.isArray(triggerKeywords) ? { triggerKeywords } : {}),
+      ...(inboundMode !== undefined ? { inboundMode: (inboundMode === 'QUALIFIER_BOT' ? 'QUALIFIER_BOT' : 'COPILOT_ONLY') as 'COPILOT_ONLY' | 'QUALIFIER_BOT' } : {}),
       ...(isActive !== undefined ? { isActive: !!isActive } : {})
     };
 
@@ -1473,6 +1471,18 @@ app.patch('/api/client/leads/:phone/service', authenticateClientPin, async (req:
     const success = await OutreachRepo.updateLeadService(clean, serviceId);
     broadcastDashboardEvent({ type: 'lead_updated', phone: clean, serviceId });
     res.json({ success, serviceId });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch('/api/client/leads/:phone/category', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const clean = String(req.params.phone).replace(/[^0-9]/g, '');
+    const { category } = req.body || {};
+    const success = await OutreachRepo.updateLeadCategory(clean, category || '');
+    broadcastDashboardEvent({ type: 'lead_updated', phone: clean, category });
+    res.json({ success, category });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

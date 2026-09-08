@@ -270,31 +270,14 @@ export class BaileysEngine {
 
         console.log(`\n📩 [BaileysEngine] Mensaje entrante de ${senderPhone}: "${incomingText}"`);
 
-        // 3. Buscar o registrar al prospecto
-        let lead = await OutreachRepo.getLeadByPhone(senderPhone);
-        if (!lead) {
-          const activeService = await OutreachRepo.getActiveService();
-          await OutreachRepo.saveLeadsFromScraper(activeService?.id || 'custom-service', [{
-            title: m.pushName || 'Contacto WhatsApp',
-            phone: senderPhone,
-            phoneClean: senderPhone
-          }]);
-          lead = await OutreachRepo.getLeadByPhone(senderPhone);
-        }
+        // 3. Buscar o registrar al prospecto con atribución inteligente de Meta Ads
+        const { lead, isNew, matchedService } = await OutreachRepo.ingestInboundLead({
+          phone: senderPhone,
+          pushName: m.pushName || undefined,
+          incomingText
+        });
 
         if (!lead) continue;
-
-        // Asignar vendedor Round Robin si el prospecto no tenía uno asignado
-        if (!lead.assignedRepName) {
-          try {
-            const nextRep = await OutreachRepo.getNextSalesRep();
-            if (nextRep) {
-              await OutreachRepo.assignLeadToRep(senderPhone, nextRep.name, nextRep.phone);
-              lead.assignedRepName = nextRep.name;
-              lead.assignedRepPhone = nextRep.phone;
-            }
-          } catch {}
-        }
 
         // 3.5. Comprobar política de Opt-Out de Meta/WhatsApp (STOP, BAJA, CANCELAR, etc.)
         const cleanUpper = incomingText.trim().toUpperCase();
@@ -374,10 +357,15 @@ export class BaileysEngine {
         const targetPhone = (lead.assignedRepPhone || settings.adminWhatsAppPhone || process.env.ADMIN_WHATSAPP_PHONE || '').replace(/[^0-9]/g, '');
         const repDisplayName = lead.assignedRepName || 'Asesor Asignado';
 
+        const isMetaAd = lead.source === 'meta_ads';
+        const sourceLabel = isMetaAd ? '🎯 *NUEVO LEAD DE META ADS (Click-to-WhatsApp)*' : '🚨 *NUEVO MENSAJE DE PROSPECTO*';
+        const campaignLabel = lead.serviceName ? `\n📢 Campaña: *${lead.serviceName}*` : '';
+
         const alertMsg = 
-          `🚨 *NUEVO MENSAJE DE PROSPECTO (Round Robin: ${repDisplayName})*\n\n` +
+          `${sourceLabel} (Round Robin: ${repDisplayName})\n\n` +
           `👤 Asesor: *${repDisplayName}*\n` +
-          `🏢 Empresa: *${lead.companyName || 'Contacto WhatsApp'}*\n` +
+          `🏢 Empresa: *${lead.companyName || 'Contacto WhatsApp'}*` +
+          `${campaignLabel}\n` +
           `📱 Teléfono: *+${senderPhone}*\n` +
           `💬 Mensaje: "${incomingText}"\n\n` +
           `💡 *QPartner Co-Pilot* ha generado 3 sugerencias tácticas en tu Dashboard para responder con 1 clic:\n` +

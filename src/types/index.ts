@@ -38,6 +38,10 @@ export interface ServiceDefinition {
   };
   aiSystemPrompt: string;
   isActive: boolean;
+  type?: 'OUTBOUND' | 'INBOUND_ADS';
+  triggerKeywords?: string[];
+  inboundMode?: 'COPILOT_ONLY' | 'QUALIFIER_BOT';
+  tagColor?: string;
   createdAt?: string;
 }
 
@@ -158,7 +162,7 @@ export interface StartCampaignResponse {
   createdAt: string;
 }
 
-export type LeadSource = 'google_maps' | 'meta_ads' | 'instagram' | 'apollo_b2b' | 'google_search' | 'csv_import';
+export type LeadSource = 'google_maps' | 'meta_ads' | 'instagram' | 'apollo_b2b' | 'google_search' | 'csv_import' | 'direct_whatsapp';
 
 export const ScrapeGoogleMapsSchema = z.object({
   query: z.string().describe("Término de búsqueda (ej. proveedores medicos, clinicas, gimnasios)"),

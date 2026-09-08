@@ -9,6 +9,7 @@ let currentUserName = localStorage.getItem('qp_user_name') || 'Kenneth (Director
 let currentOverviewData = null;
 let activeLeadPhone = null;
 let currentStreamFilter = 'ALL';
+let currentSourceFilter = 'ALL'; // 'ALL' | 'meta_ads' | 'outbound'
 let currentSearchQuery = '';
 let currentRepFilter = 'ALL';
 let currentCampaignFilter = 'ALL';
@@ -64,6 +65,7 @@ function handleLogout() {
   activeLeadPhone = null;
   currentOverviewData = null;
   currentMainView = 'workspace';
+  currentSourceFilter = 'ALL';
   localStorage.removeItem('qp_client_pin');
   sessionStorage.removeItem('qp_client_pin');
   localStorage.removeItem('qp_user_role');
@@ -631,6 +633,13 @@ function renderLeadsStream() {
     filtered = filtered.filter(l => l.assignedRepName === currentRepFilter);
   }
 
+  // Filtrar por canal (Meta Ads vs Prospección)
+  if (currentSourceFilter === 'meta_ads') {
+    filtered = filtered.filter(l => l.source === 'meta_ads' || (l.category && l.category.toLowerCase().includes('metaads')));
+  } else if (currentSourceFilter === 'outbound') {
+    filtered = filtered.filter(l => l.source !== 'meta_ads' && !(l.category && l.category.toLowerCase().includes('metaads')));
+  }
+
   // Filtrar por búsqueda
   if (currentSearchQuery) {
     const q = currentSearchQuery.toLowerCase();
@@ -638,7 +647,8 @@ function renderLeadsStream() {
       (l.companyName || '').toLowerCase().includes(q) || 
       (l.phone || '').includes(q) ||
       (l.assignedRepName || '').toLowerCase().includes(q) ||
-      (l.serviceName || '').toLowerCase().includes(q)
+      (l.serviceName || '').toLowerCase().includes(q) ||
+      (l.category || '').toLowerCase().includes(q)
     );
   }
 
@@ -688,6 +698,10 @@ function renderLeadsStream() {
 
     const repLabel = lead.assignedRepName || 'Sin asignar';
     const campLabel = lead.serviceName || (lead.serviceId ? lead.serviceId : 'Directo');
+    const isMetaAd = lead.source === 'meta_ads' || (lead.category && lead.category.toLowerCase().includes('metaads'));
+    const channelBadgeHtml = isMetaAd
+      ? `<span class="text-[9px] font-mono text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30 flex items-center gap-1" title="Canal: Meta Ads"><span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span><span>🎯 Meta Ads</span></span>`
+      : `<span class="text-[9px] font-mono text-sky-300 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/30 flex items-center gap-1" title="Canal: Prospección Fría"><i data-lucide="bot" class="w-2.5 h-2.5 flex-shrink-0"></i><span>Prospección</span></span>`;
 
     item.innerHTML = `
       <div class="flex items-center justify-between gap-2 mb-1">
@@ -701,6 +715,7 @@ function renderLeadsStream() {
         <span class="text-[10px] text-slate-500 font-mono">${timeFormatted}</span>
       </div>
       <div class="flex items-center gap-1.5 flex-wrap mb-1.5">
+        ${channelBadgeHtml}
         <span class="text-[9px] font-mono text-gold/90 bg-gold/5 px-2 py-0.5 rounded border border-gold/20 flex items-center gap-1 max-w-[150px]" title="Campaña: ${escapeHtml(campLabel)}">
           <i data-lucide="tag" class="w-2.5 h-2.5 text-gold flex-shrink-0"></i>
           <span class="truncate">${escapeHtml(campLabel)}</span>
@@ -718,6 +733,21 @@ function renderLeadsStream() {
   });
 
   if (window.lucide) lucide.createIcons();
+}
+
+function setSourceFilter(source) {
+  currentSourceFilter = source;
+  ['ALL', 'meta_ads', 'outbound'].forEach(s => {
+    const btn = document.getElementById(`sourceFilter_${s}`);
+    if (btn) {
+      if (s === source) {
+        btn.className = 'flex-1 py-1 px-2 rounded-lg text-[11px] font-sans font-medium transition text-white bg-white/[0.08] shadow-sm text-center flex items-center justify-center gap-1';
+      } else {
+        btn.className = 'flex-1 py-1 px-2 rounded-lg text-[11px] font-sans font-medium transition text-slate-400 hover:text-white text-center flex items-center justify-center gap-1';
+      }
+    }
+  });
+  renderLeadsStream();
 }
 
 function handleRepFilterChange(repName) {
@@ -910,6 +940,28 @@ async function selectLeadForDetail(phone) {
   if (addrEl) addrEl.textContent = lead.address || 'Lima, Perú';
   if (catEl) catEl.textContent = lead.category || lead.source || 'Prospección B2B';
 
+  const sourceBadge = document.getElementById('intelSourceBadge');
+  const catBadge = document.getElementById('intelCategoryBadge');
+  const catInput = document.getElementById('intelCategoryInput');
+  const isMetaAd = lead.source === 'meta_ads' || (lead.category && lead.category.toLowerCase().includes('metaads'));
+
+  if (sourceBadge) {
+    if (isMetaAd) {
+      sourceBadge.className = 'text-[10px] font-mono px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300 font-medium flex items-center gap-1';
+      sourceBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span><span>🎯 Meta Ads</span>';
+    } else {
+      sourceBadge.className = 'text-[10px] font-mono px-2 py-0.5 rounded-full border border-sky-500/30 bg-sky-500/10 text-sky-300 font-medium flex items-center gap-1';
+      sourceBadge.innerHTML = '<i data-lucide="bot" class="w-2.5 h-2.5"></i><span>🤖 Prospección Fría</span>';
+    }
+  }
+
+  if (catBadge) {
+    catBadge.textContent = lead.category || (isMetaAd ? '#MetaAds' : '#Prospección');
+  }
+  if (catInput) {
+    catInput.value = lead.category || '';
+  }
+
   // Cargar Mensajes de Chat
   const messagesContainer = document.getElementById('chatMessagesContainer');
   messagesContainer.innerHTML = `
@@ -951,6 +1003,53 @@ function updateActiveLeadHeader() {
     if (intelAssignedBadge) intelAssignedBadge.textContent = lead.assignedRepName || 'Sin asignar';
     const intelCampaignBadge = document.getElementById('intelCampaignBadge');
     if (intelCampaignBadge) intelCampaignBadge.textContent = lead.serviceName || (lead.serviceId ? lead.serviceId : 'Directo / Orgánico');
+    
+    const isMetaAd = lead.source === 'meta_ads' || (lead.category && lead.category.toLowerCase().includes('metaads'));
+    const sourceBadge = document.getElementById('intelSourceBadge');
+    if (sourceBadge) {
+      if (isMetaAd) {
+        sourceBadge.className = 'text-[10px] font-mono px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300 font-medium flex items-center gap-1';
+        sourceBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span><span>🎯 Meta Ads</span>';
+      } else {
+        sourceBadge.className = 'text-[10px] font-mono px-2 py-0.5 rounded-full border border-sky-500/30 bg-sky-500/10 text-sky-300 font-medium flex items-center gap-1';
+        sourceBadge.innerHTML = '<i data-lucide="bot" class="w-2.5 h-2.5"></i><span>🤖 Prospección Fría</span>';
+      }
+    }
+    const catBadge = document.getElementById('intelCategoryBadge');
+    if (catBadge) catBadge.textContent = lead.category || (isMetaAd ? '#MetaAds' : '#Prospección');
+  }
+}
+
+async function handleSaveCategoryClick() {
+  if (!activeLeadPhone) return;
+  const input = document.getElementById('intelCategoryInput');
+  const newCat = input ? input.value.trim() : '';
+  await handleUpdateLeadCategory(newCat);
+}
+
+async function handleUpdateLeadCategory(category) {
+  if (!activeLeadPhone || !currentPin) return;
+  try {
+    const res = await fetch(`/api/client/leads/${activeLeadPhone}/category`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-client-pin': currentPin
+      },
+      body: JSON.stringify({ category })
+    });
+    if (res.ok) {
+      const allLeads = getConsolidatedLeads();
+      const lead = allLeads.find(l => l.phone === activeLeadPhone);
+      if (lead) {
+        lead.category = category;
+      }
+      const catBadge = document.getElementById('intelCategoryBadge');
+      if (catBadge) catBadge.textContent = category || '---';
+      renderLeadsStream();
+    }
+  } catch (err) {
+    console.error('Error actualizando categoría del prospecto:', err);
   }
 }
 
@@ -4149,12 +4248,29 @@ async function handleAiGenerateCampaign() {
   }
 }
 
+function handleNewCampTypeChange(val) {
+  const modeContainer = document.getElementById('newCampInboundModeContainer');
+  const kwContainer = document.getElementById('newCampKeywordsContainer');
+  if (val === 'INBOUND_ADS') {
+    if (modeContainer) modeContainer.classList.remove('hidden');
+    if (kwContainer) kwContainer.classList.remove('hidden');
+  } else {
+    if (modeContainer) modeContainer.classList.add('hidden');
+    if (kwContainer) kwContainer.classList.add('hidden');
+  }
+}
+
 async function handleSaveNewCampaign() {
   const name = document.getElementById('newCampName')?.value.trim();
   const location = document.getElementById('newCampLocation')?.value.trim() || 'Lima, Peru';
   const outreachTemplate = document.getElementById('newCampTemplate')?.value.trim();
   const followUpTemplate = document.getElementById('newCampFollowUp')?.value.trim();
   const aiInstructions = document.getElementById('newCampPrompt')?.value.trim();
+  const type = document.getElementById('newCampType')?.value || 'OUTBOUND';
+  const inboundMode = document.getElementById('newCampInboundMode')?.value || 'COPILOT_ONLY';
+  const keywordsRaw = document.getElementById('newCampKeywords')?.value.trim() || '';
+  const triggerKeywords = keywordsRaw ? keywordsRaw.split(',').map(k => k.trim()).filter(Boolean) : [];
+
   const btn = document.getElementById('btnSaveNewCamp');
   const alertBox = document.getElementById('newCampAlertBox');
 
@@ -4181,6 +4297,9 @@ async function handleSaveNewCampaign() {
         outreachTemplate,
         followUpTemplate,
         aiInstructions,
+        type,
+        inboundMode,
+        triggerKeywords,
         active: true
       })
     });

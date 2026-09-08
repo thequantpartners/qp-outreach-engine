@@ -6,7 +6,8 @@ import {
   ChatMessage,
   CampaignSettings,
   ScrapedLead,
-  SalesRep
+  SalesRep,
+  LeadSource
 } from '../types/index.js';
 
 export class OutreachRepo {
@@ -116,6 +117,10 @@ export class OutreachRepo {
       ALTER TABLE services ADD COLUMN IF NOT EXISTS follow_up_template_2 TEXT;
       ALTER TABLE services ADD COLUMN IF NOT EXISTS asset_file_path VARCHAR(500);
       ALTER TABLE services ADD COLUMN IF NOT EXISTS asset_file_name VARCHAR(255);
+      ALTER TABLE services ADD COLUMN IF NOT EXISTS type VARCHAR(50) DEFAULT 'OUTBOUND';
+      ALTER TABLE services ADD COLUMN IF NOT EXISTS trigger_keywords JSONB DEFAULT '[]'::jsonb;
+      ALTER TABLE services ADD COLUMN IF NOT EXISTS inbound_mode VARCHAR(50) DEFAULT 'COPILOT_ONLY';
+      ALTER TABLE services ADD COLUMN IF NOT EXISTS tag_color VARCHAR(50);
 
       ALTER TABLE leads ADD COLUMN IF NOT EXISTS follow_up_count INT DEFAULT 0;
       ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_outreach_at TIMESTAMP WITH TIME ZONE;
@@ -256,6 +261,10 @@ export class OutreachRepo {
         closingPayload: r.closing_payload || {},
         aiSystemPrompt: r.ai_system_prompt,
         isActive: r.is_active,
+        type: (r.type as any) || 'OUTBOUND',
+        triggerKeywords: r.trigger_keywords || [],
+        inboundMode: (r.inbound_mode as any) || 'COPILOT_ONLY',
+        tagColor: r.tag_color || undefined,
         createdAt: r.created_at?.toISOString()
       }));
     } else {
@@ -277,8 +286,13 @@ export class OutreachRepo {
   public static async saveService(s: ServiceDefinition): Promise<void> {
     if (DbConnection.isPg()) {
       await DbConnection.getPool().query(
-        `INSERT INTO services (id, name, description, target_persona, apify_queries, target_locations, outreach_template, follow_up_template_1, follow_up_template_2, asset_file_path, asset_file_name, closing_type, closing_payload, ai_system_prompt, is_active)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        `INSERT INTO services (
+           id, name, description, target_persona, apify_queries, target_locations, 
+           outreach_template, follow_up_template_1, follow_up_template_2, 
+           asset_file_path, asset_file_name, closing_type, closing_payload, 
+           ai_system_prompt, is_active, type, trigger_keywords, inbound_mode, tag_color
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
          ON CONFLICT (id) DO UPDATE SET
            name = EXCLUDED.name,
            description = EXCLUDED.description,
@@ -293,23 +307,31 @@ export class OutreachRepo {
            closing_type = EXCLUDED.closing_type,
            closing_payload = EXCLUDED.closing_payload,
            ai_system_prompt = EXCLUDED.ai_system_prompt,
-           is_active = EXCLUDED.is_active;`,
+           is_active = EXCLUDED.is_active,
+           type = EXCLUDED.type,
+           trigger_keywords = EXCLUDED.trigger_keywords,
+           inbound_mode = EXCLUDED.inbound_mode,
+           tag_color = EXCLUDED.tag_color;`,
         [
           s.id,
           s.name,
           s.description,
           s.targetPersona,
-          JSON.stringify(s.apifyQueries),
-          JSON.stringify(s.targetLocations),
-          s.outreachTemplate,
+          JSON.stringify(s.apifyQueries || []),
+          JSON.stringify(s.targetLocations || []),
+          s.outreachTemplate || '',
           s.followUpTemplate1 || null,
           s.followUpTemplate2 || null,
           s.assetFilePath || null,
           s.assetFileName || null,
           s.closingType,
-          JSON.stringify(s.closingPayload),
+          JSON.stringify(s.closingPayload || {}),
           s.aiSystemPrompt,
-          s.isActive
+          s.isActive !== false,
+          s.type || 'OUTBOUND',
+          JSON.stringify(s.triggerKeywords || []),
+          s.inboundMode || 'COPILOT_ONLY',
+          s.tagColor || null
         ]
       );
     } else {
@@ -1493,6 +1515,128 @@ export class OutreachRepo {
     }
   }
 
+  public static async updateLeadCategory(phone: string, category: string): Promise<boolean> {
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    const cleanCategory = String(category || '').trim();
+    if (DbConnection.isPg()) {
+      const pool = DbConnection.getPool();
+      const res = await pool.query(
+        `UPDATE leads SET category = $1, updated_at = NOW() WHERE phone = $2`,
+        [cleanCategory, cleanPhone]
+      );
+      return (res.rowCount ?? 0) > 0;
+    } else {
+      const data = DbConnection.getFallbackData();
+      const lead = (data.leads || []).find((l: Lead) => l.phone === cleanPhone);
+      if (lead) {
+        lead.category = cleanCategory;
+        lead.updatedAt = new Date().toISOString();
+        DbConnection.saveFallbackData(data);
+        return true;
+      }
+      return false;
+    }
+  }
+
+  /**
+   * Ingesta inteligente de mensajes entrantes de WhatsApp (Click-to-WhatsApp / Meta Ads)
+   * Detecta si coincide con palabras clave de algún anuncio, auto-etiqueta y asigna Round Robin.
+   */
+  public static async ingestInboundLead(data: {
+    phone: string;
+    pushName?: string;
+    incomingText: string;
+  }): Promise<{ lead: Lead; isNew: boolean; matchedService?: ServiceDefinition }> {
+    const cleanPhone = data.phone.replace(/[^0-9]/g, '');
+    let existing = await OutreachRepo.getLeadByPhone(cleanPhone);
+    if (existing) {
+      return { lead: existing, isNew: false };
+    }
+
+    const services = await OutreachRepo.getServices();
+    const cleanText = (data.incomingText || '').toLowerCase().trim();
+
+    // 1. Buscar si coincide con alguna campaña Inbound por sus triggerKeywords
+    let matchedService: ServiceDefinition | undefined = undefined;
+    for (const s of services) {
+      if (!s.isActive) continue;
+      if (s.type === 'INBOUND_ADS' && Array.isArray(s.triggerKeywords) && s.triggerKeywords.length > 0) {
+        const matches = s.triggerKeywords.some(kw => kw && kw.trim().length > 1 && cleanText.includes(kw.toLowerCase().trim()));
+        if (matches) {
+          matchedService = s;
+          break;
+        }
+      }
+    }
+
+    // 2. Si no coincide con palabras clave específicas, buscar servicio INBOUND_ADS general o el activo
+    if (!matchedService) {
+      matchedService = services.find(s => s.isActive && s.type === 'INBOUND_ADS') || (await OutreachRepo.getActiveService()) || undefined;
+    }
+
+    const isMetaAd = !!(
+      (matchedService && matchedService.type === 'INBOUND_ADS') || 
+      cleanText.includes('anuncio') || 
+      cleanText.includes('facebook') || 
+      cleanText.includes('instagram') ||
+      cleanText.includes('meta')
+    );
+
+    const source: LeadSource = isMetaAd ? 'meta_ads' : 'direct_whatsapp';
+    const serviceId = matchedService?.id || 'inbound-general';
+    const serviceName = matchedService?.name || 'Inbound Directo';
+    const category = isMetaAd
+      ? (matchedService ? `#MetaAds-${matchedService.name.slice(0, 20)}` : '#MetaAds')
+      : '#WhatsApp-Directo';
+    const companyName = data.pushName?.trim() || `Contacto +${cleanPhone}`;
+
+    let nextRep = await OutreachRepo.getNextSalesRep().catch(() => null);
+
+    if (DbConnection.isPg()) {
+      const pool = DbConnection.getPool();
+      const res = await pool.query(
+        `INSERT INTO leads (
+           service_id, company_name, phone, status, source, category,
+           assigned_rep_name, assigned_rep_phone, created_at, updated_at
+         )
+         VALUES ($1, $2, $3, 'REPLIED', $4, $5, $6, $7, NOW(), NOW())
+         ON CONFLICT (phone) DO UPDATE SET updated_at = NOW()
+         RETURNING *`,
+        [
+          serviceId,
+          companyName,
+          cleanPhone,
+          source,
+          category,
+          nextRep?.name || null,
+          nextRep?.phone || null
+        ]
+      );
+      const lead = OutreachRepo.mapLeadRow(res.rows[0]);
+      lead.serviceName = serviceName;
+      return { lead, isNew: true, matchedService };
+    } else {
+      const fbData = DbConnection.getFallbackData();
+      if (!fbData.leads) fbData.leads = [];
+      const newLead: Lead = {
+        serviceId,
+        serviceName,
+        companyName,
+        phone: cleanPhone,
+        status: 'REPLIED',
+        source,
+        category,
+        assignedRepName: nextRep?.name,
+        assignedRepPhone: nextRep?.phone,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      fbData.leads.push(newLead);
+      DbConnection.saveFallbackData(fbData);
+      return { lead: newLead, isNew: true, matchedService };
+    }
+  }
+
   // --- DASHBOARD OVERVIEW ---
   public static async getDashboardOverview(): Promise<{
     metrics: {
@@ -1633,6 +1777,8 @@ export class OutreachRepo {
           l.company_name,
           l.status,
           l.service_id,
+          l.source,
+          l.category,
           s.name as service_name,
           l.assigned_rep_name,
           l.human_takeover_at
@@ -1651,6 +1797,8 @@ export class OutreachRepo {
           status: (r.status || 'REPLIED') as LeadStatus,
           serviceId: r.service_id || undefined,
           serviceName: r.service_name || 'Directo / Orgánico',
+          source: (r.source || 'outbound') as LeadSource,
+          category: r.category || '',
           assignedRepName: r.assigned_rep_name || undefined,
           isHumanTakeover: !!r.human_takeover_at || r.status === 'HUMAN_TAKEOVER',
           lastMessageSnippet: r.last_content ? r.last_content.slice(0, 75) : '',
@@ -1736,6 +1884,10 @@ export class OutreachRepo {
           leadPhone: phone,
           leadName: lead?.companyName || 'Prospecto',
           status: lead?.status || 'REPLIED',
+          source: lead?.source || 'outbound',
+          category: lead?.category || '',
+          serviceId: lead?.serviceId,
+          serviceName: lead?.serviceName,
           assignedRepName: lead?.assignedRepName,
           isHumanTakeover: lead?.status === 'HUMAN_TAKEOVER' || !!lead?.humanTakeoverAt,
           lastMessageSnippet: (lastMsg.content || '').slice(0, 75),

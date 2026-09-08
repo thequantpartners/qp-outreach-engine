@@ -404,47 +404,61 @@ RESPONDE ESTRICTAMENTE EN FORMATO JSON VÁLIDO:
       const targetPersona = service?.targetPersona || 'Decisores de compra';
 
       const lastClientMsg = [...history].reverse().find(m => m.role === 'user')?.content || '';
+      const isMetaAd = lead.source === 'meta_ads' || (lead.category && lead.category.includes('MetaAds'));
+
+      const adContextNotice = isMetaAd 
+        ? `🔥 CANAL DE ORIGEN: META ADS (Click-to-WhatsApp). Este prospecto hizo clic en un anuncio de Facebook/Instagram y escribió voluntariamente. Tiene interés directo y alta intención de compra; requiere respuesta rápida, empatía y cualificación.`
+        : `CANAL DE ORIGEN: Prospección Comercial B2B.`;
+
+      const optionsDirective = isMetaAd
+        ? `1. "💬 Empatía + Cualificación Inmediata": Agradece su mensaje del anuncio, responde a lo que pregunta de forma directa y haz 1 pregunta de filtro (ej. requerimiento, presupuesto o distrito).
+2. "🎯 Cierre y Agendamiento": Invita a una breve llamada de 10 min o demostración para cotizarle a su medida.
+3. "📄 Envío de Catálogo / Folleto": Ofrece compartir el folleto/catálogo técnico en PDF o ficha comercial con 1 clic.`
+        : `1. "🎯 Cierre y Agendamiento": Para avanzar hacia una llamada breve (10 min), reunión o confirmación formal de fecha/hora.
+2. "📄 Entrega de Valor / Documento": Para compartir un dictamen pericial, PDF técnico, video o resolver una duda técnica con solvencia.
+3. "🤝 Seguimiento Cortés": Breve, educado, de bajo compromiso (ideal si el cliente fue escueto como "ok gracias" o si no queremos atosigarlo).`;
 
       const systemPrompt = `
-Eres QPartner, el Co-Piloto de Asistencia Comercial en Vivo para Kenneth de The Quant Partners.
-Kenneth está chateando por WhatsApp con un decisor B2B.
+Eres QPartner, el Co-Piloto de Asistencia Comercial en Vivo para el equipo de ventas de The Quant Partners.
+El asesor está chateando por WhatsApp con un cliente potencial.
+
+${adContextNotice}
 
 DATOS DEL PROSPECTO:
-- Empresa: ${lead.companyName}
+- Empresa/Contacto: ${lead.companyName}
 - Teléfono: +${lead.phone}
-- Servicio / Solución: ${serviceName} (${serviceDesc})
+- Campaña / Solución: ${serviceName} (${serviceDesc})
 - Perfil: ${targetPersona}
+- Etiqueta: ${lead.category || 'General'}
 
 ÚLTIMO MENSAJE DEL PROSPECTO: "${lastClientMsg}"
 
 TU TAREA:
-Genera exactamente 3 opciones tácticas de respuesta diferentes para que Kenneth elija:
-1. "🎯 Cierre y Agendamiento": Para avanzar hacia una llamada breve (10 min), reunión o confirmación formal de fecha/hora.
-2. "📄 Entrega de Valor / Documento": Para compartir un dictamen pericial, PDF técnico, video o resolver una duda técnica con solvencia.
-3. "🤝 Seguimiento Cortés": Breve, educado, de bajo compromiso (ideal si el cliente fue escueto como "ok gracias" o si no queremos atosigarlo).
+Genera exactamente 3 opciones tácticas de respuesta diferentes para que el asesor elija con 1 clic:
+${optionsDirective}
 
 REGLAS DE ORO:
-- Respuestas naturales para WhatsApp en Perú (tono profesional, respetuoso, directo, sin párrafos eternos: máximo 1 a 3 oraciones cortas).
+- Respuestas naturales para WhatsApp en Perú (tono profesional, cálido, directo, sin párrafos eternos: máximo 1 a 3 oraciones cortas).
 - No inventes precios ni enlaces ficticios.
-- Si el cliente dijo "ok gracias", NO seas redundante; sugiere o entregar el documento prometido, o desearle buena jornada, o fijar la hora de revisión.
+- Si el cliente saludó por primera vez por un anuncio, sé cortés y dale la bienvenida inmediatamente.
 
 FORMATO DE RESPUESTA:
 Devuelve ÚNICAMENTE un JSON array con 3 elementos:
 [
   {
-    "label": "🎯 Cierre y Agendamiento",
+    "label": "${isMetaAd ? '💬 Empatía & Filtro' : '🎯 Cierre y Agendamiento'}",
     "badgeColor": "amber",
     "text": "Texto del mensaje para WhatsApp",
     "explanation": "Por qué es efectiva esta opción"
   },
   {
-    "label": "📄 Entrega de Dictamen",
+    "label": "${isMetaAd ? '🎯 Agendar Llamada' : '📄 Entrega de Dictamen'}",
     "badgeColor": "sky",
     "text": "Texto del mensaje para WhatsApp",
     "explanation": "Por qué es efectiva esta opción"
   },
   {
-    "label": "🤝 Seguimiento Cortés",
+    "label": "${isMetaAd ? '📄 Enviar Catálogo' : '🤝 Seguimiento Cortés'}",
     "badgeColor": "emerald",
     "text": "Texto del mensaje para WhatsApp",
     "explanation": "Por qué es efectiva esta opción"
@@ -542,6 +556,30 @@ Devuelve ÚNICAMENTE un JSON array con 3 elementos:
     } else if (isInmobiliarias) {
       deliverableName = 'resumen del sistema de calificación y filtro crediticio';
       deliverableActionText = `Buenos días. Tal como conversamos, le comparto la ficha técnica de cómo el agente filtra el presupuesto de los prospectos antes de pasarlos a su equipo de ventas. Quedo a su disposición.`;
+    }
+
+    const isMetaAdLead = lead.source === 'meta_ads' || (lead.category && lead.category.includes('MetaAds')) || lower.includes('anuncio');
+    if (isMetaAdLead && history.length <= 3) {
+      return [
+        {
+          label: '💬 Bienvenida + Filtro',
+          badgeColor: 'amber',
+          text: `¡Hola! Un gusto saludarte. Qué bueno que nos escribes desde nuestro anuncio de ${serviceName}. Cuéntame, ¿para qué requerimiento o proyecto puntual te gustaría implementarlo?`,
+          explanation: 'Acuse de recibo inmediato del anuncio + filtro amigable para entender la necesidad exacta.'
+        },
+        {
+          label: '🎯 Agendar Llamada (10 min)',
+          badgeColor: 'sky',
+          text: `¡Hola! Gracias por escribirnos desde nuestro anuncio. Para cotizarte con precisión y mostrarte cómo funciona, ¿te parece bien coordinar una breve llamada de 10 minutos hoy o mañana?`,
+          explanation: 'Propuesta directa para pasar el prospecto a una llamada de cierre.'
+        },
+        {
+          label: '📄 Enviar Ficha / Catálogo',
+          badgeColor: 'emerald',
+          text: `¡Hola! Con mucho gusto. Tenemos una ficha técnica y catálogo preparado con los detalles de ${serviceName}. ¿Me permites compartírtelo por aquí para que lo revises?`,
+          explanation: 'Técnica de permiso de 2 pasos para compartir información de alto valor.'
+        }
+      ];
     }
 
     // Caso 1: El cliente fue escueto ("ok", "gracias", "ok gracias", "entendido", "dale")
