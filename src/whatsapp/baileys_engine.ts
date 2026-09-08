@@ -24,6 +24,7 @@ export class BaileysEngine {
   private latestQr: string | null = null;
   private authDir: string;
   private storageDir: string;
+  private recentConversationsMap = new Map<string, { phone: string; name: string; lastMessage: string; timestamp: string }>();
 
   private constructor() {
     this.storageDir = path.resolve(process.env.STORAGE_DIR || './storage');
@@ -208,6 +209,14 @@ export class BaileysEngine {
           '';
 
         if (!incomingText.trim()) continue;
+
+        // Registrar o actualizar conversación reciente para sincronización
+        this.recentConversationsMap.set(senderPhone, {
+          phone: senderPhone,
+          name: m.pushName || (`+${senderPhone}`),
+          lastMessage: incomingText.slice(0, 120),
+          timestamp: new Date().toISOString()
+        });
 
         const settings = await OutreachRepo.getSettings();
 
@@ -539,6 +548,127 @@ export class BaileysEngine {
       console.error(`❌ [BaileysEngine] Error enviando audio a ${telefono}:`, err.message);
       return { success: false, error: err.message };
     }
+  }
+
+  /**
+   * Envía una imagen (Buffer, URL o Base64) con caption por WhatsApp
+   */
+  public async sendImage(
+    telefono: string,
+    fileBufferOrUrl: Buffer | string,
+    fileName?: string,
+    caption?: string
+  ): Promise<{ success: boolean; jid?: string; error?: string }> {
+    if (!this.sock || !this.isReady) {
+      return { success: false, error: 'WhatsApp no está conectado o autenticado.' };
+    }
+
+    try {
+      const limpio = telefono.replace(/[^0-9]/g, '');
+      const jid = `${limpio}@s.whatsapp.net`;
+
+      let imageBuffer: Buffer;
+      if (Buffer.isBuffer(fileBufferOrUrl)) {
+        imageBuffer = fileBufferOrUrl;
+      } else if (fileBufferOrUrl.startsWith('data:image')) {
+        const base64Data = fileBufferOrUrl.replace(/^data:image\/\w+;base64,/, '');
+        imageBuffer = Buffer.from(base64Data, 'base64');
+      } else if (fileBufferOrUrl.startsWith('http://') || fileBufferOrUrl.startsWith('https://')) {
+        const resp = await fetch(fileBufferOrUrl);
+        const arrayBuf = await resp.arrayBuffer();
+        imageBuffer = Buffer.from(arrayBuf);
+      } else {
+        const resolvedPath = path.isAbsolute(fileBufferOrUrl) ? fileBufferOrUrl : path.resolve(fileBufferOrUrl);
+        if (!fs.existsSync(resolvedPath)) {
+          return { success: false, error: `Imagen no encontrada en: ${resolvedPath}` };
+        }
+        imageBuffer = fs.readFileSync(resolvedPath);
+      }
+
+      console.log(`[BaileysEngine] Despachando imagen a ${limpio} (${imageBuffer.length} bytes)...`);
+      await this.sock.sendMessage(jid, {
+        image: imageBuffer,
+        caption: caption || undefined,
+        fileName: fileName || 'imagen.jpg'
+      });
+
+      this.recentConversationsMap.set(limpio, {
+        phone: limpio,
+        name: `+${limpio}`,
+        lastMessage: caption ? `[Imagen] ${caption}` : '[Imagen]',
+        timestamp: new Date().toISOString()
+      });
+
+      console.log(`✅ [BaileysEngine] Imagen entregada con éxito a ${limpio}!`);
+      return { success: true, jid };
+    } catch (err: any) {
+      console.error(`❌ [BaileysEngine] Error enviando imagen a ${telefono}:`, err.message);
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Envía un audio o nota de voz nativa PTT (Push-to-Talk) desde Buffer
+   */
+  public async sendAudioBuffer(
+    telefono: string,
+    audioBuffer: Buffer,
+    isPtt: boolean = true
+  ): Promise<{ success: boolean; jid?: string; error?: string }> {
+    if (!this.sock || !this.isReady) {
+      return { success: false, error: 'WhatsApp no está conectado o autenticado.' };
+    }
+
+    try {
+      const limpio = telefono.replace(/[^0-9]/g, '');
+      const jid = `${limpio}@s.whatsapp.net`;
+
+      console.log(`[BaileysEngine] Despachando nota de voz a ${limpio} (${audioBuffer.length} bytes)...`);
+      await this.sock.sendMessage(jid, {
+        audio: audioBuffer,
+        mimetype: 'audio/ogg; codecs=opus',
+        ptt: isPtt
+      });
+
+      this.recentConversationsMap.set(limpio, {
+        phone: limpio,
+        name: `+${limpio}`,
+        lastMessage: '🎵 [Nota de voz]',
+        timestamp: new Date().toISOString()
+      });
+
+      console.log(`✅ [BaileysEngine] Nota de voz entregada con éxito a ${limpio}!`);
+      return { success: true, jid };
+    } catch (err: any) {
+      console.error(`❌ [BaileysEngine] Error enviando nota de voz a ${telefono}:`, err.message);
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Obtiene las conversaciones detectadas en la sesión de WhatsApp para sincronización
+   */
+  public async getRecentConversations(): Promise<Array<{ phone: string; name: string; lastMessage: string; timestamp: string }>> {
+    // Si la memoria tiene pocas conversaciones (ej. reinicio reciente), hidratar desde la BD
+    if (this.recentConversationsMap.size < 5) {
+      try {
+        const leads = await OutreachRepo.getLeads({ limit: 50 });
+        for (const l of leads) {
+          if (!this.recentConversationsMap.has(l.phone)) {
+            this.recentConversationsMap.set(l.phone, {
+              phone: l.phone,
+              name: l.companyName || `+${l.phone}`,
+              lastMessage: l.handoffNotes || 'Conversación existente en CRM',
+              timestamp: l.lastMessageAt || l.updatedAt || l.createdAt || new Date().toISOString()
+            });
+          }
+        }
+      } catch {}
+    }
+
+    const list = Array.from(this.recentConversationsMap.values());
+    list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return list;
   }
 
   /**

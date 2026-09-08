@@ -24,6 +24,7 @@ let eventSource = null;
 document.addEventListener('DOMContentLoaded', () => {
   if (window.lucide) lucide.createIcons();
   checkAuth();
+  setupVoiceRecorder();
 });
 
 // 1. Autenticación por PIN y Roles
@@ -789,7 +790,12 @@ async function selectLeadForDetail(phone) {
     tagEl.classList.remove('hidden');
   }
   if (actionsEl) actionsEl.classList.remove('hidden');
-  if (composer) composer.classList.remove('hidden');
+  if (composer) {
+    composer.classList.remove('hidden');
+    const manualInput = document.getElementById('chatManualInput');
+    if (manualInput) manualInput.value = '';
+    handleChatInputChange('');
+  }
   if (avatarEl) {
     const initials = (lead.companyName || 'WA').slice(0, 2).toUpperCase();
     avatarEl.textContent = initials;
@@ -1302,6 +1308,7 @@ async function handleSendManualMessage(e) {
   if (!message || !activeLeadPhone) return;
 
   input.value = '';
+  handleChatInputChange('');
 
   try {
     const res = await fetch('/api/client/chat/send', {
@@ -1324,6 +1331,440 @@ async function handleSendManualMessage(e) {
     }
   } catch (err) {
     alert('Error de red al enviar mensaje: ' + err.message);
+  }
+}
+
+// 9.1. Alternar dinámicamente entre Botón de Micrófono (🎙️) y Enviar (➤)
+function handleChatInputChange(value) {
+  const micBtn = document.getElementById('chatMicBtn');
+  const sendBtn = document.getElementById('chatSendBtn');
+  if (!micBtn || !sendBtn) return;
+
+  if (value && value.trim().length > 0) {
+    micBtn.classList.add('hidden');
+    sendBtn.classList.remove('hidden');
+    sendBtn.classList.add('flex');
+  } else {
+    micBtn.classList.remove('hidden');
+    sendBtn.classList.add('hidden');
+    sendBtn.classList.remove('flex');
+  }
+}
+
+// 9.2. Menú de Adjuntos (Clip 📎)
+function toggleAttachmentMenu(e) {
+  if (e) e.stopPropagation();
+  const popup = document.getElementById('chatAttachmentPopup');
+  if (popup) {
+    popup.classList.toggle('hidden');
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
+function closeAttachmentMenu() {
+  const popup = document.getElementById('chatAttachmentPopup');
+  if (popup) popup.classList.add('hidden');
+}
+
+document.addEventListener('click', (e) => {
+  const popup = document.getElementById('chatAttachmentPopup');
+  const attachBtn = document.getElementById('chatAttachBtn');
+  if (popup && !popup.classList.contains('hidden')) {
+    if (!popup.contains(e.target) && !attachBtn?.contains(e.target)) {
+      popup.classList.add('hidden');
+    }
+  }
+});
+
+function triggerFileInput(inputId) {
+  const input = document.getElementById(inputId);
+  if (input) input.click();
+}
+
+// 9.3. Subida y Envío de Archivos (Imágenes máx 16MB, Documentos máx 25MB)
+async function handleFileSelected(event, type) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  if (!activeLeadPhone) {
+    alert('Seleccione un prospecto primero.');
+    event.target.value = '';
+    return;
+  }
+
+  if (type === 'image') {
+    const maxImgBytes = 16 * 1024 * 1024;
+    if (file.size > maxImgBytes) {
+      alert(`⚠️ La imagen seleccionada pesa ${(file.size / (1024 * 1024)).toFixed(1)} MB.\n\nEl límite máximo permitido para imágenes de WhatsApp es de 16 MB.`);
+      event.target.value = '';
+      return;
+    }
+  } else {
+    const maxDocBytes = 25 * 1024 * 1024;
+    if (file.size > maxDocBytes) {
+      alert(`⚠️ El documento seleccionado pesa ${(file.size / (1024 * 1024)).toFixed(1)} MB.\n\nEl límite máximo permitido para documentos de WhatsApp es de 25 MB.`);
+      event.target.value = '';
+      return;
+    }
+  }
+
+  const caption = prompt(`¿Deseas agregar un comentario o pie de mensaje para "${file.name}"? (Opcional):`, '') || '';
+
+  const reader = new FileReader();
+  reader.onload = async () => {
+    const base64Data = reader.result;
+    const attachBtn = document.getElementById('chatAttachBtn');
+    if (attachBtn) {
+      attachBtn.disabled = true;
+      attachBtn.classList.add('opacity-50');
+    }
+
+    try {
+      const res = await fetch('/api/client/chat/upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-client-pin': currentPin
+        },
+        body: JSON.stringify({
+          phone: activeLeadPhone,
+          fileBase64: base64Data,
+          fileName: file.name,
+          mimeType: file.type,
+          caption
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        selectLeadForDetail(activeLeadPhone);
+      } else {
+        alert('Error al enviar archivo: ' + (data.error || 'Error desconocido'));
+      }
+    } catch (err) {
+      alert('Error de red al subir archivo: ' + err.message);
+    } finally {
+      if (attachBtn) {
+        attachBtn.disabled = false;
+        attachBtn.classList.remove('opacity-50');
+      }
+      event.target.value = '';
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+// 9.4. Grabadora de Notas de Voz Nativas (Press & Hold + Cancel Slide)
+let voiceMediaRecorder = null;
+let voiceAudioChunks = [];
+let voiceRecordingStream = null;
+let voiceRecordingTimerInterval = null;
+let voiceRecordStartTime = 0;
+let voiceRecordStartX = 0;
+let isVoiceCancelled = false;
+
+function setupVoiceRecorder() {
+  const micBtn = document.getElementById('chatMicBtn');
+  if (!micBtn) return;
+
+  const startRecording = async (e) => {
+    if (!activeLeadPhone) {
+      alert('Seleccione un prospecto primero.');
+      return;
+    }
+
+    try {
+      voiceAudioChunks = [];
+      isVoiceCancelled = false;
+      voiceRecordStartX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+      voiceRecordStartTime = Date.now();
+
+      voiceRecordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      let mimeType = 'audio/webm;codecs=opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')
+          ? 'audio/ogg;codecs=opus'
+          : 'audio/webm';
+      }
+
+      voiceMediaRecorder = new MediaRecorder(voiceRecordingStream, { mimeType });
+      voiceMediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          voiceAudioChunks.push(event.data);
+        }
+      };
+
+      voiceMediaRecorder.onstop = async () => {
+        clearInterval(voiceRecordingTimerInterval);
+        const overlay = document.getElementById('chatRecordingOverlay');
+        if (overlay) overlay.classList.add('hidden');
+
+        if (voiceRecordingStream) {
+          voiceRecordingStream.getTracks().forEach((t) => t.stop());
+          voiceRecordingStream = null;
+        }
+
+        const duration = Date.now() - voiceRecordStartTime;
+        if (isVoiceCancelled) {
+          console.log('[VoiceRecorder] Grabación cancelada por deslizamiento.');
+          return;
+        }
+
+        if (duration < 800) {
+          console.log('[VoiceRecorder] Audio muy corto (<800ms), descartado.');
+          return;
+        }
+
+        if (voiceAudioChunks.length === 0) return;
+
+        const audioBlob = new Blob(voiceAudioChunks, { type: mimeType });
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const base64Audio = reader.result;
+          try {
+            const res = await fetch('/api/client/chat/send-voice', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-client-pin': currentPin
+              },
+              body: JSON.stringify({
+                phone: activeLeadPhone,
+                audioBase64: base64Audio
+              })
+            });
+            const data = await res.json();
+            if (res.ok) {
+              selectLeadForDetail(activeLeadPhone);
+            } else {
+              alert('Error despachando nota de voz: ' + (data.error || 'Error desconocido'));
+            }
+          } catch (err) {
+            alert('Error de red enviando nota de voz: ' + err.message);
+          }
+        };
+        reader.readAsDataURL(audioBlob);
+      };
+
+      voiceMediaRecorder.start();
+
+      const overlay = document.getElementById('chatRecordingOverlay');
+      const timerEl = document.getElementById('chatRecordingTimer');
+      if (overlay) {
+        overlay.classList.remove('hidden');
+        overlay.classList.remove('opacity-50');
+      }
+
+      voiceRecordingTimerInterval = setInterval(() => {
+        const elapsedSecs = Math.floor((Date.now() - voiceRecordStartTime) / 1000);
+        const mins = String(Math.floor(elapsedSecs / 60)).padStart(2, '0');
+        const secs = String(elapsedSecs % 60).padStart(2, '0');
+        if (timerEl) timerEl.textContent = `${mins}:${secs}`;
+      }, 500);
+
+    } catch (err) {
+      console.error('[VoiceRecorder] Error al acceder al micrófono:', err);
+      alert('No se pudo acceder al micrófono para grabar la nota de voz. Por favor verifica los permisos del navegador.');
+    }
+  };
+
+  const checkSlideCancel = (e) => {
+    if (!voiceMediaRecorder || voiceMediaRecorder.state !== 'recording') return;
+    const currentX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+    const diffX = currentX - voiceRecordStartX;
+    if (diffX < -65) {
+      isVoiceCancelled = true;
+      const overlay = document.getElementById('chatRecordingOverlay');
+      if (overlay) overlay.classList.add('opacity-50');
+    }
+  };
+
+  const stopRecording = () => {
+    if (voiceMediaRecorder && voiceMediaRecorder.state === 'recording') {
+      voiceMediaRecorder.stop();
+    }
+  };
+
+  micBtn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    startRecording(e);
+  });
+
+  window.addEventListener('pointermove', checkSlideCancel);
+
+  window.addEventListener('pointerup', () => {
+    stopRecording();
+  });
+
+  window.addEventListener('pointercancel', () => {
+    isVoiceCancelled = true;
+    stopRecording();
+  });
+}
+
+// 9.5. Sincronización Selectiva de Conversaciones de WhatsApp
+let rawWhatsAppConversations = [];
+
+async function openSyncChatsModal() {
+  const modal = document.getElementById('syncChatsModal');
+  const container = document.getElementById('syncChatsListContainer');
+  const counter = document.getElementById('syncSelectionCounter');
+  const selectAll = document.getElementById('syncSelectAllCheckbox');
+  if (!modal || !container) return;
+
+  modal.classList.remove('hidden');
+  if (selectAll) selectAll.checked = false;
+  if (counter) counter.textContent = '0 seleccionados';
+
+  container.innerHTML = `
+    <div class="text-center py-8 text-slate-400 text-xs">
+      <i data-lucide="loader-2" class="w-5 h-5 animate-spin mx-auto mb-2 text-emerald-400"></i>
+      Cargando conversaciones detectadas en WhatsApp...
+    </div>
+  `;
+  if (window.lucide) lucide.createIcons();
+
+  try {
+    const res = await fetch('/api/client/whatsapp/conversations', {
+      headers: { 'x-client-pin': currentPin }
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al obtener conversaciones');
+
+    rawWhatsAppConversations = data.conversations || [];
+    renderSyncChatsList();
+  } catch (err) {
+    container.innerHTML = `
+      <div class="text-center py-6 text-red-400 text-xs">
+        <i data-lucide="alert-circle" class="w-5 h-5 mx-auto mb-2 text-red-400"></i>
+        ${escapeHtml(err.message)}
+      </div>
+    `;
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
+function closeSyncChatsModal() {
+  const modal = document.getElementById('syncChatsModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function renderSyncChatsList() {
+  const container = document.getElementById('syncChatsListContainer');
+  if (!container) return;
+
+  if (rawWhatsAppConversations.length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-8 text-slate-400 text-xs">
+        No se encontraron conversaciones activas en la sesión actual de WhatsApp.
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = rawWhatsAppConversations.map((conv, idx) => {
+    const isExisting = conv.alreadyInCrm;
+    const initial = (conv.name || conv.phone).charAt(0).toUpperCase();
+    const dateFormatted = conv.timestamp ? new Date(conv.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+
+    return `
+      <div class="flex items-center gap-3 p-2.5 rounded-xl border ${isExisting ? 'bg-card/30 border-white/[0.04] opacity-60' : 'bg-card/70 hover:bg-card border-white/[0.08] transition'}">
+        <input 
+          type="checkbox" 
+          id="syncChat_${idx}" 
+          data-phone="${conv.phone}"
+          data-name="${escapeHtml(conv.name || '')}"
+          data-last="${escapeHtml(conv.lastMessage || '')}"
+          ${isExisting ? 'disabled' : 'checked'}
+          onchange="updateSyncSelectionCounter()"
+          class="sync-chat-item rounded bg-surface border-white/20 text-emerald-500 focus:ring-emerald-500/30 w-4 h-4 cursor-pointer flex-shrink-0 disabled:opacity-40"
+        />
+        <div class="w-8 h-8 rounded-full bg-surface border border-white/10 flex items-center justify-center text-xs font-serif font-bold text-emerald-400 flex-shrink-0">
+          ${initial}
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs font-sans font-medium text-white truncate">${escapeHtml(conv.name || conv.phone)}</span>
+            <span class="text-[10px] text-slate-500 font-mono flex-shrink-0">${dateFormatted}</span>
+          </div>
+          <p class="text-[11px] text-slate-400 truncate mt-0.5">${escapeHtml(conv.lastMessage || 'Sin mensajes recientes')}</p>
+        </div>
+        ${isExisting ? `
+          <span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-white/[0.06] text-slate-400 flex-shrink-0">En CRM</span>
+        ` : `
+          <span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 flex-shrink-0">Nuevo</span>
+        `}
+      </div>
+    `;
+  }).join('');
+
+  updateSyncSelectionCounter();
+  if (window.lucide) lucide.createIcons();
+}
+
+function toggleSelectAllSyncChats(isChecked) {
+  const checkboxes = document.querySelectorAll('.sync-chat-item:not(:disabled)');
+  checkboxes.forEach(cb => {
+    cb.checked = isChecked;
+  });
+  updateSyncSelectionCounter();
+}
+
+function updateSyncSelectionCounter() {
+  const checkboxes = document.querySelectorAll('.sync-chat-item:checked');
+  const counter = document.getElementById('syncSelectionCounter');
+  if (counter) {
+    counter.textContent = `${checkboxes.length} seleccionados`;
+  }
+}
+
+async function submitSyncSelectedChats() {
+  const checkboxes = document.querySelectorAll('.sync-chat-item:checked');
+  if (checkboxes.length === 0) {
+    alert('Por favor selecciona al menos una conversación para sincronizar.');
+    return;
+  }
+
+  const selectedList = [];
+  checkboxes.forEach(cb => {
+    selectedList.push({
+      phone: cb.dataset.phone,
+      name: cb.dataset.name,
+      lastMessage: cb.dataset.last
+    });
+  });
+
+  const btn = document.getElementById('syncSubmitBtn');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader" class="w-3.5 h-3.5 animate-spin"></i><span>Importando...</span>';
+    if (window.lucide) lucide.createIcons();
+  }
+
+  try {
+    const res = await fetch('/api/client/whatsapp/sync-leads', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-client-pin': currentPin
+      },
+      body: JSON.stringify({ conversations: selectedList })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      alert(`✅ ${data.message || 'Conversaciones sincronizadas correctamente.'}`);
+      closeSyncChatsModal();
+      fetchOverview();
+    } else {
+      alert('Error sincronizando conversaciones: ' + (data.error || 'Error desconocido'));
+    }
+  } catch (err) {
+    alert('Error de red al sincronizar: ' + err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="download-cloud" class="w-3.5 h-3.5"></i><span>Importar Seleccionados</span>';
+      if (window.lucide) lucide.createIcons();
+    }
   }
 }
 

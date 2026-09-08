@@ -30,7 +30,8 @@ import { OpenRouterCloser } from '../ai/openrouter_closer.js';
 dotenv.config();
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '35mb' }));
+app.use(express.urlencoded({ extended: true, limit: '35mb' }));
 
 // Middleware de CORS para Vercel y clientes autorizados
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -797,6 +798,216 @@ app.post('/api/client/chat/send-document', authenticateClientPin, async (req: Re
     } else {
       res.status(500).json({ error: sendError || 'Fallo despachando documento por WhatsApp' });
     }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Despacho de imágenes y documentos subidos desde el chat (Max: 16MB imágenes, 25MB documentos)
+app.post('/api/client/chat/upload', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const { phone, fileBase64, fileName, mimeType, caption } = req.body || {};
+    if (!phone || !fileBase64 || !fileName) {
+      res.status(400).json({ error: 'phone, fileBase64 y fileName son requeridos' });
+      return;
+    }
+
+    const clean = String(phone).replace(/[^0-9]/g, '');
+    const cleanBase64 = fileBase64.replace(/^data:[^;]+;base64,/, '');
+    const buffer = Buffer.from(cleanBase64, 'base64');
+    const isImage = (mimeType && mimeType.startsWith('image/')) || /\.(jpg|jpeg|png|webp|gif)$/i.test(fileName);
+
+    // Validar límites de peso estricto
+    const maxSizeBytes = isImage ? 16 * 1024 * 1024 : 25 * 1024 * 1024;
+    if (buffer.length > maxSizeBytes) {
+      const maxMb = isImage ? '16 MB' : '25 MB';
+      res.status(400).json({ error: `El archivo supera el límite máximo permitido de ${maxMb}.` });
+      return;
+    }
+
+    // Persistir temporalmente en el volumen de almacenamiento
+    const uploadsDir = path.resolve(process.env.STORAGE_DIR || './storage', 'uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    const safeName = `${Date.now()}_${fileName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const savedPath = path.join(uploadsDir, safeName);
+    fs.writeFileSync(savedPath, buffer);
+
+    const settings = await OutreachRepo.getSettings();
+    const provider = settings.whatsappProvider || 'direct_qr';
+    let sendSuccess = false;
+    let sendError = '';
+    let jid: string | undefined;
+
+    if (provider === 'meta_cloud_api') {
+      const metaRes = await MetaCloudEngine.sendDocumentMessage(clean, savedPath, fileName, caption);
+      sendSuccess = metaRes.success;
+      sendError = metaRes.error || '';
+      jid = metaRes.messageId;
+    } else {
+      if (isImage) {
+        const result = await whatsapp.sendImage(clean, buffer, fileName, caption);
+        sendSuccess = result.success;
+        sendError = result.error || '';
+        jid = result.jid;
+      } else {
+        const result = await whatsapp.sendDocument(clean, savedPath, fileName, caption);
+        sendSuccess = result.success;
+        sendError = result.error || '';
+        jid = result.jid;
+      }
+    }
+
+    if (sendSuccess) {
+      await OutreachRepo.updateLeadStatus(clean, 'HUMAN_TAKEOVER', {
+        humanTakeoverAt: new Date().toISOString()
+      });
+      const tag = isImage ? '🖼️ [IMAGEN' : '📁 [DOCUMENTO';
+      const fileMsg = `${tag}: ${fileName}] ${caption || ''}`.trim();
+      await OutreachRepo.addChatMessage(clean, 'human_agent', fileMsg);
+
+      broadcastDashboardEvent({
+        type: 'new_message',
+        phone: clean,
+        role: 'human_agent',
+        content: fileMsg,
+        createdAt: new Date().toISOString()
+      });
+
+      res.json({ success: true, fileName, jid });
+    } else {
+      res.status(500).json({ error: sendError || 'Error despachando archivo por WhatsApp' });
+    }
+  } catch (err: any) {
+    console.error('[UploadRoute] Error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Despacho de notas de voz nativas PTT grabadas desde el micrófono del navegador
+app.post('/api/client/chat/send-voice', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const { phone, audioBase64 } = req.body || {};
+    if (!phone || !audioBase64) {
+      res.status(400).json({ error: 'phone y audioBase64 son requeridos' });
+      return;
+    }
+
+    const clean = String(phone).replace(/[^0-9]/g, '');
+    const cleanBase64 = audioBase64.replace(/^data:[^;]+;base64,/, '');
+    const buffer = Buffer.from(cleanBase64, 'base64');
+
+    if (buffer.length > 16 * 1024 * 1024) {
+      res.status(400).json({ error: 'El audio supera el límite máximo permitido de 16 MB.' });
+      return;
+    }
+
+    const settings = await OutreachRepo.getSettings();
+    const provider = settings.whatsappProvider || 'direct_qr';
+    let sendSuccess = false;
+    let sendError = '';
+
+    if (provider === 'meta_cloud_api') {
+      res.status(400).json({ error: 'El envío de notas de voz nativas PTT requiere Modo Directo QR.' });
+      return;
+    } else {
+      const result = await whatsapp.sendAudioBuffer(clean, buffer, true);
+      sendSuccess = result.success;
+      sendError = result.error || '';
+    }
+
+    if (sendSuccess) {
+      await OutreachRepo.updateLeadStatus(clean, 'HUMAN_TAKEOVER', {
+        humanTakeoverAt: new Date().toISOString()
+      });
+      const voiceMsg = '🎵 [Nota de voz enviada]';
+      await OutreachRepo.addChatMessage(clean, 'human_agent', voiceMsg);
+
+      broadcastDashboardEvent({
+        type: 'new_message',
+        phone: clean,
+        role: 'human_agent',
+        content: voiceMsg,
+        createdAt: new Date().toISOString()
+      });
+
+      res.json({ success: true });
+    } else {
+      res.status(500).json({ error: sendError || 'Error enviando nota de voz por WhatsApp' });
+    }
+  } catch (err: any) {
+    console.error('[SendVoiceRoute] Error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Listar conversaciones recientes detectadas en WhatsApp para sincronización selectiva
+app.get('/api/client/whatsapp/conversations', authenticateClientPin, async (_req: Request, res: Response) => {
+  try {
+    const rawList = await whatsapp.getRecentConversations();
+    const leads = await OutreachRepo.getLeads({ limit: 500 });
+    const existingPhones = new Set(leads.map(l => l.phone));
+
+    const conversations = rawList.map(c => ({
+      ...c,
+      alreadyInCrm: existingPhones.has(c.phone)
+    }));
+
+    res.json({ success: true, conversations });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Ingestar/sincronizar conversaciones seleccionadas al CRM
+app.post('/api/client/whatsapp/sync-leads', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    const { conversations, serviceId } = req.body || {};
+    if (!Array.isArray(conversations) || conversations.length === 0) {
+      res.status(400).json({ error: 'El listado de conversaciones a sincronizar es requerido' });
+      return;
+    }
+
+    let syncedCount = 0;
+    const activeService = serviceId || (await OutreachRepo.getActiveService())?.id || 'custom-service';
+    const rep = await OutreachRepo.getNextSalesRep();
+
+    for (const item of conversations) {
+      const phoneClean = String(item.phone || '').replace(/[^0-9]/g, '');
+      if (!phoneClean) continue;
+
+      const lead = await OutreachRepo.createDirectLead({
+        phone: phoneClean,
+        companyName: item.name || `WhatsApp ${phoneClean}`,
+        serviceId: activeService
+      });
+
+      if (rep && !lead.assignedRepName) {
+        await OutreachRepo.assignLeadToRep(phoneClean, rep.id, rep.name);
+      }
+
+      if (item.lastMessage) {
+        const history = await OutreachRepo.getChatHistory(phoneClean, 2);
+        if (history.length === 0) {
+          await OutreachRepo.addChatMessage(phoneClean, 'user', item.lastMessage);
+        }
+      }
+
+      syncedCount++;
+    }
+
+    broadcastDashboardEvent({
+      type: 'leads_synced',
+      count: syncedCount,
+      timestamp: new Date().toISOString()
+    });
+
+    res.json({
+      success: true,
+      syncedCount,
+      message: `${syncedCount} conversaciones sincronizadas exitosamente en el CRM.`
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
