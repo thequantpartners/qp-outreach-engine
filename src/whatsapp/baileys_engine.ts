@@ -343,13 +343,20 @@ export class BaileysEngine {
         }
 
         // 2. Si el mensaje viene del propio admin (Kenneth) a la cuenta del bot
-        if (senderPhone === settings.adminWhatsAppPhone.replace(/[^0-9]/g, '')) {
-          console.log(`[BaileysEngine] Mensaje recibido del administrador: "${incomingText}"`);
-          // Podría procesar comandos si se desea
+        const adminClean = settings.adminWhatsAppPhone ? settings.adminWhatsAppPhone.replace(/[^0-9]/g, '') : '';
+        const isAdmin = adminClean && senderPhone === adminClean;
+
+        if (isAdmin && incomingText.trim().startsWith('/')) {
+          console.log(`[BaileysEngine] Comando de administrador recibido: "${incomingText}"`);
+          // Procesar futuros comandos slash del admin aquí
           continue;
         }
 
-        console.log(`\n📩 [BaileysEngine] Mensaje entrante de ${senderPhone}: "${incomingText}"`);
+        if (isAdmin) {
+          console.log(`[BaileysEngine] Mensaje de interacción/prueba del administrador (${senderPhone}): "${incomingText}"`);
+        } else {
+          console.log(`\n📩 [BaileysEngine] Mensaje entrante de ${senderPhone}: "${incomingText}"`);
+        }
 
         // 3. Buscar o registrar al prospecto con atribución inteligente de Meta Ads
         const { lead, isNew, matchedService } = await OutreachRepo.ingestInboundLead({
