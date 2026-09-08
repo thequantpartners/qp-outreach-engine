@@ -3061,7 +3061,7 @@ function closeSettingsModal() {
 }
 
 function switchSettingsTab(tabName) {
-  const tabs = ['whatsapp', 'team', 'ai', 'antiban', 'saar'];
+  const tabs = ['whatsapp', 'team', 'ai', 'scraping', 'antiban', 'saar'];
   tabs.forEach(t => {
     const btn = document.getElementById(`settingsTabBtn${t.charAt(0).toUpperCase() + t.slice(1)}`);
     const content = document.getElementById(`settingsTabContent${t.charAt(0).toUpperCase() + t.slice(1)}`);
@@ -3431,6 +3431,94 @@ async function handleTestAiConnection() {
 }
 
 // -----------------------------------------------------------------
+// Configuración de Scraping & Apify (BYOK)
+// -----------------------------------------------------------------
+let currentApifyMode = 'managed';
+
+function selectApifyMode(mode) {
+  currentApifyMode = mode;
+  const btnManaged = document.getElementById('btnApifyModeManaged');
+  const btnCustom = document.getElementById('btnApifyModeCustom');
+  const secCustom = document.getElementById('apifyCustomKeySection');
+
+  if (mode === 'custom') {
+    if (btnManaged) btnManaged.className = 'p-3 rounded-xl border border-white/[0.08] bg-card hover:border-gold/30 text-left transition flex items-start gap-2.5';
+    if (btnCustom) btnCustom.className = 'p-3 rounded-xl border border-gold/40 bg-gold/10 text-left transition flex items-start gap-2.5';
+    if (secCustom) secCustom.classList.remove('hidden');
+  } else {
+    if (btnManaged) btnManaged.className = 'p-3 rounded-xl border border-gold/40 bg-gold/10 text-left transition flex items-start gap-2.5';
+    if (btnCustom) btnCustom.className = 'p-3 rounded-xl border border-white/[0.08] bg-card hover:border-gold/30 text-left transition flex items-start gap-2.5';
+    if (secCustom) secCustom.classList.add('hidden');
+  }
+
+  if (window.lucide) lucide.createIcons();
+}
+
+function toggleApifyKeyVisibility() {
+  const keyInput = document.getElementById('settingApifyToken');
+  const icon = document.getElementById('apifyKeyVisibilityIcon');
+  if (!keyInput) return;
+
+  if (keyInput.type === 'password') {
+    keyInput.type = 'text';
+    if (icon) icon.setAttribute('data-lucide', 'eye-off');
+  } else {
+    keyInput.type = 'password';
+    if (icon) icon.setAttribute('data-lucide', 'eye');
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+async function handleTestApifyConnection() {
+  const token = document.getElementById('settingApifyToken')?.value || '';
+  const btn = document.getElementById('testApifyBtn');
+  const btnText = document.getElementById('testApifyBtnText');
+  const badge = document.getElementById('apifyTestResultBadge');
+
+  if (btn) btn.disabled = true;
+  if (btnText) btnText.textContent = 'Consultando saldo...';
+  if (badge) {
+    badge.className = 'text-xs font-mono text-gold flex items-center gap-1';
+    badge.innerHTML = '<i data-lucide="loader" class="w-3 h-3 animate-spin"></i><span>Validando con Apify API...</span>';
+    badge.classList.remove('hidden');
+    if (window.lucide) lucide.createIcons();
+  }
+
+  try {
+    const res = await fetch('/api/client/apify/test', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-client-pin': currentPin
+      },
+      body: JSON.stringify({ token })
+    });
+    const data = await res.json();
+
+    if (res.ok && data.success) {
+      if (badge) {
+        badge.className = 'text-xs font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg flex items-center gap-1.5';
+        badge.innerHTML = `<i data-lucide="check-circle" class="w-3.5 h-3.5"></i><span>@${escapeHtml(data.username)} (${escapeHtml(data.plan)}) · Saldo: $${data.balanceUsd} USD</span>`;
+      }
+    } else {
+      if (badge) {
+        badge.className = 'text-xs font-mono text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2.5 py-1 rounded-lg flex items-center gap-1.5';
+        badge.innerHTML = `<i data-lucide="alert-circle" class="w-3.5 h-3.5"></i><span>${escapeHtml(data.error || 'Token inválido')}</span>`;
+      }
+    }
+  } catch (err) {
+    if (badge) {
+      badge.className = 'text-xs font-mono text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2.5 py-1 rounded-lg flex items-center gap-1.5';
+      badge.innerHTML = `<i data-lucide="alert-circle" class="w-3.5 h-3.5"></i><span>${escapeHtml(err.message)}</span>`;
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+    if (btnText) btnText.textContent = 'Probar Conexión & Saldo';
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
+// -----------------------------------------------------------------
 // Cargar y Guardar Configuración Consolidada
 // -----------------------------------------------------------------
 async function loadSettingsData() {
@@ -3510,6 +3598,14 @@ async function loadSettingsData() {
       }
     }
     
+    // Poblado Scraping & Apify
+    const useCustomApify = !!settings.useCustomApify;
+    selectApifyMode(useCustomApify ? 'custom' : 'managed');
+    const apifyTokenEl = document.getElementById('settingApifyToken');
+    if (apifyTokenEl) {
+      apifyTokenEl.value = settings.apifyToken || '';
+    }
+
     // Poblado SaaR & Finanzas
     const currencyEl = document.getElementById('settingCurrency');
     const retainerEl = document.getElementById('settingMonthlyRetainer');
@@ -3597,6 +3693,9 @@ async function handleSaveSettings() {
   const metaWebhookVerifyToken = document.getElementById('settingMetaVerifyToken')?.value?.trim() || '';
   const whatsappProvider = currentWhatsAppProvider || 'direct_qr';
 
+  const useCustomApify = (currentApifyMode === 'custom');
+  const apifyToken = document.getElementById('settingApifyToken')?.value?.trim() || '';
+
   if (minDelaySeconds < 60) {
     alert('Por seguridad anti-baneo, el delay mínimo no puede ser menor a 60 segundos.');
     return;
@@ -3640,7 +3739,9 @@ async function handleSaveSettings() {
         metaPhoneNumberId,
         metaWabaId,
         metaAccessToken,
-        metaWebhookVerifyToken
+        metaWebhookVerifyToken,
+        useCustomApify,
+        apifyToken
       })
     });
 
@@ -3664,7 +3765,7 @@ async function handleSaveSettings() {
     if (res.ok && data.success) {
       if (alertBox) {
         alertBox.className = 'p-3 rounded-xl text-xs font-mono bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 block';
-        alertBox.textContent = '✅ Configuración, honorarios SaaR y equipo guardados en PostgreSQL correctamente.';
+        alertBox.textContent = '✅ Configuración, credenciales Apify, honorarios SaaR y equipo guardados en PostgreSQL correctamente.';
       }
       setTimeout(() => {
         if (alertBox) alertBox.classList.add('hidden');

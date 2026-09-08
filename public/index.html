@@ -1596,6 +1596,14 @@
           <span>IA & Proveedores (LLM)</span>
         </button>
         <button 
+          id="settingsTabBtnScraping" 
+          onclick="switchSettingsTab('scraping')" 
+          class="px-4 py-2.5 text-xs font-sans border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-2 transition flex-shrink-0"
+        >
+          <i data-lucide="scan-search" class="w-3.5 h-3.5 text-gold"></i>
+          <span>Scraping & Apify</span>
+        </button>
+        <button 
           id="settingsTabBtnAntiban" 
           onclick="switchSettingsTab('antiban')" 
           class="px-4 py-2.5 text-xs font-sans border-b-2 border-transparent text-slate-400 hover:text-slate-200 font-medium flex items-center gap-2 transition flex-shrink-0"
@@ -1903,6 +1911,102 @@
               <span id="testAiBtnText">Probar Conexión IA</span>
             </button>
             <div id="aiTestResultBadge" class="text-xs font-sans hidden"></div>
+          </div>
+        </div>
+
+        <!-- TAB: SCRAPING & APIFY (BYOK) -->
+        <div id="settingsTabContentScraping" class="space-y-4 hidden">
+          <div class="p-3.5 bg-gold/10 border border-gold/20 rounded-xl text-xs space-y-1 text-slate-200 font-sans">
+            <div class="flex items-center gap-2 font-medium text-gold">
+              <i data-lucide="scan-search" class="w-4 h-4"></i>
+              <span>Motor de Prospección Multicanal (Google Maps, Meta Ads & Instagram)</span>
+            </div>
+            <p class="text-[11px] text-slate-300 font-light leading-relaxed">
+              El motor extrae automáticamente empresas y teléfonos calificados desde fuentes B2B. Puedes utilizar la infraestructura gestionada de la plataforma o conectar tu propia cuenta de Apify para imputar el consumo a tu facturación corporativa.
+            </p>
+          </div>
+
+          <!-- Selector de Modo de Scraping -->
+          <div class="p-3.5 bg-surface/80 rounded-xl border border-white/[0.08] space-y-2">
+            <label class="block text-xs font-sans font-medium text-slate-300">Modo de Extracción y Scraping</label>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button 
+                type="button" 
+                id="btnApifyModeManaged"
+                onclick="selectApifyMode('managed')" 
+                class="p-3 rounded-xl border border-gold/40 bg-gold/10 text-left transition flex items-start gap-2.5"
+              >
+                <div class="w-7 h-7 rounded-lg bg-gold/20 text-gold flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <i data-lucide="server" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <div class="text-xs font-sans font-semibold text-white">Infraestructura QP (Gestionada)</div>
+                  <div class="text-[11px] text-slate-400 font-light">Créditos de prospección cubiertos por la plataforma. Sin configuración técnica requerida.</div>
+                </div>
+              </button>
+
+              <button 
+                type="button" 
+                id="btnApifyModeCustom"
+                onclick="selectApifyMode('custom')" 
+                class="p-3 rounded-xl border border-white/[0.08] bg-card hover:border-gold/30 text-left transition flex items-start gap-2.5"
+              >
+                <div class="w-7 h-7 rounded-lg bg-purple-500/15 text-purple-400 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <i data-lucide="key" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <div class="text-xs font-sans font-semibold text-white">Clave Propia (BYOK)</div>
+                  <div class="text-[11px] text-slate-400 font-light">Conecta tu propio token de Apify para consumir tu saldo y límites dedicados.</div>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <!-- Sección BYOK: Configuración de Token Personal -->
+          <div id="apifyCustomKeySection" class="space-y-3 hidden p-4 rounded-xl bg-card border border-white/[0.08]">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-sans font-medium text-slate-300">Token de API de Apify (APIFY_TOKEN)</label>
+              <a 
+                href="https://console.apify.com/account/integrations" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                class="text-[11px] text-gold hover:underline inline-flex items-center gap-1 font-sans"
+              >
+                <span>Obtener en Apify Console</span>
+                <i data-lucide="external-link" class="w-3 h-3"></i>
+              </a>
+            </div>
+            
+            <div class="relative">
+              <input 
+                type="password" 
+                id="settingApifyToken" 
+                placeholder="apify_api_••••••••••••••••" 
+                class="w-full input-luxury px-3.5 py-2.5 pr-10 text-xs text-white font-mono placeholder:text-slate-500"
+              />
+              <button 
+                type="button" 
+                onclick="toggleApifyKeyVisibility()" 
+                class="absolute right-3 top-2.5 text-slate-400 hover:text-white transition" 
+                title="Mostrar/Ocultar Token"
+              >
+                <i id="apifyKeyVisibilityIcon" data-lucide="eye" class="w-4 h-4"></i>
+              </button>
+            </div>
+
+            <!-- Botón Probar Conexión & Saldo -->
+            <div class="pt-2 flex items-center justify-between flex-wrap gap-2">
+              <button 
+                type="button" 
+                onclick="handleTestApifyConnection()" 
+                id="testApifyBtn"
+                class="px-4 py-2 rounded-xl bg-card border border-white/[0.08] hover:border-gold/40 text-xs font-sans font-medium text-gold hover:text-white transition flex items-center gap-2 shadow-sm"
+              >
+                <i data-lucide="wallet" class="w-3.5 h-3.5 text-gold"></i>
+                <span id="testApifyBtnText">Probar Conexión & Saldo</span>
+              </button>
+              <div id="apifyTestResultBadge" class="text-xs font-sans hidden"></div>
+            </div>
           </div>
         </div>
 

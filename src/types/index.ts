@@ -110,6 +110,8 @@ export interface CampaignSettings {
   metaWabaId?: string;
   metaAccessToken?: string;
   metaWebhookVerifyToken?: string;
+  useCustomApify?: boolean;
+  apifyToken?: string;
 }
 
 export const SendMessageSchema = z.object({
@@ -280,7 +282,9 @@ export const ConfigureSettingsSchema = z.object({
   isAutonomousActive: z.boolean().optional(),
   currency: z.string().optional(),
   monthlyRetainerFee: z.number().optional(),
-  successFeePerMeeting: z.number().optional()
+  successFeePerMeeting: z.number().optional(),
+  useCustomApify: z.boolean().optional(),
+  apifyToken: z.string().optional()
 });
 
 export type ConfigureSettingsRequest = z.infer<typeof ConfigureSettingsSchema>;

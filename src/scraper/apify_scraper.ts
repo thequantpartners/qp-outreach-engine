@@ -1,3 +1,4 @@
+import { OutreachRepo } from '../db/repo.js';
 import dotenv from 'dotenv';
 import {
   ScrapedLead,
@@ -12,6 +13,27 @@ import {
 dotenv.config();
 
 export class ApifyScraper {
+  public static async getEffectiveToken(providedToken?: string): Promise<string> {
+    if (providedToken && providedToken.trim().length > 0) {
+      return providedToken.trim();
+    }
+    try {
+      const settings = await OutreachRepo.getSettings();
+      if (settings.useCustomApify && settings.apifyToken && settings.apifyToken.trim().length > 0) {
+        return settings.apifyToken.trim();
+      }
+    } catch {
+      // Fallback
+    }
+    const envToken = process.env.APIFY_TOKEN;
+    if (envToken && envToken.trim().length > 0) {
+      return envToken.trim();
+    }
+    throw new Error(
+      'Falta configurar APIFY_TOKEN (en Configuración de la plataforma o en variable de entorno). Obtenlo en https://console.apify.com/account/integrations'
+    );
+  }
+
   private static get token(): string {
     const t = process.env.APIFY_TOKEN;
     if (!t) {
@@ -68,9 +90,10 @@ export class ApifyScraper {
    * Ejecutor común para actores de Apify con polling y manejo de timeouts
    */
   private static async runActorAndGetItems(actorId: string, input: any, label: string): Promise<any[]> {
+    const token = await this.getEffectiveToken();
     console.log(`[ApifyScraper] Iniciando actor "${actorId}" para [${label}]...`);
 
-    const runRes = await fetch(`https://api.apify.com/v2/acts/${actorId}/runs?token=${this.token}`, {
+    const runRes = await fetch(`https://api.apify.com/v2/acts/${actorId}/runs?token=${token}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input)
@@ -94,7 +117,7 @@ export class ApifyScraper {
       }
 
       await new Promise((r) => setTimeout(r, 4000));
-      const statusRes = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${this.token}`);
+      const statusRes = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${token}`);
       const statusJson: any = await statusRes.json();
       const status = statusJson.data?.status;
 
@@ -105,7 +128,7 @@ export class ApifyScraper {
       }
     }
 
-    const datasetRes = await fetch(`https://api.apify.com/v2/datasets/${defaultDatasetId}/items?token=${this.token}`);
+    const datasetRes = await fetch(`https://api.apify.com/v2/datasets/${defaultDatasetId}/items?token=${token}`);
     const items = (await datasetRes.json()) as any[];
     console.log(`[ApifyScraper] [${label}] ${items.length} registros extraídos de Apify.`);
     return items;

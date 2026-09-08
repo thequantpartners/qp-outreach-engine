@@ -515,7 +515,10 @@ app.get('/api/client/settings', authenticateClientPin, async (_req: Request, res
         metaPhoneNumberId: settings.metaPhoneNumberId || '',
         metaWabaId: settings.metaWabaId || '',
         metaAccessToken: settings.metaAccessToken ? (settings.metaAccessToken.length > 8 ? '••••••••' + settings.metaAccessToken.slice(-4) : '••••••••') : '',
-        metaWebhookVerifyToken: settings.metaWebhookVerifyToken || ''
+        metaWebhookVerifyToken: settings.metaWebhookVerifyToken || '',
+        useCustomApify: settings.useCustomApify ?? false,
+        apifyToken: settings.apifyToken ? (settings.apifyToken.length > 8 ? '••••••••' + settings.apifyToken.slice(-4) : '••••••••') : '',
+        hasServerApifyToken: !!process.env.APIFY_TOKEN
       },
       whatsapp: waStatus
     });
@@ -531,7 +534,8 @@ app.post('/api/client/settings', authenticateClientPin, requireOwnerRole, async 
       startHour, endHour, minDelaySeconds, maxDelaySeconds, dailyLimit, 
       adminWhatsAppPhone, salesReps, aiProvider, aiApiKey, aiModel,
       currency, monthlyRetainerFee, successFeePerMeeting,
-      whatsappProvider, metaPhoneNumberId, metaWabaId, metaAccessToken, metaWebhookVerifyToken
+      whatsappProvider, metaPhoneNumberId, metaWabaId, metaAccessToken, metaWebhookVerifyToken,
+      useCustomApify, apifyToken
     } = req.body || {};
 
     let sanitizedSalesReps: SalesRep[] | undefined = undefined;
@@ -568,7 +572,9 @@ app.post('/api/client/settings', authenticateClientPin, requireOwnerRole, async 
       ...(metaPhoneNumberId !== undefined ? { metaPhoneNumberId: String(metaPhoneNumberId).trim() } : {}),
       ...(metaWabaId !== undefined ? { metaWabaId: String(metaWabaId).trim() } : {}),
       ...(metaAccessToken !== undefined && !metaAccessToken.startsWith('••••') ? { metaAccessToken: String(metaAccessToken).trim() } : {}),
-      ...(metaWebhookVerifyToken !== undefined ? { metaWebhookVerifyToken: String(metaWebhookVerifyToken).trim() } : {})
+      ...(metaWebhookVerifyToken !== undefined ? { metaWebhookVerifyToken: String(metaWebhookVerifyToken).trim() } : {}),
+      ...(useCustomApify !== undefined ? { useCustomApify: Boolean(useCustomApify) } : {}),
+      ...(apifyToken !== undefined && !apifyToken.startsWith('••••') ? { apifyToken: String(apifyToken).trim() } : {})
     });
 
     const updated = await OutreachRepo.getSettings();
@@ -657,6 +663,71 @@ app.post('/api/client/ai/test', authenticateClientPin, async (req: Request, res:
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Probar conexión de Token de Apify y consultar saldo disponible
+app.post('/api/client/apify/test', authenticateClientPin, async (req: Request, res: Response) => {
+  try {
+    let { token } = req.body || {};
+    if (!token || token.startsWith('••••')) {
+      const currentSettings = await OutreachRepo.getSettings();
+      token = currentSettings.apifyToken || process.env.APIFY_TOKEN || '';
+    }
+    const cleanToken = String(token || '').trim();
+    if (!cleanToken) {
+      res.status(400).json({ error: 'Debes proporcionar un APIFY_TOKEN válido para probar la conexión.' });
+      return;
+    }
+
+    const startTime = Date.now();
+    const userRes = await fetch('https://api.apify.com/v2/users/me', {
+      headers: { 'Authorization': `Bearer ${cleanToken}` }
+    });
+
+    if (!userRes.ok) {
+      const errJson: any = await userRes.json().catch(() => ({}));
+      res.status(400).json({
+        success: false,
+        error: errJson.error?.message || `Token inválido o expirado en Apify (HTTP ${userRes.status}).`
+      });
+      return;
+    }
+
+    const userJson: any = await userRes.json();
+    const latencyMs = Date.now() - startTime;
+    const userData = userJson.data || {};
+
+    let creditLimitUsd = userData.plan?.monthlyUsageCreditsUsd ?? (userData.plan?.maxMonthlyUsageUsd ?? 5);
+    let usageUsd = 0;
+    let balanceUsd = creditLimitUsd;
+
+    // Consultar consumo del ciclo actual
+    try {
+      const usageRes = await fetch('https://api.apify.com/v2/users/me/usage/monthly', {
+        headers: { 'Authorization': `Bearer ${cleanToken}` }
+      });
+      if (usageRes.ok) {
+        const usageJson: any = await usageRes.json();
+        usageUsd = Number((usageJson.data?.totalUsageCreditsUsdAfterVolumeDiscount || 0).toFixed(2));
+        balanceUsd = Math.max(0, Number((creditLimitUsd - usageUsd).toFixed(2)));
+      }
+    } catch {
+      // Mantener balance base si no se puede obtener el ciclo
+    }
+
+    res.json({
+      success: true,
+      username: userData.username || 'Usuario Apify',
+      email: userData.email || '',
+      plan: userData.plan?.id || userData.plan?.name || 'FREE',
+      creditLimitUsd,
+      usageUsd,
+      balanceUsd,
+      latencyMs
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Error al conectar con los servidores de Apify.' });
   }
 });
 
