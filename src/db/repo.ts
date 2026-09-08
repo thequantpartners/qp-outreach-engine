@@ -1561,6 +1561,136 @@ export class OutreachRepo {
    * Ingesta inteligente de mensajes entrantes de WhatsApp (Click-to-WhatsApp / Meta Ads)
    * Detecta si coincide con palabras clave de algún anuncio, auto-etiqueta y asigna Round Robin.
    */
+  /**
+   * Busca un lead por su WhatsApp LID o por su número
+   */
+  public static async getLeadByLid(lid: string): Promise<Lead | null> {
+    const cleanLid = lid.replace(/[^0-9]/g, '');
+    if (!cleanLid) return null;
+
+    if (DbConnection.isPg()) {
+      const pool = DbConnection.getPool();
+      const res = await pool.query(
+        `SELECT * FROM leads WHERE custom_fields->>'lid' = $1 OR phone = $1 LIMIT 1`,
+        [cleanLid]
+      );
+      if (res.rows.length > 0) return OutreachRepo.mapLeadRow(res.rows[0]);
+      return null;
+    } else {
+      const fb = DbConnection.getFallbackData();
+      const found = (fb.leads || []).find((l: any) => l.customFields?.lid === cleanLid || l.phone === cleanLid);
+      return found || null;
+    }
+  }
+
+  /**
+   * Vincula un WhatsApp LID a un lead existente sin duplicar registros
+   */
+  public static async linkLeadLid(phone: string, lid: string): Promise<void> {
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    const cleanLid = lid.replace(/[^0-9]/g, '');
+    if (!cleanPhone || !cleanLid || cleanPhone === cleanLid) return;
+
+    if (DbConnection.isPg()) {
+      const pool = DbConnection.getPool();
+      await pool.query(
+        `UPDATE leads 
+         SET custom_fields = jsonb_set(COALESCE(custom_fields, '{}'::jsonb), '{lid}', to_jsonb($2::text)),
+             updated_at = NOW()
+         WHERE phone = $1`,
+        [cleanPhone, cleanLid]
+      );
+    } else {
+      const fb = DbConnection.getFallbackData();
+      const lead = (fb.leads || []).find((l: any) => l.phone === cleanPhone);
+      if (lead) {
+        lead.customFields = { ...(lead.customFields || {}), lid: cleanLid };
+      }
+    }
+  }
+
+  /**
+   * Fusiona dos prospectos duplicados (ej. uno creado por LID temporal y el número real)
+   */
+  public static async mergeLeads(sourcePhone: string, targetPhone: string, lid?: string): Promise<Lead | null> {
+    const cleanSource = sourcePhone.replace(/[^0-9]/g, '');
+    const cleanTarget = targetPhone.replace(/[^0-9]/g, '');
+    if (!cleanSource || !cleanTarget || cleanSource === cleanTarget) return null;
+
+    console.log(`🔀 [OutreachRepo] Fusionando chat y datos de lead ${cleanSource} -> ${cleanTarget}`);
+
+    if (DbConnection.isPg()) {
+      const pool = DbConnection.getPool();
+
+      // 1. Migrar mensajes del chat
+      await pool.query(
+        `UPDATE chat_messages SET lead_phone = $1 WHERE lead_phone = $2`,
+        [cleanTarget, cleanSource]
+      );
+
+      // 2. Traer source y target
+      const targetRes = await pool.query(`SELECT * FROM leads WHERE phone = $1`, [cleanTarget]);
+      const sourceRes = await pool.query(`SELECT * FROM leads WHERE phone = $1`, [cleanSource]);
+
+      if (targetRes.rows.length === 0 && sourceRes.rows.length > 0) {
+        await OutreachRepo.updateLeadPhone(cleanSource, cleanTarget, lid);
+        return await OutreachRepo.getLeadByPhone(cleanTarget);
+      }
+
+      if (sourceRes.rows.length > 0 && targetRes.rows.length > 0) {
+        const sourceRow = sourceRes.rows[0];
+        const targetRow = targetRes.rows[0];
+
+        const combinedCustomFields = {
+          ...(targetRow.custom_fields || {}),
+          ...(sourceRow.custom_fields || {}),
+          ...(lid ? { lid } : (cleanSource.length >= 14 ? { lid: cleanSource } : {}))
+        };
+
+        const latestTime = new Date(sourceRow.last_message_at || sourceRow.updated_at) > new Date(targetRow.last_message_at || targetRow.updated_at)
+          ? sourceRow.last_message_at
+          : targetRow.last_message_at;
+
+        await pool.query(
+          `UPDATE leads 
+           SET status = CASE WHEN $2 = 'REPLIED' OR status = 'REPLIED' THEN 'REPLIED' ELSE status END,
+               last_message_at = COALESCE($3, last_message_at),
+               custom_fields = $4,
+               updated_at = NOW()
+           WHERE phone = $1`,
+          [cleanTarget, sourceRow.status, latestTime, JSON.stringify(combinedCustomFields)]
+        );
+
+        // Eliminar el duplicado source
+        await pool.query(`DELETE FROM leads WHERE phone = $1`, [cleanSource]);
+      }
+
+      return await OutreachRepo.getLeadByPhone(cleanTarget);
+    } else {
+      const fb = DbConnection.getFallbackData();
+      if (fb.messages) {
+        fb.messages.forEach((m: any) => {
+          if (m.leadPhone === cleanSource) m.leadPhone = cleanTarget;
+        });
+      }
+      if (fb.leads) {
+        const targetLead = fb.leads.find((l: any) => l.phone === cleanTarget);
+        const sourceIdx = fb.leads.findIndex((l: any) => l.phone === cleanSource);
+        if (targetLead && sourceIdx !== -1) {
+          const sourceLead = fb.leads[sourceIdx];
+          targetLead.customFields = {
+            ...(targetLead.customFields || {}),
+            ...(sourceLead.customFields || {}),
+            ...(lid ? { lid } : (cleanSource.length >= 14 ? { lid: cleanSource } : {}))
+          };
+          if (sourceLead.status === 'REPLIED') targetLead.status = 'REPLIED';
+          fb.leads.splice(sourceIdx, 1);
+        }
+      }
+      return await OutreachRepo.getLeadByPhone(cleanTarget);
+    }
+  }
+
   public static async updateLeadPhone(oldPhone: string, newPhone: string, lid?: string): Promise<void> {
     const cleanOld = oldPhone.replace(/[^0-9]/g, '');
     const cleanNew = newPhone.replace(/[^0-9]/g, '');
@@ -1609,15 +1739,32 @@ export class OutreachRepo {
     lid?: string;
   }): Promise<{ lead: Lead; isNew: boolean; matchedService?: ServiceDefinition }> {
     const cleanPhone = data.phone.replace(/[^0-9]/g, '');
+    const cleanLid = data.lid ? data.lid.replace(/[^0-9]/g, '') : '';
+
+    // 1. Buscar por teléfono directo
     let existing = await OutreachRepo.getLeadByPhone(cleanPhone);
-    if (!existing && data.lid) {
-      existing = await OutreachRepo.getLeadByPhone(data.lid);
+
+    // 2. Si no se encontró y tenemos LID, o si cleanPhone parece un LID (>= 14 dígitos):
+    if (!existing && (cleanLid || cleanPhone.length >= 14)) {
+      const lookupLid = cleanLid || cleanPhone;
+      existing = await OutreachRepo.getLeadByLid(lookupLid);
       if (existing) {
-        await OutreachRepo.updateLeadPhone(existing.phone, cleanPhone, data.lid);
-        existing.phone = cleanPhone;
+        console.log(`🔗 [OutreachRepo] Lead encontrado por LID ${lookupLid}: +${existing.phone}`);
+        // Si el cleanPhone es un número real nuevo (<= 13 dígitos y no LID):
+        if (cleanPhone.length <= 13 && !cleanPhone.startsWith('269') && cleanPhone !== existing.phone) {
+          await OutreachRepo.updateLeadPhone(existing.phone, cleanPhone, lookupLid);
+          existing.phone = cleanPhone;
+        }
       }
     }
+
+    // 3. Si encontramos el lead existente, asegurar que tenga el LID registrado
     if (existing) {
+      if (cleanLid && (!existing.customFields?.lid || existing.customFields.lid !== cleanLid)) {
+        await OutreachRepo.linkLeadLid(existing.phone, cleanLid);
+        if (!existing.customFields) existing.customFields = {};
+        existing.customFields.lid = cleanLid;
+      }
       return { lead: existing, isNew: false };
     }
 

@@ -19,12 +19,17 @@ dotenv.config();
 export class BaileysEngine {
   private static instance: BaileysEngine | null = null;
   private sock: WASocket | null = null;
+  private authState: any = null;
   private isReady: boolean = false;
   private isInitializing: boolean = false;
   private latestQr: string | null = null;
   private authDir: string;
   private storageDir: string;
   private recentConversationsMap = new Map<string, { phone: string; name: string; lastMessage: string; timestamp: string }>();
+
+  // Cache en memoria bidireccional para WhatsApp LIDs
+  public static lidToPhoneCache = new Map<string, string>();
+  public static phoneToLidCache = new Map<string, string>();
 
   private constructor() {
     this.storageDir = path.resolve(process.env.STORAGE_DIR || './storage');
@@ -48,39 +53,30 @@ export class BaileysEngine {
   public async init(): Promise<void> {
     if (this.sock && this.isReady) return;
     if (this.isInitializing) return;
+
     this.isInitializing = true;
+    console.log('[BaileysEngine] Iniciando conexión con WhatsApp Web...');
 
     try {
-      if (this.sock) {
-        try {
-          this.sock.ev.removeAllListeners('connection.update');
-          this.sock.ev.removeAllListeners('creds.update');
-          this.sock.ev.removeAllListeners('messages.upsert');
-          (this.sock as any).ws?.close();
-        } catch {}
-        this.sock = null;
-      }
-
       if (!fs.existsSync(this.authDir)) {
         fs.mkdirSync(this.authDir, { recursive: true });
       }
 
-      // Auto-descomprimir backup si existe
-      const tarFile = path.join(this.storageDir, 'whatsapp_auth.tar.gz');
+      // Validar integridad de creds.json si existe
       const credsFile = path.join(this.authDir, 'creds.json');
-
-      if (fs.existsSync(tarFile) && !fs.existsSync(credsFile)) {
+      if (fs.existsSync(credsFile)) {
         try {
-          console.log('[BaileysEngine] Descomprimiendo backup desde whatsapp_auth.tar.gz...');
-          const { execSync } = await import('child_process');
-          execSync(`tar -xzf "${tarFile}" -C "${this.storageDir}"`);
-          console.log('✅ [BaileysEngine] Sesión restaurada con éxito desde tar.gz!');
-        } catch (err: any) {
-          console.error('[BaileysEngine] Error descomprimiendo backup:', err.message);
+          const raw = fs.readFileSync(credsFile, 'utf-8');
+          JSON.parse(raw);
+        } catch {
+          console.warn('⚠️ [BaileysEngine] Archivo creds.json corrupto. Purgando sesión para nuevo QR limpio...');
+          fs.rmSync(this.authDir, { recursive: true, force: true });
+          fs.mkdirSync(this.authDir, { recursive: true });
         }
       }
 
       const { state, saveCreds } = await useMultiFileAuthState(this.authDir);
+      this.authState = state;
 
       this.sock = makeWASocket({
         auth: state,
@@ -92,6 +88,39 @@ export class BaileysEngine {
       });
 
       this.sock.ev.on('creds.update', saveCreds);
+
+      // Listener en tiempo real para mapeo de WhatsApp LIDs emitidos por Baileys
+      this.sock.ev.on('lid-mapping.update' as any, async (update: any) => {
+        try {
+          const lid = update?.lid ? update.lid.replace(/[^0-9]/g, '') : '';
+          const pn = update?.pn ? update.pn.replace(/@s\.whatsapp\.net/, '').replace(/[^0-9]/g, '') : '';
+          if (lid && pn) {
+            console.log(`🔗 [BaileysEngine] lid-mapping.update detectado: LID ${lid} ↔ PN ${pn}`);
+            BaileysEngine.lidToPhoneCache.set(lid, pn);
+            BaileysEngine.phoneToLidCache.set(pn, lid);
+            await OutreachRepo.linkLeadLid(pn, lid);
+            await OutreachRepo.mergeLeads(lid, pn, lid);
+          }
+        } catch (err: any) {
+          console.error('[BaileysEngine] Error en lid-mapping.update:', err.message);
+        }
+      });
+
+      this.sock.ev.on('contacts.upsert', async (contacts: any[]) => {
+        if (!Array.isArray(contacts)) return;
+        for (const c of contacts) {
+          if (c.id && c.lid) {
+            const pn = c.id.replace(/@s\.whatsapp\.net/, '').replace(/[^0-9]/g, '');
+            const lid = c.lid.replace(/@lid/, '').replace(/[^0-9]/g, '');
+            if (pn && lid && pn !== lid) {
+              BaileysEngine.lidToPhoneCache.set(lid, pn);
+              BaileysEngine.phoneToLidCache.set(pn, lid);
+              await OutreachRepo.linkLeadLid(pn, lid);
+              await OutreachRepo.mergeLeads(lid, pn, lid);
+            }
+          }
+        }
+      });
 
       this.sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
@@ -197,19 +226,45 @@ export class BaileysEngine {
 
         if (remoteJid.endsWith('@lid')) {
           senderLid = remoteJid.replace(/[^0-9]/g, '');
-          // 1. Prioridad: remoteJidAlt o participantAlt en el key del mensaje
-          const altJid = (m.key as any).remoteJidAlt || (m.key as any).participantAlt || '';
-          if (altJid && altJid.includes('@s.whatsapp.net')) {
-            resolvedPhone = altJid.replace(/@s\.whatsapp\.net/, '').replace(/[^0-9]/g, '');
+
+          // 1. Cache en memoria estático bidireccional (instantáneo)
+          if (BaileysEngine.lidToPhoneCache.has(senderLid)) {
+            resolvedPhone = BaileysEngine.lidToPhoneCache.get(senderLid)!;
           }
-          // 2. Si no viene en el key, consultar el mapeo en memoria de Baileys signalRepository
-          if (!resolvedPhone && (this.sock as any)?.signalRepository?.lidMapping?.getPNForLID) {
+
+          // 2. Alt JID en el mensaje (remoteJidAlt, participantAlt)
+          if (!resolvedPhone) {
+            const altJid = (m.key as any).remoteJidAlt || (m.key as any).participantAlt || (m as any).participantAlt || '';
+            if (altJid && altJid.includes('@s.whatsapp.net')) {
+              resolvedPhone = altJid.replace(/@s\.whatsapp\.net/, '').replace(/[^0-9]/g, '');
+            }
+          }
+
+          // 3. Buscar en la base de datos PostgreSQL por LID asociado
+          if (!resolvedPhone) {
+            const existingLead = await OutreachRepo.getLeadByLid(senderLid);
+            if (existingLead && existingLead.phone && !existingLead.phone.startsWith('269') && existingLead.phone.length <= 13) {
+              resolvedPhone = existingLead.phone;
+              console.log(`🔗 [BaileysEngine] LID ${senderLid} resuelto via BD a lead existente: +${resolvedPhone}`);
+            }
+          }
+
+          // 4. Buscar en el authState keys de Baileys (lid-mapping store)
+          if (!resolvedPhone && this.authState?.keys?.get) {
             try {
-              const mapped = await (this.sock as any).signalRepository.lidMapping.getPNForLID(remoteJid);
-              if (mapped) {
-                resolvedPhone = mapped.replace(/@s\.whatsapp\.net/, '').replace(/[^0-9]/g, '');
+              const reverseKey = `${senderLid}_reverse`;
+              const stored = await this.authState.keys.get('lid-mapping', [reverseKey]);
+              if (stored?.[reverseKey]) {
+                const pn = stored[reverseKey];
+                resolvedPhone = pn.replace(/@s\.whatsapp\.net/, '').replace(/[^0-9]/g, '');
+                console.log(`🔗 [BaileysEngine] LID ${senderLid} resuelto via Baileys authState: +${resolvedPhone}`);
               }
             } catch {}
+          }
+
+          if (resolvedPhone) {
+            BaileysEngine.lidToPhoneCache.set(senderLid, resolvedPhone);
+            BaileysEngine.phoneToLidCache.set(resolvedPhone, senderLid);
           }
         }
 
@@ -217,7 +272,7 @@ export class BaileysEngine {
           resolvedPhone = remoteJid.replace(/@[^]+$/, '').replace(/[^0-9]/g, '');
         }
 
-        const senderPhone = resolvedPhone;
+        let senderPhone = resolvedPhone;
         if (!senderPhone) continue;
 
         // Extraer texto del mensaje soportando mensajes efímeros y multimedia
@@ -305,6 +360,16 @@ export class BaileysEngine {
         });
 
         if (!lead) continue;
+
+        // Si el lead registrado en BD tiene su teléfono real (evita bifurcar chats en @lid)
+        if (lead.phone && lead.phone !== senderPhone && !lead.phone.startsWith('269')) {
+          console.log(`🔄 [BaileysEngine] Unificando chat: senderPhone ${senderPhone} -> Lead real +${lead.phone}`);
+          if (senderLid) {
+            BaileysEngine.lidToPhoneCache.set(senderLid, lead.phone);
+            BaileysEngine.phoneToLidCache.set(lead.phone, senderLid);
+          }
+          senderPhone = lead.phone;
+        }
 
         // 3.5. Comprobar política de Opt-Out de Meta/WhatsApp (STOP, BAJA, CANCELAR, etc.)
         const cleanUpper = incomingText.trim().toUpperCase();
@@ -464,8 +529,20 @@ export class BaileysEngine {
       }
 
       console.log(`[BaileysEngine] Enviando mensaje a ${limpio}...`);
-      await this.sock.sendMessage(jid, { text: mensaje });
+      const sent = await this.sock.sendMessage(jid, { text: mensaje });
       console.log(`✅ [BaileysEngine] Mensaje entregado a ${limpio}!`);
+
+      if (sent?.key) {
+        const alt = ((sent.key as any).remoteJidAlt || '').replace(/[^0-9]/g, '');
+        const remote = (sent.key.remoteJid || '').replace(/[^0-9]/g, '');
+        const lidCandidate = (sent.key.remoteJid || '').endsWith('@lid') ? remote : ((sent.key as any).remoteJidAlt || '').endsWith('@lid') ? alt : '';
+        if (lidCandidate && limpio && lidCandidate !== limpio) {
+          BaileysEngine.lidToPhoneCache.set(lidCandidate, limpio);
+          BaileysEngine.phoneToLidCache.set(limpio, lidCandidate);
+          await OutreachRepo.linkLeadLid(limpio, lidCandidate);
+        }
+      }
+
       return { success: true, jid };
     } catch (err: any) {
       console.error(`❌ [BaileysEngine] Error enviando a ${telefono}:`, err.message);
