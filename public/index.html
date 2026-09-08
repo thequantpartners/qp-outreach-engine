@@ -2,7 +2,10 @@
 <html lang="es" class="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>The Quant Partners · Centro Comercial Autónomo</title>
   
   <!-- Obsidian Precision Fonts -->
@@ -145,6 +148,29 @@
       background-color: #0E1322 !important;
       color: #F8FAFC !important;
     }
+
+    /* Bloqueo Estricto de Desborde Horizontal SaaR Mobile */
+    html, body {
+      overflow-x: hidden !important;
+      width: 100vw !important;
+      max-width: 100vw !important;
+      touch-action: pan-y !important;
+    }
+
+    @media (max-width: 1023px) {
+      .desktop-only {
+        display: none !important;
+      }
+      .mobile-chat-open {
+        display: flex !important;
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100vw !important;
+        height: 100dvh !important;
+        z-index: 100 !important;
+        background-color: #05070B !important;
+      }
+    }
   </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden bg-obsidian text-slate-200">
@@ -197,7 +223,7 @@
   <!-- ============================================== -->
   <!-- BARRA SUPERIOR EDITORIAL (HEADER) -->
   <!-- ============================================== -->
-  <header id="appHeader" class="h-14 border-b border-white/[0.06] bg-surface/80 backdrop-blur-md px-5 flex items-center justify-between flex-shrink-0 z-20">
+  <header id="appHeader" class="h-14 border-b border-white/[0.06] bg-surface/80 backdrop-blur-md px-4 sm:px-5 flex items-center justify-between flex-shrink-0 z-20 w-full max-w-[100vw] overflow-hidden">
     <div class="flex items-center gap-4">
       <div class="w-8 h-8 rounded-lg bg-gold/15 border border-gold/30 flex items-center justify-center text-gold font-serif font-bold text-sm">
         QP
@@ -211,10 +237,10 @@
       </div>
     </div>
 
-    <!-- NAVEGACIÓN Y VISTAS -->
+    <!-- NAVEGACIÓN Y VISTAS (Solo Desktop / PC) -->
     <div class="flex items-center gap-2">
       <!-- Selector de Vista: Master-Detail Workspace vs Prospección vs Métricas -->
-      <div class="flex items-center bg-obsidian p-1 rounded-lg border border-white/[0.06]">
+      <div class="desktop-only hidden lg:flex items-center bg-obsidian p-1 rounded-lg border border-white/[0.06]">
         <button 
           onclick="switchMainView('workspace')" 
           id="tabBtnWorkspace" 
@@ -241,11 +267,11 @@
         </button>
       </div>
 
-      <!-- Botón de Configuración del Sistema -->
+      <!-- Botón de Configuración del Sistema (Solo Desktop / PC) -->
       <button 
         onclick="openSettingsModal()" 
         id="btnOpenSettings"
-        class="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-surface hover:bg-white/[0.05] border border-white/[0.08] hover:border-gold/40 flex items-center gap-1.5 transition"
+        class="desktop-only hidden lg:flex px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-surface hover:bg-white/[0.05] border border-white/[0.08] hover:border-gold/40 items-center gap-1.5 transition"
         title="Configuración de WhatsApp, anti-baneo y derivación comercial"
       >
         <i data-lucide="settings" class="w-3.5 h-3.5 text-gold"></i>
@@ -256,27 +282,27 @@
       <div 
         id="waStatusBadge" 
         onclick="openSettingsModal('whatsapp')" 
-        class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-mono cursor-pointer transition hover:bg-emerald-500/15"
+        class="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-mono cursor-pointer transition hover:bg-emerald-500/15 flex-shrink-0"
         title="Clic para gestionar WhatsApp o re-escanear QR"
       >
         <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-        <span id="waStatusText">WhatsApp Conectado</span>
+        <span id="waStatusText" class="text-[11px] sm:text-xs">Conectado</span>
       </div>
 
-      <!-- Perfil / Rol Activo -->
+      <!-- Perfil / Rol Activo (Solo Desktop) -->
       <div 
         id="userProfileBadge" 
-        class="hidden items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.08] text-xs font-sans"
+        class="desktop-only hidden items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.08] text-xs font-sans"
       >
         <span class="w-2 h-2 rounded-full bg-gold"></span>
         <span id="userProfileName" class="text-slate-200 font-medium">Kenneth</span>
       </div>
 
-      <!-- Botón de Acceso a SuperAdmin (Solo Director/Owner) -->
+      <!-- Botón de Acceso a SuperAdmin (Solo Director/Owner en Desktop) -->
       <a 
         href="/master" 
         id="btnGoToMaster"
-        class="hidden px-2.5 py-1.5 rounded-lg bg-gold/10 hover:bg-gold/20 text-gold border border-gold/30 text-xs font-medium items-center gap-1.5 transition shadow-sm"
+        class="desktop-only hidden px-2.5 py-1.5 rounded-lg bg-gold/10 hover:bg-gold/20 text-gold border border-gold/30 text-xs font-medium items-center gap-1.5 transition shadow-sm"
         title="Abrir Consola Maestra de SuperAdmin (Flota de Nodos Satélite)"
       >
         <i data-lucide="zap" class="w-3.5 h-3.5"></i>
@@ -288,16 +314,16 @@
         type="button"
         onclick="handleLogout()" 
         title="Cerrar sesión"
-        class="p-1.5 rounded-lg bg-surface hover:bg-rose-500/10 border border-white/[0.06] text-slate-400 hover:text-rose-400 transition"
+        class="p-1.5 rounded-lg bg-surface hover:bg-rose-500/10 border border-white/[0.06] text-slate-400 hover:text-rose-400 transition flex-shrink-0"
       >
         <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
       </button>
 
-      <!-- Botón Recargar Datos -->
+      <!-- Botón Recargar Datos (Solo Desktop) -->
       <button 
         onclick="fetchOverview()" 
         title="Actualizar datos de PostgreSQL"
-        class="p-1.5 rounded-lg bg-surface hover:bg-white/[0.05] border border-white/[0.06] text-slate-400 hover:text-white transition"
+        class="desktop-only hidden lg:flex p-1.5 rounded-lg bg-surface hover:bg-white/[0.05] border border-white/[0.06] text-slate-400 hover:text-white transition"
       >
         <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
       </button>
@@ -305,9 +331,9 @@
   </header>
 
   <!-- ============================================== -->
-  <!-- BANNER DE ACTIVACIÓN RÁPIDA / ONBOARDING (LINEAR STYLE) -->
+  <!-- BANNER DE ACTIVACIÓN RÁPIDA / ONBOARDING (LINEAR STYLE - SOLO PC) -->
   <!-- ============================================== -->
-  <div id="onboardingBanner" class="border-b border-white/[0.06] bg-surface/90 px-5 py-2.5 flex items-center justify-between transition-all duration-300 flex-shrink-0">
+  <div id="onboardingBanner" class="hidden lg:flex border-b border-white/[0.06] bg-surface/90 px-5 py-2.5 items-center justify-between transition-all duration-300 flex-shrink-0">
     <div class="flex items-center gap-6 overflow-x-auto custom-scroll py-0.5">
       <div class="flex items-center gap-2 flex-shrink-0">
         <div class="w-5 h-5 rounded-md bg-gold/10 border border-gold/30 flex items-center justify-center text-gold font-mono text-[10px] font-bold">
@@ -442,29 +468,21 @@
           </div>
         </div>
 
-        <!-- Filtro por Canal de Origen (Orgánico vs Meta Ads vs Prospección) -->
+        <!-- Filtro por Canal de Origen (Meta Ads vs Prospección Fría) -->
         <div class="flex items-center gap-1 bg-card p-1 rounded-xl border border-white/[0.08]">
           <button 
             type="button" 
             onclick="setSourceFilter('ALL')" 
             id="sourceFilter_ALL" 
-            class="flex-1 py-1 px-1.5 rounded-lg text-[10px] font-sans font-medium transition text-white bg-white/[0.08] shadow-sm text-center"
+            class="flex-1 py-1 px-2 rounded-lg text-[11px] font-sans font-medium transition text-white bg-white/[0.08] shadow-sm text-center"
           >
             Todos
           </button>
           <button 
             type="button" 
-            onclick="setSourceFilter('organic')" 
-            id="sourceFilter_organic" 
-            class="flex-1 py-1 px-1.5 rounded-lg text-[10px] font-sans font-medium transition text-slate-400 hover:text-emerald-300 text-center flex items-center justify-center gap-1"
-          >
-            <span>💬</span><span>Orgánico</span>
-          </button>
-          <button 
-            type="button" 
             onclick="setSourceFilter('meta_ads')" 
             id="sourceFilter_meta_ads" 
-            class="flex-1 py-1 px-1.5 rounded-lg text-[10px] font-sans font-medium transition text-slate-400 hover:text-amber-300 text-center flex items-center justify-center gap-1"
+            class="flex-1 py-1 px-2 rounded-lg text-[11px] font-sans font-medium transition text-slate-400 hover:text-white text-center flex items-center justify-center gap-1"
           >
             <span>🎯</span><span>Meta Ads</span>
           </button>
@@ -472,7 +490,7 @@
             type="button" 
             onclick="setSourceFilter('outbound')" 
             id="sourceFilter_outbound" 
-            class="flex-1 py-1 px-1.5 rounded-lg text-[10px] font-sans font-medium transition text-slate-400 hover:text-sky-300 text-center flex items-center justify-center gap-1"
+            class="flex-1 py-1 px-2 rounded-lg text-[11px] font-sans font-medium transition text-slate-400 hover:text-white text-center flex items-center justify-center gap-1"
           >
             <span>🤖</span><span>Prospección</span>
           </button>
@@ -722,8 +740,14 @@
     </section>
 
     <!-- COLUMNA 3: PANEL DE INTELIGENCIA COMERCIAL & FICHA DEL PROSPECTO -->
-    <aside id="leadDetailIntelPanel" class="fixed inset-0 z-50 bg-obsidian/95 backdrop-blur-md lg:static lg:w-[330px] xl:w-[360px] lg:bg-surface/40 border-l border-white/[0.06] flex flex-col flex-shrink-0 overflow-y-auto custom-scroll hidden lg:flex">
+    <!-- En móvil se convierte en un Bottom Sheet -->
+    <aside id="leadDetailIntelPanel" class="fixed inset-x-0 bottom-0 top-[15vh] z-[60] bg-surface rounded-t-3xl border-t border-white/[0.08] shadow-2xl transition-transform duration-300 translate-y-full lg:translate-y-0 lg:static lg:h-auto lg:w-[330px] xl:w-[360px] lg:bg-surface/40 lg:border-l lg:border-t-0 lg:rounded-none flex flex-col flex-shrink-0 lg:flex overflow-hidden">
       
+      <!-- Agarradera (Drag Handle) para móvil -->
+      <div class="lg:hidden w-full flex justify-center pt-3 pb-1 cursor-pointer bg-surface/60" onclick="toggleMobileLeadInfo(false)">
+        <div class="w-10 h-1.5 bg-white/20 rounded-full"></div>
+      </div>
+
       <!-- Cabecera Panel Inteligencia -->
       <div class="h-14 border-b border-white/[0.06] px-4 flex items-center justify-between flex-shrink-0 bg-surface/60">
         <div class="flex items-center gap-2">
@@ -747,6 +771,9 @@
           </button>
         </div>
       </div>
+
+      <!-- Contenedor scrolleable interno -->
+      <div class="flex-1 overflow-y-auto custom-scroll flex flex-col">
 
       <!-- Contenido del Panel Inteligencia (Activo cuando hay un lead seleccionado) -->
       <div id="intelPanelContent" class="p-4 space-y-4 flex-1">
@@ -907,6 +934,7 @@
 
         </div>
 
+      </div> <!-- Cierra el div del contenedor scrolleable interno -->
     </aside>
 
   </main>
@@ -2638,72 +2666,27 @@
           ></textarea>
         </div>
 
-        <!-- Selector de Límite de Scraping Automático -->
-        <div id="newCampScrapeOptions" class="p-3.5 rounded-xl bg-subsurface/70 border border-white/[0.08] flex items-center justify-between gap-3">
-          <div>
-            <label class="block text-xs font-sans font-medium text-slate-200">Extracción de Prospectos en Google Maps</label>
-            <p class="text-[11px] text-slate-400 font-light">La IA generará las queries del nicho y extraerá prospectos verificados con 1 solo clic.</p>
-          </div>
-          <select id="newCampScrapeLimit" class="input-luxury px-3 py-1.5 text-xs text-white font-mono cursor-pointer rounded-lg bg-card border border-white/[0.1]">
-            <option value="15" selected>15 prospectos (Recomendado)</option>
-            <option value="25">25 prospectos</option>
-            <option value="50">50 prospectos</option>
-          </select>
-        </div>
-
         <div id="newCampAlertBox" class="p-3 rounded-xl text-xs hidden font-sans"></div>
       </div>
 
       <!-- Footer -->
-      <div class="px-6 py-4 border-t border-white/[0.06] flex items-center justify-between flex-shrink-0 bg-surface/50 gap-2">
+      <div class="px-6 py-4 border-t border-white/[0.06] flex items-center justify-between flex-shrink-0 bg-surface/50">
         <button 
           type="button" 
           onclick="closeCreateCampaignModal()" 
-          class="px-3.5 py-2 rounded-xl text-xs font-sans font-medium text-slate-400 hover:text-white bg-card border border-white/[0.08] transition"
+          class="px-4 py-2 rounded-xl text-xs font-sans font-medium text-slate-300 hover:text-white bg-card border border-white/[0.08] transition"
         >
           Cancelar
         </button>
-        <div class="flex items-center gap-2">
-          <button 
-            type="button" 
-            onclick="handleSaveNewCampaign()" 
-            id="btnSaveOnlyNewCamp" 
-            class="px-4 py-2 rounded-xl text-xs font-sans font-medium text-slate-300 hover:text-white bg-card border border-white/[0.08] hover:border-white/[0.15] transition"
-          >
-            Solo Guardar
-          </button>
-          <button 
-            type="button" 
-            onclick="handleSaveAndLaunchScraping()" 
-            id="btnSaveAndScrapeCamp" 
-            class="px-5 py-2 btn-gold rounded-xl text-xs font-sans font-semibold flex items-center gap-2 shadow-md shadow-gold/15"
-          >
-            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
-            <span>🚀 Guardar y Extraer con IA</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ============================================== -->
-  <!-- MODAL: PROGRESO DE EXTRACCIÓN CON IA -->
-  <!-- ============================================== -->
-  <div id="scrapingProgressModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 hidden">
-    <div class="bg-surface border border-gold/40 rounded-2xl p-6 max-w-md w-full text-center shadow-2xl relative">
-      <div class="w-12 h-12 rounded-2xl bg-gold/15 text-gold flex items-center justify-center mx-auto mb-4 border border-gold/30">
-        <i data-lucide="loader" class="w-6 h-6 animate-spin"></i>
-      </div>
-      <h3 class="font-serif text-base font-semibold text-white mb-1" id="scrapeProgressTitle">Extrayendo Prospectos en Google Maps...</h3>
-      <p class="text-xs text-slate-300 font-light mb-4" id="scrapeProgressSubtitle">La IA está escaneando empresas del sector y verificando teléfonos en la base de datos.</p>
-      
-      <div class="w-full bg-card rounded-full h-2 overflow-hidden border border-white/[0.08] mb-4">
-        <div id="scrapeProgressBar" class="h-full bg-gradient-to-r from-gold-dark via-gold to-gold-light rounded-full transition-all duration-500 w-1/3 animate-pulse"></div>
-      </div>
-      
-      <div class="flex items-center justify-between text-[11px] font-mono text-slate-400">
-        <span id="scrapeProgressQuery">Conectando a Apify...</span>
-        <span id="scrapeProgressTimer">0s transcurridos</span>
+        <button 
+          type="button" 
+          onclick="handleSaveNewCampaign()" 
+          id="btnSaveNewCamp" 
+          class="px-6 py-2 btn-gold rounded-xl text-xs font-sans font-semibold flex items-center gap-2 shadow-md shadow-gold/10"
+        >
+          <i data-lucide="check" class="w-3.5 h-3.5"></i>
+          <span>Guardar y Activar Campaña</span>
+        </button>
       </div>
     </div>
   </div>
@@ -3279,6 +3262,6 @@
     </div>
   </div>
 
-  <script src="/dashboard/app.js"></script>
+  <script src="/dashboard/app.js?v=20260908_wa_v4"></script>
 </body>
 </html>
