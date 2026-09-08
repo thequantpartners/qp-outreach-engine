@@ -2898,7 +2898,7 @@ function initSSE() {
     eventSource.close();
   }
 
-  eventSource = new EventSource(`/api/client/stream?pin=${currentPin}`);
+  eventSource = new EventSource(`/api/client/stream?pin=${encodeURIComponent(currentPin)}`);
 
   eventSource.onmessage = (e) => {
     try {

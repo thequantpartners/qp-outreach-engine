@@ -1795,14 +1795,7 @@ app.post('/api/client/scrape/execute', authenticateClientPin, requireOwnerRole, 
   }
 });
 
-app.get('/api/client/stream', (req: Request, res: Response) => {
-  const configuredPin = process.env.CLIENT_PIN || '1234';
-  const queryPin = req.query.pin as string;
-
-  if (!queryPin || queryPin !== configuredPin) {
-    res.status(401).end();
-    return;
-  }
+app.get('/api/client/stream', authenticateClientPin, (req: Request, res: Response) => {
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
