@@ -145,6 +145,19 @@
       background-color: #0E1322 !important;
       color: #F8FAFC !important;
     }
+
+    /* WhatsApp Nativo en Móvil */
+    @media (max-width: 1023px) {
+      .mobile-chat-open {
+        display: flex !important;
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100vw !important;
+        height: 100dvh !important;
+        z-index: 50 !important;
+        background-color: #05070B !important;
+      }
+    }
   </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden bg-obsidian text-slate-200">
@@ -211,10 +224,10 @@
       </div>
     </div>
 
-    <!-- NAVEGACIÓN Y VISTAS -->
+    <!-- NAVEGACIÓN Y VISTAS (Solo Desktop / PC) -->
     <div class="flex items-center gap-2">
       <!-- Selector de Vista: Master-Detail Workspace vs Prospección vs Métricas -->
-      <div class="flex items-center bg-obsidian p-1 rounded-lg border border-white/[0.06]">
+      <div class="hidden lg:flex items-center bg-obsidian p-1 rounded-lg border border-white/[0.06]">
         <button 
           onclick="switchMainView('workspace')" 
           id="tabBtnWorkspace" 
@@ -241,11 +254,11 @@
         </button>
       </div>
 
-      <!-- Botón de Configuración del Sistema -->
+      <!-- Botón de Configuración del Sistema (Solo Desktop / PC) -->
       <button 
         onclick="openSettingsModal()" 
         id="btnOpenSettings"
-        class="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-surface hover:bg-white/[0.05] border border-white/[0.08] hover:border-gold/40 flex items-center gap-1.5 transition"
+        class="hidden lg:flex px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-surface hover:bg-white/[0.05] border border-white/[0.08] hover:border-gold/40 items-center gap-1.5 transition"
         title="Configuración de WhatsApp, anti-baneo y derivación comercial"
       >
         <i data-lucide="settings" class="w-3.5 h-3.5 text-gold"></i>
@@ -305,9 +318,9 @@
   </header>
 
   <!-- ============================================== -->
-  <!-- BANNER DE ACTIVACIÓN RÁPIDA / ONBOARDING (LINEAR STYLE) -->
+  <!-- BANNER DE ACTIVACIÓN RÁPIDA / ONBOARDING (LINEAR STYLE - SOLO PC) -->
   <!-- ============================================== -->
-  <div id="onboardingBanner" class="border-b border-white/[0.06] bg-surface/90 px-5 py-2.5 flex items-center justify-between transition-all duration-300 flex-shrink-0">
+  <div id="onboardingBanner" class="hidden lg:flex border-b border-white/[0.06] bg-surface/90 px-5 py-2.5 items-center justify-between transition-all duration-300 flex-shrink-0">
     <div class="flex items-center gap-6 overflow-x-auto custom-scroll py-0.5">
       <div class="flex items-center gap-2 flex-shrink-0">
         <div class="w-5 h-5 rounded-md bg-gold/10 border border-gold/30 flex items-center justify-center text-gold font-mono text-[10px] font-bold">
@@ -714,8 +727,14 @@
     </section>
 
     <!-- COLUMNA 3: PANEL DE INTELIGENCIA COMERCIAL & FICHA DEL PROSPECTO -->
-    <aside id="leadDetailIntelPanel" class="fixed inset-0 z-50 bg-obsidian/95 backdrop-blur-md lg:static lg:w-[330px] xl:w-[360px] lg:bg-surface/40 border-l border-white/[0.06] flex flex-col flex-shrink-0 overflow-y-auto custom-scroll hidden lg:flex">
+    <!-- En móvil se convierte en un Bottom Sheet -->
+    <aside id="leadDetailIntelPanel" class="fixed inset-x-0 bottom-0 top-[15vh] z-[60] bg-surface rounded-t-3xl border-t border-white/[0.08] shadow-2xl transition-transform duration-300 translate-y-full lg:translate-y-0 lg:static lg:h-auto lg:w-[330px] xl:w-[360px] lg:bg-surface/40 lg:border-l lg:border-t-0 lg:rounded-none flex flex-col flex-shrink-0 lg:flex overflow-hidden">
       
+      <!-- Agarradera (Drag Handle) para móvil -->
+      <div class="lg:hidden w-full flex justify-center pt-3 pb-1 cursor-pointer bg-surface/60" onclick="toggleMobileLeadInfo(false)">
+        <div class="w-10 h-1.5 bg-white/20 rounded-full"></div>
+      </div>
+
       <!-- Cabecera Panel Inteligencia -->
       <div class="h-14 border-b border-white/[0.06] px-4 flex items-center justify-between flex-shrink-0 bg-surface/60">
         <div class="flex items-center gap-2">
@@ -739,6 +758,9 @@
           </button>
         </div>
       </div>
+
+      <!-- Contenedor scrolleable interno -->
+      <div class="flex-1 overflow-y-auto custom-scroll flex flex-col">
 
       <!-- Contenido del Panel Inteligencia (Activo cuando hay un lead seleccionado) -->
       <div id="intelPanelContent" class="p-4 space-y-4 flex-1">
@@ -899,6 +921,7 @@
 
         </div>
 
+      </div> <!-- Cierra el div del contenedor scrolleable interno -->
     </aside>
 
   </main>

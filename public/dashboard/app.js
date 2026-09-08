@@ -891,47 +891,82 @@ function handleLeadSearch(val) {
 // 6. Navegación Móvil Estilo WhatsApp (100% Responsivo)
 function openMobileChat(phone) {
   if (window.innerWidth < 1024) {
-    const col1 = document.getElementById('colLeadsList');
     const col2 = document.getElementById('colActiveChat');
-    if (col1 && col2) {
-      col1.classList.add('hidden');
+    if (col2) {
       col2.classList.remove('hidden');
-      col2.classList.add('flex', 'w-full');
+      col2.classList.add('mobile-chat-open');
     }
   }
 }
 
 function closeMobileChat() {
-  const col1 = document.getElementById('colLeadsList');
   const col2 = document.getElementById('colActiveChat');
-  const col3 = document.getElementById('leadDetailIntelPanel');
-  if (col1 && col2) {
-    col1.classList.remove('hidden');
-    col2.classList.add('hidden');
-    col2.classList.remove('flex', 'w-full');
+  if (col2) {
+    col2.classList.remove('mobile-chat-open');
+    if (window.innerWidth < 1024) {
+      col2.classList.add('hidden');
+    }
   }
-  if (col3 && window.innerWidth < 1024) {
-    col3.classList.add('hidden');
-    col3.classList.remove('flex');
-  }
+  // Cerrar bottom sheet si está abierto
+  toggleMobileLeadInfo(false);
 }
 
 function toggleMobileLeadInfo(forceState) {
   const col3 = document.getElementById('leadDetailIntelPanel');
   if (!col3) return;
-  if (forceState !== undefined) {
-    if (forceState) {
-      col3.classList.remove('hidden');
-      col3.classList.add('flex');
-    } else {
-      col3.classList.add('hidden');
-      col3.classList.remove('flex');
+  
+  const isDesktop = window.innerWidth >= 1024;
+
+  if (isDesktop) {
+    if (forceState !== undefined) {
+      if (forceState) {
+        col3.classList.remove('hidden');
+        col3.classList.add('flex');
+      } else {
+        col3.classList.add('hidden');
+        col3.classList.remove('flex');
+      }
+      return;
     }
-    return;
+    col3.classList.toggle('hidden');
+    col3.classList.toggle('flex');
+  } else {
+    // Modo Móvil (Bottom Sheet)
+    // Nos aseguramos que no esté hidden para que anime
+    col3.classList.remove('hidden');
+    col3.classList.add('flex');
+
+    if (forceState !== undefined) {
+      if (forceState) {
+        // Abrir
+        col3.classList.remove('translate-y-full');
+        col3.classList.add('translate-y-0');
+      } else {
+        // Cerrar
+        col3.classList.remove('translate-y-0');
+        col3.classList.add('translate-y-full');
+      }
+      return;
+    }
+    
+    // Toggle normal
+    if (col3.classList.contains('translate-y-full')) {
+      col3.classList.remove('translate-y-full');
+      col3.classList.add('translate-y-0');
+    } else {
+      col3.classList.remove('translate-y-0');
+      col3.classList.add('translate-y-full');
+    }
   }
-  col3.classList.toggle('hidden');
-  col3.classList.toggle('flex');
 }
+
+// Wrapper para mobile nav (usa el mismo switchMainView pero permite restaurar vistas de chat)
+window.switchMobileNav = function(view) {
+  closeMobileChat(); // Asegurar que salimos del chat activo al cambiar de sección
+  if (typeof switchMainView === 'function') {
+    switchMainView(view);
+  }
+};
 
 // 7. Seleccionar Prospecto y Abrir Detalle / Chat Directo
 async function selectLeadForDetail(phone) {
