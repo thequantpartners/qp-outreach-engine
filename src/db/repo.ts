@@ -144,43 +144,79 @@ export class OutreachRepo {
       ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS meta_waba_id VARCHAR(100);
       ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS meta_access_token TEXT;
       ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS meta_webhook_verify_token VARCHAR(100);
+      ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT false;
       ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_customer_message_at TIMESTAMP WITH TIME ZONE;
     `);
 
     // Comprobar si no hay servicios registrados
+    const isClientMode = process.env.MODE === 'client';
     const checkServices = await pool.query("SELECT COUNT(*) FROM services");
     const noServices = parseInt(checkServices.rows[0].count, 10) === 0;
 
     if (noServices) {
-      console.log('[OutreachRepo] Insertando presets de servicios iniciales en PostgreSQL...');
-      for (const s of OutreachRepo.defaultServices) {
-        await pool.query(
-          `INSERT INTO services (id, name, description, target_persona, apify_queries, target_locations, outreach_template, follow_up_template_1, follow_up_template_2, asset_file_path, asset_file_name, closing_type, closing_payload, ai_system_prompt, is_active)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-           ON CONFLICT (id) DO NOTHING`,
-          [
-            s.id,
-            s.name,
-            s.description,
-            s.targetPersona,
-            JSON.stringify(s.apifyQueries),
-            JSON.stringify(s.targetLocations),
-            s.outreachTemplate,
-            s.followUpTemplate1 || null,
-            s.followUpTemplate2 || null,
-            s.assetFilePath || null,
-            s.assetFileName || null,
-            s.closingType,
-            JSON.stringify(s.closingPayload),
-            s.aiSystemPrompt,
-            s.isActive
-          ]
-        );
+      if (!isClientMode) {
+        console.log('[OutreachRepo] Insertando presets de servicios iniciales en PostgreSQL (Modo Master)...');
+        for (const s of OutreachRepo.defaultServices) {
+          await pool.query(
+            `INSERT INTO services (id, name, description, target_persona, apify_queries, target_locations, outreach_template, follow_up_template_1, follow_up_template_2, asset_file_path, asset_file_name, closing_type, closing_payload, ai_system_prompt, is_active)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+             ON CONFLICT (id) DO NOTHING`,
+            [
+              s.id,
+              s.name,
+              s.description,
+              s.targetPersona,
+              JSON.stringify(s.apifyQueries),
+              JSON.stringify(s.targetLocations),
+              s.outreachTemplate,
+              s.followUpTemplate1 || null,
+              s.followUpTemplate2 || null,
+              s.assetFilePath || null,
+              s.assetFileName || null,
+              s.closingType,
+              JSON.stringify(s.closingPayload),
+              s.aiSystemPrompt,
+              s.isActive
+            ]
+          );
+        }
+      } else if (process.env.INITIAL_NICHE) {
+        try {
+          const { BlueprintsManager } = await import('../master/blueprints_manager.js');
+          const bp = BlueprintsManager.getBlueprint(process.env.INITIAL_NICHE);
+          if (bp) {
+            console.log(`[OutreachRepo] Sembrando blueprint inicial de nicho "${bp.nicheName}" para cliente...`);
+            const company = process.env.COMPANY_NAME || 'Mi Empresa';
+            const sId = `${bp.id}-${process.env.CLIENT_ID || 'satelite'}`;
+            await pool.query(
+              `INSERT INTO services (id, name, description, target_persona, apify_queries, target_locations, outreach_template, follow_up_template_1, follow_up_template_2, closing_type, closing_payload, ai_system_prompt, is_active)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+               ON CONFLICT (id) DO NOTHING`,
+              [
+                sId,
+                `${bp.nicheName} - ${company}`,
+                bp.description,
+                'Directores, gerentes y tomadores de decisión.',
+                JSON.stringify(bp.defaultApifyQueries),
+                JSON.stringify(bp.defaultTargetLocations),
+                bp.outreachTemplate.replace(/\{\{companyName\}\}/g, company).replace(/\{\{agentName\}\}/g, company),
+                bp.followUpTemplate1.replace(/\{\{companyName\}\}/g, company).replace(/\{\{agentName\}\}/g, company),
+                bp.followUpTemplate2.replace(/\{\{companyName\}\}/g, company).replace(/\{\{agentName\}\}/g, company),
+                bp.recommendedClosingMode,
+                JSON.stringify({}),
+                bp.systemPromptTemplate.replace(/\{\{companyName\}\}/g, company).replace(/\{\{agentName\}\}/g, company),
+                true
+              ]
+            );
+          }
+        } catch (e: any) {
+          console.warn('[OutreachRepo] No se pudo cargar blueprint de nicho inicial:', e.message);
+        }
       }
     }
 
     // Configuración inicial
-    const initialAdminPhone = process.env.ADMIN_WHATSAPP_PHONE || '';
+    const initialAdminPhone = process.env.ADMIN_WHATSAPP_PHONE || (isClientMode ? '' : '51902105668');
     await pool.query(`
       INSERT INTO campaign_settings (id, daily_limit, min_delay_seconds, max_delay_seconds, start_hour, end_hour, admin_whatsapp_phone, is_autonomous_active)
       VALUES ('main_config', 35, 180, 300, 9, 19, $1, true)
@@ -191,8 +227,9 @@ export class OutreachRepo {
   }
 
   private static async initFallbackSchema(): Promise<void> {
+    const isClientMode = process.env.MODE === 'client';
     const data = DbConnection.getFallbackData();
-    if (!data.services || data.services.length === 0) {
+    if (!isClientMode && (!data.services || data.services.length === 0)) {
       data.services = OutreachRepo.defaultServices;
       DbConnection.saveFallbackData(data);
       console.log('✅ [OutreachRepo] Servicios iniciales cargados en fallback local.');
@@ -1086,7 +1123,8 @@ export class OutreachRepo {
         metaPhoneNumberId: r.meta_phone_number_id || '',
         metaWabaId: r.meta_waba_id || '',
         metaAccessToken: r.meta_access_token || '',
-        metaWebhookVerifyToken: r.meta_webhook_verify_token || 'qp_verify_token_2026'
+        metaWebhookVerifyToken: r.meta_webhook_verify_token || 'qp_verify_token_2026',
+        onboardingCompleted: r.onboarding_completed != null ? Boolean(r.onboarding_completed) : (process.env.MODE !== 'client')
       };
     } else {
       const data = DbConnection.getFallbackData();
@@ -1110,7 +1148,8 @@ export class OutreachRepo {
         metaPhoneNumberId: '',
         metaWabaId: '',
         metaAccessToken: '',
-        metaWebhookVerifyToken: 'qp_verify_token_2026'
+        metaWebhookVerifyToken: 'qp_verify_token_2026',
+        onboardingCompleted: process.env.MODE !== 'client'
       };
     }
   }
@@ -1143,6 +1182,7 @@ export class OutreachRepo {
            meta_waba_id = $20,
            meta_access_token = $21,
            meta_webhook_verify_token = $22,
+           onboarding_completed = $23,
            updated_at = NOW()
          WHERE id = 'main_config'`,
         [
@@ -1167,7 +1207,8 @@ export class OutreachRepo {
           updated.metaPhoneNumberId || '',
           updated.metaWabaId || '',
           updated.metaAccessToken || '',
-          updated.metaWebhookVerifyToken || 'qp_verify_token_2026'
+          updated.metaWebhookVerifyToken || 'qp_verify_token_2026',
+          Boolean(updated.onboardingCompleted)
         ]
       );
     } else {

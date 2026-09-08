@@ -26,6 +26,9 @@ import fs from 'fs';
 import path from 'path';
 import { RoundRobinManager } from '../pipeline/round_robin.js';
 import { ClientRegistry } from '../master/client_registry.js';
+import { Deployer } from '../master/deployer.js';
+import { BlueprintsManager } from '../master/blueprints_manager.js';
+import { VpsInstaller } from '../master/vps_installer.js';
 import { OpenRouterCloser } from '../ai/openrouter_closer.js';
 
 dotenv.config();
@@ -262,7 +265,11 @@ async function authenticateClientPin(req: Request, res: Response, next: NextFunc
   }
   const cleanPin = String(providedPin).trim();
   if (cleanPin === configuredPin) {
-    (req as any).clientUser = { role: 'owner', repName: 'Kenneth (Director)' };
+    const isClientMode = process.env.MODE === 'client';
+    const ownerName = isClientMode
+      ? (process.env.ADMIN_NAME || `${process.env.COMPANY_NAME || 'Cliente'} (Director)`)
+      : 'Kenneth (Director)';
+    (req as any).clientUser = { role: 'owner', repName: ownerName };
     next();
     return;
   }
@@ -344,12 +351,17 @@ app.post('/api/client/auth', async (req: Request, res: Response) => {
   // 1. Acceso Dueño / Admin
   if (cleanPin && cleanPin === configuredPin) {
     authAttemptsByIp.delete(ip); // Restablecer intentos al acertar
+    const isClientMode = process.env.MODE === 'client';
+    const ownerName = isClientMode
+      ? (process.env.ADMIN_NAME || `${process.env.COMPANY_NAME || 'Cliente'} (Director)`)
+      : 'Kenneth (Director)';
     res.json({
       success: true,
       role: 'owner',
-      repName: 'Kenneth (Director)',
-      companyName: process.env.COMPANY_NAME || 'Centro Comercial B2B',
-      serviceName: process.env.SERVICE_NAME || 'Departamento Comercial Autónomo'
+      repName: ownerName,
+      companyName: process.env.COMPANY_NAME || (isClientMode ? 'Centro Comercial B2B' : 'The Quant Partners'),
+      serviceName: process.env.SERVICE_NAME || 'Departamento Comercial Autónomo',
+      mode: process.env.MODE || 'master'
     });
     return;
   }
@@ -444,11 +456,18 @@ app.get('/api/client/overview', authenticateClientPin, async (req: Request, res:
       }
     }
 
+    const isClientMode = process.env.MODE === 'client';
+    const ownerName = isClientMode
+      ? (process.env.ADMIN_NAME || `${process.env.COMPANY_NAME || 'Cliente'} (Director)`)
+      : 'Kenneth (Director)';
+
     res.json({
       role: clientUser?.role || 'owner',
-      repName: clientUser?.repName,
-      companyName: process.env.COMPANY_NAME || 'The Quant Partners',
+      repName: clientUser?.repName || ownerName,
+      companyName: process.env.COMPANY_NAME || (isClientMode ? 'Centro Comercial B2B' : 'The Quant Partners'),
       serviceName: process.env.SERVICE_NAME || 'Departamento Comercial Autónomo',
+      mode: process.env.MODE || 'master',
+      onboardingCompleted: settings.onboardingCompleted ?? (!isClientMode),
       whatsappProvider: provider,
       isWhatsAppReady,
       hasQr,
@@ -1921,7 +1940,150 @@ app.get('/api/client/stream', authenticateClientPin, (req: Request, res: Respons
   });
 });
 
-// --- MASTER HEARTBEAT RECEIVER ---
+// =================================================================
+// MASTER HUB & SATELLITE FLEET API (Exclusivo Kenneth / Master Mode)
+// =================================================================
+
+// 1. Telemetría consolidada de la flota y facturación acumulada
+app.get('/api/master/fleet', authenticateClientPin, requireOwnerRole, async (req: Request, res: Response) => {
+  try {
+    const health = await ClientRegistry.getFleetHealth();
+    const feePerMeeting = 200;
+    const defaultRetainer = 2800;
+
+    const clientsWithBilling = health.clients.map(c => {
+      const retainer = defaultRetainer;
+      const successFees = (c.meetingsBooked || 0) * feePerMeeting;
+      const totalMonthBilling = retainer + successFees;
+      return {
+        ...c,
+        monthlyRetainer: retainer,
+        feePerMeeting,
+        successFees,
+        totalMonthBilling
+      };
+    });
+
+    const totalRetainerRevenue = health.clients.length * defaultRetainer;
+    const totalSuccessFees = health.totalMeetingsBooked * feePerMeeting;
+    const totalFleetRevenue = totalRetainerRevenue + totalSuccessFees;
+
+    res.json({
+      success: true,
+      mode: process.env.MODE || 'master',
+      summary: {
+        totalClients: health.totalClients,
+        activeClients: health.activeClients,
+        disconnectedClients: health.disconnectedClients,
+        totalLeadsContacted: health.totalLeadsContacted,
+        totalQualifiedOpportunities: health.totalQualifiedOpportunities,
+        totalMeetingsBooked: health.totalMeetingsBooked,
+        totalRetainerRevenue,
+        totalSuccessFees,
+        totalFleetRevenue
+      },
+      clients: clientsWithBilling
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 2. Aprovisionar nuevo nodo satélite en 1 Clic (Railway o VPS)
+app.post('/api/master/provision', authenticateClientPin, requireOwnerRole, async (req: Request, res: Response) => {
+  try {
+    const { companyName, adminPhone, niche, deployTarget, salesReps, meetingUrl, closingMode, clientPin, serviceName } = req.body || {};
+    if (!companyName || !adminPhone) {
+      res.status(400).json({ error: 'companyName y adminPhone son obligatorios para aprovisionar un satélite.' });
+      return;
+    }
+
+    const result = await Deployer.provisionClient({
+      companyName,
+      adminPhone,
+      niche: niche || 'custom',
+      deployTarget: deployTarget || 'railway',
+      salesReps: salesReps || [{ name: companyName, phone: adminPhone, isActive: true }],
+      meetingUrl,
+      closingMode,
+      clientPin,
+      serviceName
+    });
+
+    res.json(result);
+  } catch (err: any) {
+    console.error('❌ [MasterHub] Error aprovisionando cliente:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 3. Clonar configuración de cliente existente
+app.post('/api/master/clone', authenticateClientPin, requireOwnerRole, async (req: Request, res: Response) => {
+  try {
+    const { sourceClientId, newCompanyName, newAdminPhone, newSalesReps, deployTarget, newClientPin } = req.body || {};
+    if (!sourceClientId || !newCompanyName || !newAdminPhone) {
+      res.status(400).json({ error: 'sourceClientId, newCompanyName y newAdminPhone son requeridos.' });
+      return;
+    }
+
+    const result = await Deployer.cloneClient({
+      sourceClientId,
+      newCompanyName,
+      newAdminPhone,
+      newSalesReps: newSalesReps || [{ name: newCompanyName, phone: newAdminPhone, isActive: true }],
+      deployTarget,
+      newClientPin
+    });
+
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 4. Eliminar cliente de la flota
+app.delete('/api/master/client/:clientId', authenticateClientPin, requireOwnerRole, async (req: Request, res: Response) => {
+  try {
+    const ok = await ClientRegistry.deleteClient(req.params.clientId as string);
+    res.json({ success: ok });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 5. Lista de blueprints de nichos disponibles
+app.get('/api/master/blueprints', authenticateClientPin, async (_req: Request, res: Response) => {
+  try {
+    const blueprints = BlueprintsManager.listBlueprints();
+    res.json({ success: true, blueprints });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 6. Endpoint público para instalador en 1 línea VPS: curl -fsSL https://.../api/master/install/:clientId | bash
+app.get('/api/master/install/:clientId', async (req: Request, res: Response) => {
+  try {
+    const client = await ClientRegistry.getClient(req.params.clientId as string);
+    if (!client) {
+      res.status(404).setHeader('Content-Type', 'text/plain').send('echo "Error: Cliente no encontrado en Master Hub" && exit 1\n');
+      return;
+    }
+
+    const masterBaseUrl = process.env.PUBLIC_URL
+      ? (process.env.PUBLIC_URL.startsWith('http') ? process.env.PUBLIC_URL : `https://${process.env.PUBLIC_URL}`)
+      : `http://${req.headers.host || 'localhost:3100'}`;
+    const masterHeartbeatUrl = `${masterBaseUrl}/api/master/heartbeat`;
+
+    const script = VpsInstaller.generateInstallScript(client, masterHeartbeatUrl);
+    res.setHeader('Content-Type', 'text/x-shellscript; charset=utf-8');
+    res.send(script);
+  } catch (err: any) {
+    res.status(500).setHeader('Content-Type', 'text/plain').send(`echo "Error generando script: ${err.message}" && exit 1\n`);
+  }
+});
+
+// 7. Receptor de telemetría Heartbeat de los satélites
 app.post('/api/master/heartbeat', async (req: Request, res: Response) => {
   try {
     await ClientRegistry.recordHeartbeat(req.body);
@@ -2479,5 +2641,40 @@ app.listen(PORT, async () => {
 
   // 3. Iniciar Pipeline Continuo Autónomo
   AutonomousPipeline.start();
+
+  // 4. Iniciar Emisor Silencioso de Heartbeat (Solo en Modo Cliente o si tiene MASTER_HEARTBEAT_URL)
+  if (process.env.MODE === 'client' || process.env.MASTER_HEARTBEAT_URL) {
+    const masterUrl = process.env.MASTER_HEARTBEAT_URL;
+    if (masterUrl) {
+      console.log(`💓 [Heartbeat] Emisor de telemetría SaaR configurado hacia: ${masterUrl}`);
+      const sendHeartbeat = async () => {
+        try {
+          const waStatus = whatsapp.getStatus();
+          const overview = await OutreachRepo.getDashboardOverview();
+          const payload = {
+            clientId: process.env.CLIENT_ID || 'client-node',
+            companyName: process.env.COMPANY_NAME || 'Cliente SaaR',
+            timestamp: new Date().toISOString(),
+            isWhatsAppConnected: waStatus.isReady,
+            totalLeads: overview.metrics.totalLeads,
+            repliedLeads: overview.metrics.replied,
+            qualifiedLeads: overview.metrics.qualified,
+            meetingsBooked: overview.metrics.meetingsScheduled,
+            nodeUptimeSeconds: Math.floor((Date.now() - startTime) / 1000)
+          };
+          await fetch(masterUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+        } catch {
+          // Silencioso para evitar spam
+        }
+      };
+
+      setTimeout(sendHeartbeat, 10000);
+      setInterval(sendHeartbeat, 5 * 60 * 1000);
+    }
+  }
 });
 

@@ -8,6 +8,7 @@ import {
 } from '../types/index.js';
 import { ClientRegistry } from './client_registry.js';
 import { BlueprintsManager } from './blueprints_manager.js';
+import { VpsInstaller } from './vps_installer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,10 +26,13 @@ export interface ProvisionResult {
   configDir: string;
   salesRepsCount: number;
   message: string;
+  installCommand?: string;
+  railwayDeployUrl?: string;
+  railwayCliCommand?: string;
 }
 
 export class Deployer {
-  private static generateSlug(name: string): string {
+  public static generateSlug(name: string): string {
     return name
       .toLowerCase()
       .normalize('NFD')
@@ -37,8 +41,51 @@ export class Deployer {
       .replace(/^-+|-+$/g, '');
   }
 
-  private static generatePin(): string {
+  public static generatePin(): string {
     return Math.floor(1000 + Math.random() * 9000).toString();
+  }
+
+  /**
+   * Ejecuta aprovisionamiento vía Railway GraphQL API si RAILWAY_API_TOKEN está disponible
+   */
+  private static async provisionRailwayProject(
+    projectName: string,
+    token: string
+  ): Promise<{ projectId?: string; error?: string }> {
+    try {
+      const query = `
+        mutation ProjectCreate($input: ProjectCreateInput!) {
+          projectCreate(input: $input) {
+            id
+            name
+          }
+        }
+      `;
+      const res = await fetch('https://backboard.railway.app/graphql/v2', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          query,
+          variables: {
+            input: {
+              name: projectName,
+              description: `Instancia SaaR Desacoplada - ${projectName}`
+            }
+          }
+        })
+      });
+
+      const data = (await res.json()) as any;
+      if (data.errors && data.errors.length > 0) {
+        return { error: data.errors[0].message };
+      }
+      return { projectId: data.data?.projectCreate?.id };
+    } catch (err: any) {
+      return { error: err.message };
+    }
   }
 
   /**
@@ -65,64 +112,18 @@ export class Deployer {
       fs.mkdirSync(clientDir, { recursive: true });
     }
 
-    // 3. Determinar URL pública
-    const defaultMasterUrl = process.env.PUBLIC_URL
-      ? `https://${process.env.PUBLIC_URL}`
+    // 3. Determinar URLs maestras y del satélite
+    const masterBaseUrl = process.env.PUBLIC_URL
+      ? (process.env.PUBLIC_URL.startsWith('http') ? process.env.PUBLIC_URL : `https://${process.env.PUBLIC_URL}`)
       : `http://localhost:${process.env.PORT || 3100}`;
+    const masterHeartbeatUrl = `${masterBaseUrl}/api/master/heartbeat`;
+
     const dashboardDomain = deployTarget === 'railway'
       ? `${clientId}.up.railway.app`
       : `${clientId}.thequantpartners.pe`;
     const dashboardUrl = `https://${dashboardDomain}/dashboard`;
 
-    // 4. Generar archivo .env para el nodo del cliente
-    const salesRepsString = req.salesReps.map(r => `${r.name}:${r.phone}`).join(',');
-    const envContent = [
-      `# Configuración del Nodo Satélite - ${req.companyName}`,
-      `MODE=client`,
-      `PORT=3100`,
-      `COMPANY_NAME="${req.companyName}"`,
-      `CLIENT_ID="${clientId}"`,
-      `CLIENT_PIN="${clientPin}"`,
-      `ADMIN_WHATSAPP_PHONE="${req.adminPhone.replace(/[^0-9]/g, '')}"`,
-      `SALES_REPS="${salesRepsString}"`,
-      `CLOSING_MODE="${closingMode}"`,
-      req.meetingUrl ? `MEETING_URL="${req.meetingUrl}"` : '',
-      `SERVICE_NAME="${serviceName}"`,
-      `PUBLIC_URL="${dashboardDomain}"`,
-      `MASTER_HEARTBEAT_URL="${defaultMasterUrl}/api/master/heartbeat"`,
-      `DATABASE_URL="${process.env.DATABASE_URL || ''}"`,
-      `STORAGE_DIR="./storage"`,
-      `API_SECRET_KEY="qp-client-sec-${clientPin}"`
-    ].filter(Boolean).join('\n');
-
-    fs.writeFileSync(path.join(clientDir, '.env.production'), envContent, 'utf-8');
-
-    // 5. Generar archivo docker-compose.yml para despliegue en VPS
-    const dockerComposeContent = `
-version: '3.8'
-services:
-  ${clientId}:
-    image: qp-outreach-engine:latest
-    container_name: qp-node-${clientId}
-    restart: unless-stopped
-    env_file:
-      - .env.production
-    ports:
-      - "31${Math.floor(10 + Math.random() * 89)}:3100"
-    volumes:
-      - ./storage:/app/storage
-    environment:
-      - NODE_ENV=production
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.${clientId}.rule=Host(\`${dashboardDomain}\`)"
-      - "traefik.http.routers.${clientId}.entrypoints=websecure"
-      - "traefik.http.routers.${clientId}.tls.certresolver=myresolver"
-`.trim();
-
-    fs.writeFileSync(path.join(clientDir, 'docker-compose.yml'), dockerComposeContent, 'utf-8');
-
-    // 6. Registrar en el catálogo maestro
+    // 4. Registrar en el catálogo maestro
     const clientRecord: FleetClientRecord = {
       clientId,
       companyName: req.companyName,
@@ -144,6 +145,36 @@ services:
       updatedAt: new Date().toISOString()
     };
 
+    // 5. Generar artefactos de despliegue para VPS o Railway
+    const installScript = VpsInstaller.generateInstallScript(clientRecord, masterHeartbeatUrl);
+    const envProduction = VpsInstaller.generateEnvProduction(clientRecord, masterHeartbeatUrl);
+    const dockerCompose = VpsInstaller.generateDockerCompose(clientRecord);
+
+    fs.writeFileSync(path.join(clientDir, 'install.sh'), installScript, { encoding: 'utf-8', mode: 0o755 });
+    fs.writeFileSync(path.join(clientDir, '.env.production'), envProduction, 'utf-8');
+    fs.writeFileSync(path.join(clientDir, 'docker-compose.yml'), dockerCompose, 'utf-8');
+
+    const installCommand = `curl -fsSL ${masterBaseUrl}/api/master/install/${clientId} | bash`;
+
+    let railwayDeployUrl: string | undefined;
+    let railwayCliCommand: string | undefined;
+
+    if (deployTarget === 'railway') {
+      const railwayToken = process.env.RAILWAY_API_TOKEN;
+      if (railwayToken) {
+        console.log(`⚡ [Deployer] Detectado RAILWAY_API_TOKEN. Creando proyecto en Railway API...`);
+        const railwayRes = await this.provisionRailwayProject(`QP - ${req.companyName}`, railwayToken);
+        if (railwayRes.error) {
+          console.warn(`⚠️ [Deployer] Railway API error: ${railwayRes.error}`);
+        } else {
+          console.log(`✅ [Deployer] Proyecto creado en Railway: ID ${railwayRes.projectId}`);
+        }
+      }
+
+      railwayDeployUrl = `https://railway.app/new/template?template=https%3A%2F%2Fgithub.com%2Fthe-quant-partners%2Fqp-outreach-engine&envs=MODE%2CCOMPANY_NAME%2CCLIENT_ID%2CCLIENT_PIN%2CADMIN_WHATSAPP_PHONE%2CMASTER_HEARTBEAT_URL&MODE=client&COMPANY_NAME=${encodeURIComponent(req.companyName)}&CLIENT_ID=${clientId}&CLIENT_PIN=${clientPin}&ADMIN_WHATSAPP_PHONE=${req.adminPhone.replace(/[^0-9]/g, '')}&MASTER_HEARTBEAT_URL=${encodeURIComponent(masterHeartbeatUrl)}`;
+      railwayCliCommand = `railway init --name "qp-${clientId}" && railway add -d postgres`;
+    }
+
     await ClientRegistry.registerClient(clientRecord);
 
     console.log(`✅ [Deployer] Cliente "${req.companyName}" aprovisionado con éxito.`);
@@ -160,7 +191,12 @@ services:
       status: 'ACTIVE',
       configDir: clientDir,
       salesRepsCount: req.salesReps.length,
-      message: `Cliente "${req.companyName}" aprovisionado exitosamente en ${clientDir}. PIN de acceso: ${clientPin}.`
+      installCommand,
+      railwayDeployUrl,
+      railwayCliCommand,
+      message: deployTarget === 'vps'
+        ? `Cliente "${req.companyName}" listo para VPS. Ejecuta en el servidor: ${installCommand}`
+        : `Cliente "${req.companyName}" aprovisionado para Railway. PIN de acceso: ${clientPin}`
     };
   }
 

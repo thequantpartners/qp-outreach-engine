@@ -239,6 +239,14 @@
           <i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i>
           <span>Métricas SaaR</span>
         </button>
+        <button 
+          onclick="switchMainView('fleet')" 
+          id="tabBtnFleet" 
+          class="hidden px-3.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-white flex items-center gap-2 transition"
+        >
+          <i data-lucide="network" class="w-3.5 h-3.5 text-gold"></i>
+          <span>Flota SaaR</span>
+        </button>
       </div>
 
       <!-- Botón de Carga Masiva (CSV / BBDD) -->
@@ -1415,6 +1423,151 @@
   </section>
 
   <!-- ============================================== -->
+  <!-- VISTA 4: FLOTA SAAR & MASTER HUB (KENNETH EXCLUSIVO) -->
+  <!-- ============================================== -->
+  <section id="viewFleet" class="flex-1 overflow-y-auto custom-scroll p-8 hidden">
+    <div class="max-w-7xl mx-auto space-y-8">
+      
+      <!-- Top Banner / Header -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/[0.06] pb-6">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-gold/15 text-gold border border-gold/30 uppercase tracking-widest">
+              Master Hub · SaaR Decoupled Fleet
+            </span>
+            <span class="text-xs text-slate-500 font-mono">Zero Leakage Architecture</span>
+          </div>
+          <h2 class="text-2xl font-serif font-medium text-white tracking-tight mt-1">Flota de Nodos Satélite Desacoplados</h2>
+          <p class="text-xs text-slate-400 font-sans mt-0.5">
+            Monitoreo en tiempo real de nodos clientes independientes, telemetría silenciosa de WhatsApp y cálculo automatizado de facturación mensual (Retainer + Success Fee por Citas).
+          </p>
+        </div>
+
+        <div class="flex items-center gap-2.5">
+          <button 
+            type="button" 
+            onclick="loadFleetData()" 
+            class="px-3 py-2 rounded-xl bg-surface hover:bg-white/[0.05] border border-white/[0.08] text-slate-300 hover:text-white text-xs font-sans font-medium flex items-center gap-2 transition"
+            title="Refrescar telemetría de todos los clientes"
+          >
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-gold"></i>
+            <span>Refrescar Telemetría</span>
+          </button>
+
+          <button 
+            type="button" 
+            onclick="openProvisionModal()" 
+            class="px-4 py-2 rounded-xl btn-gold text-xs font-sans font-semibold flex items-center gap-2 shadow-lg shadow-gold/15 transition"
+          >
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            <span>+ Desplegar Nuevo Satélite en 1 Clic</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI Fleet Cards (4 Bento Luxury Cards) -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Card 1: Nodos Satélite -->
+        <div class="card-luxury p-5 relative overflow-hidden group">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-sans text-slate-400 font-medium uppercase tracking-wider">Satélites Desplegados</span>
+            <div class="w-8 h-8 rounded-lg bg-gold/10 border border-gold/20 flex items-center justify-center text-gold">
+              <i data-lucide="server" class="w-4 h-4"></i>
+            </div>
+          </div>
+          <div class="mt-3 flex items-baseline gap-2">
+            <h3 id="fleetStatTotalClients" class="text-2xl font-serif font-semibold text-white">0</h3>
+            <span id="fleetStatActiveRatio" class="text-xs font-mono text-emerald-400">0 online</span>
+          </div>
+          <p class="text-[11px] text-slate-500 font-sans mt-1">Instancias 100% aisladas con BD propia</p>
+        </div>
+
+        <!-- Card 2: Alcance Acumulado -->
+        <div class="card-luxury p-5 relative overflow-hidden group">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-sans text-slate-400 font-medium uppercase tracking-wider">Leads en la Flota</span>
+            <div class="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+              <i data-lucide="users" class="w-4 h-4"></i>
+            </div>
+          </div>
+          <div class="mt-3 flex items-baseline gap-2">
+            <h3 id="fleetStatTotalLeads" class="text-2xl font-serif font-semibold text-white">0</h3>
+            <span id="fleetStatQualified" class="text-xs font-mono text-blue-400">0 calificados</span>
+          </div>
+          <p class="text-[11px] text-slate-500 font-sans mt-1">Prospectos gestionados sin mezcla de datos</p>
+        </div>
+
+        <!-- Card 3: Citas Agendadas (KPI de Éxito) -->
+        <div class="card-luxury p-5 relative overflow-hidden group border-gold/30 bg-gold/[0.02]">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-sans text-gold font-medium uppercase tracking-wider">Citas Agendadas (Mes)</span>
+            <div class="w-8 h-8 rounded-lg bg-gold/15 border border-gold/30 flex items-center justify-center text-gold">
+              <i data-lucide="calendar-check" class="w-4 h-4"></i>
+            </div>
+          </div>
+          <div class="mt-3 flex items-baseline gap-2">
+            <h3 id="fleetStatMeetings" class="text-2xl font-serif font-semibold text-gold">0</h3>
+            <span class="text-xs font-mono text-gold/80">Reuniones de negocio</span>
+          </div>
+          <p class="text-[11px] text-slate-400 font-sans mt-1">Success Fee: S/. 200 por cita confirmada</p>
+        </div>
+
+        <!-- Card 4: Facturación Total SaaR -->
+        <div class="card-luxury p-5 relative overflow-hidden group border-emerald-500/30 bg-emerald-500/[0.02]">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-sans text-emerald-400 font-medium uppercase tracking-wider">Facturación del Mes</span>
+            <div class="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+              <i data-lucide="dollar-sign" class="w-4 h-4"></i>
+            </div>
+          </div>
+          <div class="mt-3 flex items-baseline gap-2">
+            <h3 id="fleetStatTotalRevenue" class="text-2xl font-serif font-semibold text-emerald-400 font-mono">S/. 0</h3>
+          </div>
+          <p id="fleetStatRevenueBreakdown" class="text-[11px] text-slate-400 font-sans mt-1">Retainer + Success Fees acumulados</p>
+        </div>
+      </div>
+
+      <!-- Fleet Nodes Grid -->
+      <div class="space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-base font-serif font-medium text-white flex items-center gap-2">
+            <i data-lucide="layers" class="w-4 h-4 text-gold"></i>
+            <span>Nodos Clientes Registrados</span>
+          </h3>
+          <span id="fleetClientCountBadge" class="text-xs font-mono text-slate-400 px-2 py-0.5 rounded-full bg-white/[0.05] border border-white/[0.06]">
+            0 clientes
+          </span>
+        </div>
+
+        <!-- Container de tarjetas de clientes -->
+        <div id="fleetClientsContainer" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <!-- Renderizado dinámico vía app.js -->
+        </div>
+
+        <!-- Estado vacío si no hay clientes -->
+        <div id="fleetEmptyState" class="hidden card-luxury p-12 text-center">
+          <div class="w-12 h-12 rounded-2xl bg-gold/10 border border-gold/20 text-gold flex items-center justify-center mx-auto mb-4">
+            <i data-lucide="server-off" class="w-6 h-6"></i>
+          </div>
+          <h4 class="text-base font-serif font-medium text-white">Aún no has desplegado nodos clientes</h4>
+          <p class="text-xs text-slate-400 font-sans max-w-md mx-auto mt-1.5">
+            Cuando cierres tu primer cliente SaaR, haz clic en el botón superior para aprovisionar una infraestructura virgen completa en 60 segundos con PostgreSQL dedicado y cero fuga de datos.
+          </p>
+          <button 
+            type="button" 
+            onclick="openProvisionModal()" 
+            class="mt-5 px-4 py-2 rounded-xl btn-gold text-xs font-sans font-semibold inline-flex items-center gap-2 shadow-lg shadow-gold/15"
+          >
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            <span>Aprovisionar Mi Primer Cliente</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============================================== -->
   <!-- MODAL DE CARGA MASIVA DE PROSPECTOS (CSV / BBDD) -->
   <!-- ============================================== -->
   <div id="importModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 hidden">
@@ -2555,6 +2708,419 @@
           </button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- ============================================== -->
+  <!-- MODAL DE APROVISIONAMIENTO DE NODO SATÉLITE EN 1 CLIC -->
+  <!-- ============================================== -->
+  <div id="provisionModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 hidden">
+    <div class="bg-surface border border-white/[0.08] rounded-2xl p-6 max-w-xl w-full shadow-2xl relative flex flex-col max-h-[90vh] overflow-hidden">
+      <!-- Header -->
+      <div class="flex items-center justify-between pb-4 border-b border-white/[0.06] flex-shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-gold/15 text-gold flex items-center justify-center">
+            <i data-lucide="cpu" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="font-serif text-base font-medium text-white">Aprovisionar Nuevo Nodo Satélite SaaR</h3>
+            <p class="text-xs text-slate-400 font-light">Despliegue virgen desacoplado con BD PostgreSQL dedicada y cero fuga de datos</p>
+          </div>
+        </div>
+        <button onclick="closeProvisionModal()" class="text-slate-400 hover:text-white p-1 rounded-lg">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Form Body -->
+      <form id="provisionForm" onsubmit="handleProvisionSubmit(event)" class="flex-1 overflow-y-auto custom-scroll space-y-4 py-4">
+        
+        <!-- Nombre de la Empresa -->
+        <div>
+          <label class="block text-xs font-sans font-medium text-slate-300 uppercase tracking-wider mb-1.5">
+            Nombre de la Empresa / Cliente *
+          </label>
+          <input 
+            type="text" 
+            id="provCompanyName" 
+            required 
+            placeholder="ej. Clínica Odontológica Renacer" 
+            class="w-full input-luxury px-3.5 py-2.5 text-xs text-slate-200 font-sans"
+            oninput="handleProvCompanyInput(this.value)"
+          />
+        </div>
+
+        <!-- Celular del Director para Alertas -->
+        <div>
+          <label class="block text-xs font-sans font-medium text-slate-300 uppercase tracking-wider mb-1.5">
+            WhatsApp del Director / Notificaciones *
+          </label>
+          <input 
+            type="text" 
+            id="provAdminPhone" 
+            required 
+            placeholder="ej. 51912345678" 
+            class="w-full input-luxury px-3.5 py-2.5 text-xs text-slate-200 font-mono"
+          />
+          <p class="text-[11px] text-slate-500 font-sans mt-1">Recibirá notificaciones inmediatas cuando el bot califique una oportunidad o agende cita.</p>
+        </div>
+
+        <!-- Nicho / Plantilla Blueprint -->
+        <div>
+          <label class="block text-xs font-sans font-medium text-slate-300 uppercase tracking-wider mb-1.5">
+            Plantilla de Nicho B2B
+          </label>
+          <select id="provNicheSelect" class="w-full input-luxury px-3.5 py-2.5 text-xs text-slate-200 font-sans">
+            <option value="clinicas_salud">Clínicas Odontológicas y Centros Estéticos</option>
+            <option value="inmobiliarias">Desarrollos Inmobiliarios y Constructoras</option>
+            <option value="estudios_abogados">Estudios Jurídicos y Abogados Corporativos</option>
+            <option value="construccion_b2b">Contratistas y Proveedores de Infraestructura</option>
+            <option value="custom">Personalizado (Instancia 100% en Blanco)</option>
+          </select>
+        </div>
+
+        <!-- Destino de Despliegue: Railway vs VPS -->
+        <div>
+          <label class="block text-xs font-sans font-medium text-slate-300 uppercase tracking-wider mb-1.5">
+            Destino de Despliegue de la Infraestructura
+          </label>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="cursor-pointer border border-gold/40 bg-gold/[0.04] p-3 rounded-xl flex items-start gap-2.5 transition has-[:checked]:border-gold has-[:checked]:bg-gold/[0.08]">
+              <input type="radio" name="provDeployTarget" value="railway" checked class="mt-0.5 accent-gold">
+              <div>
+                <p class="text-xs font-sans font-semibold text-white">Railway 1-Click</p>
+                <p class="text-[11px] text-slate-400">Automático en la nube con subdominio .up.railway.app</p>
+              </div>
+            </label>
+            <label class="cursor-pointer border border-white/[0.08] bg-card p-3 rounded-xl flex items-start gap-2.5 transition has-[:checked]:border-gold has-[:checked]:bg-gold/[0.08]">
+              <input type="radio" name="provDeployTarget" value="vps" class="mt-0.5 accent-gold">
+              <div>
+                <p class="text-xs font-sans font-semibold text-white">VPS Propio</p>
+                <p class="text-[11px] text-slate-400">Script curl | bash de 1 línea con Docker Compose y Postgres</p>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Mecanismo de Cierre -->
+        <div>
+          <label class="block text-xs font-sans font-medium text-slate-300 uppercase tracking-wider mb-1.5">
+            Mecanismo de Cierre Sugerido
+          </label>
+          <select id="provClosingMode" class="w-full input-luxury px-3.5 py-2.5 text-xs text-slate-200 font-sans">
+            <option value="HYBRID_SMART">Híbrido Inteligente (Filtro IA + Cal.com + WhatsApp Asesor)</option>
+            <option value="MEETING_LINK">Agendamiento Directo (Cal.com / Enlace de Calendario)</option>
+            <option value="PHONE_HANDOFF">Derivación Inmediata a Celular Humano (Human Takeover)</option>
+          </select>
+        </div>
+
+        <!-- Clave Maestra del Cliente -->
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="block text-xs font-sans font-medium text-slate-300 uppercase tracking-wider">
+              Clave Maestra de Acceso (PIN) *
+            </label>
+            <button type="button" onclick="generateRandomClientPin()" class="text-gold hover:text-white text-[11px] font-sans font-medium flex items-center gap-1">
+              <i data-lucide="shuffle" class="w-3 h-3"></i>
+              <span>Generar otra</span>
+            </button>
+          </div>
+          <input 
+            type="text" 
+            id="provClientPin" 
+            required 
+            value="ClienteQP#2026" 
+            class="w-full input-luxury px-3.5 py-2.5 text-xs text-slate-200 font-mono tracking-wider font-semibold"
+          />
+          <p class="text-[11px] text-slate-500 font-sans mt-1">Esta es la clave única que entregarás al cliente para que ingrese a su panel.</p>
+        </div>
+
+        <!-- Box de Cero Fugas -->
+        <div class="p-3 bg-emerald-500/10 border border-emerald-500/25 rounded-xl flex items-start gap-2.5 text-emerald-400 text-xs font-sans">
+          <i data-lucide="shield-check" class="w-4 h-4 flex-shrink-0 mt-0.5"></i>
+          <div>
+            <p class="font-semibold text-emerald-300">Garantía de Cero Fugas de Datos (Zero Leakage)</p>
+            <p class="text-[11px] text-emerald-400/90 mt-0.5">
+              Esta nueva instancia nacerá 100% limpia: base de datos con 0 leads, WhatsApp desconectado y sin tus claves privadas de OpenRouter o Apify. El cliente configurará sus propias credenciales en su Onboarding Wizard.
+            </p>
+          </div>
+        </div>
+
+        <div id="provErrorBox" class="p-3 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-400 text-xs hidden"></div>
+
+        <!-- Footer Buttons -->
+        <div class="pt-4 border-t border-white/[0.06] flex items-center justify-between flex-shrink-0">
+          <button 
+            type="button" 
+            onclick="closeProvisionModal()" 
+            class="px-4 py-2 rounded-xl text-xs font-sans font-medium text-slate-400 hover:text-white bg-card border border-white/[0.06] transition"
+          >
+            Cancelar
+          </button>
+          <button 
+            type="submit" 
+            id="provSubmitBtn" 
+            class="px-5 py-2.5 btn-gold rounded-xl text-xs font-sans font-semibold flex items-center gap-2 shadow-lg shadow-gold/15"
+          >
+            <i data-lucide="rocket" class="w-4 h-4"></i>
+            <span id="provSubmitBtnText">Aprovisionar Nodo en 1 Clic</span>
+          </button>
+        </div>
+      </form>
+
+      <!-- Pantalla de Éxito / Resultado del Aprovisionamiento -->
+      <div id="provSuccessView" class="hidden py-6 space-y-5 text-center">
+        <div class="w-12 h-12 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto">
+          <i data-lucide="check-circle" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <h4 class="font-serif text-lg font-medium text-white">¡Nodo Satélite Aprovisionado con Éxito!</h4>
+          <p id="provSuccessCompany" class="text-xs text-slate-400 font-sans mt-1"></p>
+        </div>
+
+        <!-- Credenciales Card -->
+        <div class="bg-obsidian border border-white/[0.08] rounded-xl p-4 text-left space-y-3 font-sans">
+          <div>
+            <span class="text-[10px] text-slate-500 uppercase font-semibold">URL del Dashboard Cliente:</span>
+            <div class="flex items-center justify-between mt-1 p-2 bg-surface rounded-lg border border-white/[0.06]">
+              <a id="provSuccessUrl" href="#" target="_blank" class="text-xs text-gold font-mono truncate hover:underline"></a>
+              <button type="button" onclick="copyProvDashboardUrl()" class="text-slate-400 hover:text-white p-1" title="Copiar enlace">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <span class="text-[10px] text-slate-500 uppercase font-semibold">Clave Maestra (PIN):</span>
+            <div class="flex items-center justify-between mt-1 p-2 bg-surface rounded-lg border border-white/[0.06]">
+              <span id="provSuccessPin" class="text-xs font-mono font-bold text-white tracking-widest"></span>
+              <button type="button" onclick="copyProvPin()" class="text-slate-400 hover:text-white p-1" title="Copiar clave">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Solo si es VPS -->
+          <div id="provSuccessVpsBox" class="hidden">
+            <span class="text-[10px] text-slate-500 uppercase font-semibold">Comando de Instalación en VPS (1 Sola Línea):</span>
+            <div class="mt-1 p-2 bg-surface rounded-lg border border-white/[0.06] flex items-center justify-between">
+              <code id="provSuccessCommand" class="text-[11px] font-mono text-emerald-400 truncate select-all"></code>
+              <button type="button" onclick="copyProvCommand()" class="text-slate-400 hover:text-white p-1" title="Copiar comando">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+            <p class="text-[10px] text-slate-400 mt-1">Pega este comando en la terminal de cualquier VPS (Hetzner, AWS, Ubuntu) y levantará todo automáticamente.</p>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-center gap-3 pt-2">
+          <button 
+            type="button" 
+            onclick="closeProvisionModal(); switchMainView('fleet');" 
+            class="px-5 py-2.5 rounded-xl btn-gold text-xs font-sans font-semibold"
+          >
+            Entendido, Ver en la Flota
+          </button>
+          <a 
+            id="provSuccessOpenBtn" 
+            href="#" 
+            target="_blank" 
+            class="px-5 py-2.5 rounded-xl bg-surface border border-white/[0.08] text-xs font-sans font-medium text-slate-200 hover:text-white hover:bg-white/[0.05] transition flex items-center gap-2"
+          >
+            <span>Abrir Dashboard del Cliente</span>
+            <i data-lucide="external-link" class="w-3.5 h-3.5 text-gold"></i>
+          </a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================== -->
+  <!-- MODAL ONBOARDING WIZARD DE 3 PASOS (INSTANCIA CLIENTE VIRGEN) -->
+  <!-- ============================================== -->
+  <div id="onboardingWizardModal" class="fixed inset-0 z-[120] flex items-center justify-center bg-black/95 backdrop-blur-xl p-4 hidden">
+    <div class="bg-surface border border-gold/30 rounded-2xl p-7 max-w-xl w-full shadow-2xl relative flex flex-col max-h-[92vh] overflow-hidden">
+      
+      <!-- Wizard Progress Header -->
+      <div class="pb-5 border-b border-white/[0.08] flex-shrink-0">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2">
+            <div class="w-6 h-6 rounded-lg bg-gold/20 text-gold flex items-center justify-center text-xs font-serif font-bold">
+              QP
+            </div>
+            <span class="text-xs font-serif font-semibold text-white">Asistente de Configuración Inicial</span>
+          </div>
+          <span id="wizardStepNumberBadge" class="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-gold/15 text-gold border border-gold/30">
+            Paso 1 de 3
+          </span>
+        </div>
+
+        <!-- Stepper Bar -->
+        <div class="grid grid-cols-3 gap-2 text-center text-xs font-sans">
+          <div id="wizardStepTab1" class="pb-1 border-b-2 border-gold text-gold font-semibold flex items-center justify-center gap-1.5">
+            <span class="w-4 h-4 rounded-full bg-gold/20 text-[10px] flex items-center justify-center">1</span>
+            <span>WhatsApp</span>
+          </div>
+          <div id="wizardStepTab2" class="pb-1 border-b-2 border-white/[0.1] text-slate-500 flex items-center justify-center gap-1.5">
+            <span class="w-4 h-4 rounded-full bg-white/[0.05] text-[10px] flex items-center justify-center">2</span>
+            <span>IA & Scraping</span>
+          </div>
+          <div id="wizardStepTab3" class="pb-1 border-b-2 border-white/[0.1] text-slate-500 flex items-center justify-center gap-1.5">
+            <span class="w-4 h-4 rounded-full bg-white/[0.05] text-[10px] flex items-center justify-center">3</span>
+            <span>Lanzamiento</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Content Steps Container -->
+      <div class="flex-1 overflow-y-auto custom-scroll py-5 space-y-4">
+        
+        <!-- ==================== PASO 1: VINCULAR WHATSAPP ==================== -->
+        <div id="wizardStepContent1" class="space-y-4">
+          <div class="text-center">
+            <h4 class="text-base font-serif font-medium text-white">Vincula el WhatsApp de tu Negocio</h4>
+            <p class="text-xs text-slate-400 font-sans mt-1">Escanea el código QR con el WhatsApp corporativo desde el cual prospectarás y responderás a tus clientes.</p>
+          </div>
+
+          <!-- QR Box -->
+          <div class="bg-obsidian border border-white/[0.08] rounded-2xl p-5 text-center max-w-xs mx-auto">
+            <div id="wizardQrWrapper" class="relative inline-block bg-white p-3 rounded-xl">
+              <img id="wizardQrImg" src="" alt="WhatsApp QR" class="w-48 h-48 mx-auto object-contain">
+              <div id="wizardQrLoading" class="absolute inset-0 bg-obsidian/90 flex flex-col items-center justify-center text-xs text-slate-300">
+                <i data-lucide="loader-2" class="w-6 h-6 animate-spin text-gold mb-2"></i>
+                <span>Generando QR...</span>
+              </div>
+            </div>
+
+            <div id="wizardWaStatusBadge" class="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono bg-amber-500/10 border border-amber-500/25 text-amber-400">
+              <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+              <span>Esperando escaneo en WhatsApp...</span>
+            </div>
+
+            <div class="mt-3 flex items-center justify-center gap-2">
+              <button type="button" onclick="refreshWizardQr()" class="text-xs text-slate-400 hover:text-gold flex items-center gap-1">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                <span>Refrescar código QR</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================== PASO 2: CREDENCIALES IA & SCRAPING ==================== -->
+        <div id="wizardStepContent2" class="hidden space-y-4 font-sans">
+          <div>
+            <h4 class="text-base font-serif font-medium text-white">Credenciales de IA y Scraping</h4>
+            <p class="text-xs text-slate-400 mt-1">Configura tus propias claves para que el motor opere de forma totalmente autónoma e independiente.</p>
+          </div>
+
+          <!-- Proveedor de IA -->
+          <div>
+            <label class="block text-xs font-medium text-slate-300 uppercase tracking-wider mb-1.5">Proveedor de Inteligencia Artificial</label>
+            <select id="wizardAiProvider" class="w-full input-luxury px-3.5 py-2.5 text-xs text-slate-200">
+              <option value="openrouter">OpenRouter (Recomendado: Gemini 2.5 Flash, Claude 3.5 Sonnet, GPT-4o)</option>
+              <option value="gemini">Google Gemini Directo</option>
+              <option value="openai">OpenAI Directo (ChatGPT)</option>
+            </select>
+          </div>
+
+          <!-- API Key de IA -->
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="block text-xs font-medium text-slate-300 uppercase tracking-wider">Tu API Key de IA *</label>
+              <a href="https://openrouter.ai/keys" target="_blank" class="text-[11px] text-gold hover:underline flex items-center gap-1">
+                <span>Obtener en 1 minuto</span>
+                <i data-lucide="external-link" class="w-3 h-3"></i>
+              </a>
+            </div>
+            <input 
+              type="password" 
+              id="wizardAiApiKey" 
+              placeholder="sk-or-v1-..." 
+              class="w-full input-luxury px-3.5 py-2.5 text-xs text-slate-200 font-mono"
+            />
+          </div>
+
+          <!-- Token de Apify (Opcional) -->
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="block text-xs font-medium text-slate-300 uppercase tracking-wider">Token de Apify (Scraping de Google Maps)</label>
+              <a href="https://console.apify.com/account/integrations" target="_blank" class="text-[11px] text-gold hover:underline flex items-center gap-1">
+                <span>Obtener gratis en Apify</span>
+                <i data-lucide="external-link" class="w-3 h-3"></i>
+              </a>
+            </div>
+            <input 
+              type="password" 
+              id="wizardApifyToken" 
+              placeholder="apify_api_..." 
+              class="w-full input-luxury px-3.5 py-2.5 text-xs text-slate-200 font-mono"
+            />
+            <p class="text-[11px] text-slate-500 mt-1">Permite extraer prospectos y teléfonos directamente de Google Maps y Meta Ads con 1 clic.</p>
+          </div>
+        </div>
+
+        <!-- ==================== PASO 3: EQUIPO COMERCIAL & ACTIVACIÓN ==================== -->
+        <div id="wizardStepContent3" class="hidden space-y-4 font-sans">
+          <div>
+            <h4 class="text-base font-serif font-medium text-white">Equipo Comercial & Notificaciones</h4>
+            <p class="text-xs text-slate-400 mt-1">Define quién recibirá las alertas inmediatas cuando un lead responda o solicite una cita.</p>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-300 uppercase tracking-wider mb-1.5">Nombre del Director / Gerente Comercial *</label>
+            <input 
+              type="text" 
+              id="wizardDirectorName" 
+              placeholder="ej. Claudia Ramos" 
+              class="w-full input-luxury px-3.5 py-2.5 text-xs text-slate-200"
+            />
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-300 uppercase tracking-wider mb-1.5">WhatsApp para Alertas de Citas *</label>
+            <input 
+              type="text" 
+              id="wizardDirectorPhone" 
+              placeholder="ej. 51912345678" 
+              class="w-full input-luxury px-3.5 py-2.5 text-xs text-slate-200 font-mono"
+            />
+            <p class="text-[11px] text-slate-500 mt-1">Aquí te llegará un WhatsApp inmediato con el nombre de la empresa y resumen de cada cita agendada.</p>
+          </div>
+
+          <div class="p-3.5 rounded-xl bg-gold/10 border border-gold/30 text-gold text-xs">
+            <div class="flex items-center gap-2 font-semibold">
+              <i data-lucide="sparkles" class="w-4 h-4"></i>
+              <span>¡Todo listo para comenzar a generar oportunidades!</span>
+            </div>
+            <p class="text-[11px] text-slate-300 mt-1">Al hacer clic en Activar, se guardarán tus credenciales y podrás lanzar tu primera campaña de prospección desde el CRM.</p>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Wizard Footer Buttons -->
+      <div class="pt-4 border-t border-white/[0.08] flex items-center justify-between flex-shrink-0">
+        <button 
+          type="button" 
+          id="wizardPrevBtn" 
+          onclick="wizardPrevStep()" 
+          class="hidden px-4 py-2 rounded-xl text-xs font-sans font-medium text-slate-400 hover:text-white bg-card border border-white/[0.06] transition"
+        >
+          ← Volver
+        </button>
+        <div class="flex-1"></div>
+        <button 
+          type="button" 
+          id="wizardNextBtn" 
+          onclick="wizardNextStep()" 
+          class="px-5 py-2.5 btn-gold rounded-xl text-xs font-sans font-semibold flex items-center gap-2 shadow-lg shadow-gold/15"
+        >
+          <span id="wizardNextBtnText">Continuar al Paso 2 →</span>
+          <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+
     </div>
   </div>
 

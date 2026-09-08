@@ -112,6 +112,7 @@ export interface CampaignSettings {
   metaWebhookVerifyToken?: string;
   useCustomApify?: boolean;
   apifyToken?: string;
+  onboardingCompleted?: boolean;
 }
 
 export const SendMessageSchema = z.object({

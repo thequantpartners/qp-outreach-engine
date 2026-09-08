@@ -17,7 +17,11 @@ let currentServicesList = [];
 let activeCampaignId = null;
 let createCampaignTargetSelectId = null;
 let batchCountdownInterval = null;
-let currentMainView = 'workspace'; // 'workspace' | 'discovery' | 'metrics'
+let currentMainView = 'workspace'; // 'workspace' | 'discovery' | 'metrics' | 'fleet'
+let currentMode = localStorage.getItem('qp_mode') || 'master';
+let currentWizardStep = 1;
+let wizardQrPollInterval = null;
+let currentFleetData = null;
 let eventSource = null;
 
 // Initialization
@@ -86,9 +90,12 @@ function applyRolePermissions() {
     userProfileBadge.classList.add('flex');
   }
 
+  const tabFleet = document.getElementById('tabBtnFleet');
+
   if (currentUserRole === 'sales_rep') {
     if (tabDiscovery) tabDiscovery.classList.add('hidden');
     if (tabMetrics) tabMetrics.classList.add('hidden');
+    if (tabFleet) tabFleet.classList.add('hidden');
     if (btnImport) btnImport.classList.add('hidden');
     if (btnSettings) btnSettings.classList.add('hidden');
     if (banner) banner.classList.add('hidden');
@@ -97,6 +104,11 @@ function applyRolePermissions() {
   } else {
     if (tabDiscovery) tabDiscovery.classList.remove('hidden');
     if (tabMetrics) tabMetrics.classList.remove('hidden');
+    if (currentMode !== 'client') {
+      if (tabFleet) tabFleet.classList.remove('hidden');
+    } else {
+      if (tabFleet) tabFleet.classList.add('hidden');
+    }
     if (btnImport) btnImport.classList.remove('hidden');
     if (btnSettings) btnSettings.classList.remove('hidden');
     if (repFilterWrapper) repFilterWrapper.classList.remove('hidden');
@@ -126,6 +138,10 @@ async function handlePinSubmit(e) {
       currentPin = pin;
       currentUserRole = data.role || 'owner';
       currentUserName = data.repName || 'Kenneth (Director)';
+      if (data.mode) {
+        currentMode = data.mode;
+        localStorage.setItem('qp_mode', currentMode);
+      }
       localStorage.setItem('qp_client_pin', pin);
       sessionStorage.setItem('qp_client_pin', pin);
       localStorage.setItem('qp_user_role', currentUserRole);
@@ -165,6 +181,11 @@ async function fetchOverview() {
     const data = await res.json();
     currentOverviewData = data;
 
+    if (data.mode) {
+      currentMode = data.mode;
+      localStorage.setItem('qp_mode', currentMode);
+    }
+
     if (data.role) {
       currentUserRole = data.role;
       if (data.repName) currentUserName = data.repName;
@@ -175,6 +196,11 @@ async function fetchOverview() {
 
     if (data.salesReps && Array.isArray(data.salesReps)) {
       currentTeamReps = data.salesReps;
+    }
+
+    // Auto-disparo del Onboarding Wizard si es un satélite cliente virgen
+    if (currentMode === 'client' && data.onboardingCompleted === false) {
+      openOnboardingWizard();
     }
 
     await loadAllCampaigns();
@@ -1994,9 +2020,11 @@ function switchMainView(view) {
   const workspaceView = document.getElementById('viewWorkspace');
   const discoveryView = document.getElementById('viewDiscovery');
   const metricsView = document.getElementById('viewMetrics');
+  const fleetView = document.getElementById('viewFleet');
   const btnWorkspace = document.getElementById('tabBtnWorkspace');
   const btnDiscovery = document.getElementById('tabBtnDiscovery');
   const btnMetrics = document.getElementById('tabBtnMetrics');
+  const btnFleet = document.getElementById('tabBtnFleet');
 
   const activeClass = 'px-3.5 py-1 rounded-md text-xs font-medium flex items-center gap-2 transition bg-white/[0.05] text-gold border border-gold/20';
   const inactiveClass = 'px-3.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-white flex items-center gap-2 transition';
@@ -2004,10 +2032,12 @@ function switchMainView(view) {
   if (workspaceView) workspaceView.classList.add('hidden');
   if (discoveryView) discoveryView.classList.add('hidden');
   if (metricsView) metricsView.classList.add('hidden');
+  if (fleetView) fleetView.classList.add('hidden');
 
   if (btnWorkspace) btnWorkspace.className = inactiveClass;
   if (btnDiscovery) btnDiscovery.className = inactiveClass;
   if (btnMetrics) btnMetrics.className = inactiveClass;
+  if (btnFleet) btnFleet.className = inactiveClass;
 
   if (view === 'workspace') {
     if (workspaceView) workspaceView.classList.remove('hidden');
@@ -2022,6 +2052,10 @@ function switchMainView(view) {
   } else if (view === 'metrics') {
     if (metricsView) metricsView.classList.remove('hidden');
     if (btnMetrics) btnMetrics.className = activeClass;
+  } else if (view === 'fleet') {
+    if (fleetView) fleetView.classList.remove('hidden');
+    if (btnFleet) btnFleet.className = activeClass;
+    loadFleetData();
   }
 
   if (window.lucide) lucide.createIcons();
@@ -4404,4 +4438,518 @@ function updateBatchUI(job) {
   }
 
   if (window.lucide) lucide.createIcons();
+}
+
+// =================================================================
+// 22. MASTER HUB · FLOTA DE NODOS SATÉLITE SAAR (EXCLUSIVO KENNETH)
+// =================================================================
+
+async function loadFleetData() {
+  const container = document.getElementById('fleetClientsContainer');
+  const emptyState = document.getElementById('fleetEmptyState');
+  if (!container) return;
+
+  try {
+    const res = await fetch('/api/master/fleet', {
+      headers: { 'x-client-pin': currentPin }
+    });
+
+    if (!res.ok) {
+      if (res.status === 403 || res.status === 401) {
+        console.warn('Acceso denegado a Flota Master.');
+        return;
+      }
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    currentFleetData = data;
+
+    // Actualizar KPIs superiores
+    const summary = data.summary || {};
+    const totalEl = document.getElementById('fleetStatTotalClients');
+    const activeRatioEl = document.getElementById('fleetStatActiveRatio');
+    const leadsEl = document.getElementById('fleetStatTotalLeads');
+    const qualEl = document.getElementById('fleetStatQualified');
+    const meetingsEl = document.getElementById('fleetStatMeetings');
+    const revenueEl = document.getElementById('fleetStatTotalRevenue');
+    const revenueBreakdownEl = document.getElementById('fleetStatRevenueBreakdown');
+    const badgeEl = document.getElementById('fleetClientCountBadge');
+
+    if (totalEl) totalEl.textContent = summary.totalClients || 0;
+    if (activeRatioEl) activeRatioEl.textContent = `${summary.activeClients || 0} online`;
+    if (leadsEl) leadsEl.textContent = (summary.totalLeadsContacted || 0).toLocaleString();
+    if (qualEl) qualEl.textContent = `${summary.totalQualifiedOpportunities || 0} calificados`;
+    if (meetingsEl) meetingsEl.textContent = summary.totalMeetingsBooked || 0;
+    if (revenueEl) revenueEl.textContent = `S/. ${(summary.totalFleetRevenue || 0).toLocaleString()}`;
+    if (revenueBreakdownEl) {
+      revenueBreakdownEl.textContent = `Retainers: S/. ${(summary.totalRetainerRevenue || 0).toLocaleString()} + Citas: S/. ${(summary.totalSuccessFees || 0).toLocaleString()}`;
+    }
+    if (badgeEl) badgeEl.textContent = `${(data.clients || []).length} cliente(s)`;
+
+    // Renderizar tarjetas de clientes
+    const clients = data.clients || [];
+    if (clients.length === 0) {
+      container.innerHTML = '';
+      if (emptyState) emptyState.classList.remove('hidden');
+      return;
+    }
+
+    if (emptyState) emptyState.classList.add('hidden');
+    container.innerHTML = clients.map(c => {
+      const isOnline = c.isWhatsAppConnected;
+      const statusBadge = isOnline
+        ? `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/10 border border-emerald-500/25 text-emerald-400"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>Online</span>`
+        : `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-rose-500/10 border border-rose-500/25 text-rose-400"><span class="w-1.5 h-1.5 rounded-full bg-rose-400"></span>Desconectado</span>`;
+
+      const targetBadge = c.deployTarget === 'vps'
+        ? `<span class="px-2 py-0.5 rounded text-[10px] font-mono bg-purple-500/10 border border-purple-500/20 text-purple-300">VPS Dedicado</span>`
+        : `<span class="px-2 py-0.5 rounded text-[10px] font-mono bg-blue-500/10 border border-blue-500/20 text-blue-300">Railway Cloud</span>`;
+
+      const meetings = c.meetingsBooked || 0;
+      const fees = (c.successFees || 0).toLocaleString();
+      const totalMonth = (c.totalMonthBilling || 2800).toLocaleString();
+
+      return `
+        <div class="card-luxury p-5 flex flex-col justify-between space-y-4 hover:border-gold/30 transition">
+          <!-- Top Row -->
+          <div>
+            <div class="flex items-start justify-between gap-2 mb-2">
+              <div>
+                <h4 class="font-serif text-sm font-semibold text-white tracking-tight">${escapeHtml(c.companyName)}</h4>
+                <p class="text-[11px] font-mono text-slate-400 mt-0.5 truncate max-w-[200px]" title="${c.clientId}">${c.clientId}</p>
+              </div>
+              <div class="flex flex-col items-end gap-1">
+                ${statusBadge}
+                ${targetBadge}
+              </div>
+            </div>
+
+            <!-- Stats Mini Grid -->
+            <div class="grid grid-cols-4 gap-1.5 p-2.5 bg-obsidian rounded-xl border border-white/[0.04] text-center font-sans mt-3">
+              <div>
+                <p class="text-[9px] text-slate-500 uppercase font-semibold">Leads</p>
+                <p class="text-xs font-mono font-bold text-slate-200 mt-0.5">${c.totalLeads || 0}</p>
+              </div>
+              <div>
+                <p class="text-[9px] text-slate-500 uppercase font-semibold">Resp.</p>
+                <p class="text-xs font-mono font-bold text-slate-200 mt-0.5">${c.repliedLeads || 0}</p>
+              </div>
+              <div>
+                <p class="text-[9px] text-slate-500 uppercase font-semibold">Calif.</p>
+                <p class="text-xs font-mono font-bold text-blue-400 mt-0.5">${c.qualifiedLeads || 0}</p>
+              </div>
+              <div>
+                <p class="text-[9px] text-gold uppercase font-semibold">Citas</p>
+                <p class="text-xs font-mono font-bold text-gold mt-0.5">${meetings}</p>
+              </div>
+            </div>
+
+            <!-- Facturación Acumulada Box -->
+            <div class="mt-3 p-2.5 bg-gold/[0.03] border border-gold/20 rounded-xl flex items-center justify-between text-xs font-sans">
+              <div>
+                <span class="text-[10px] text-slate-400">Facturación Acumulada:</span>
+                <p class="text-[11px] text-slate-300 font-mono">Retainer S/. 2.8k + Fee S/. ${fees}</p>
+              </div>
+              <span class="font-mono font-bold text-gold text-sm">S/. ${totalMonth}</span>
+            </div>
+          </div>
+
+          <!-- Bottom Actions -->
+          <div class="pt-3 border-t border-white/[0.06] flex items-center justify-between gap-2">
+            <div class="flex items-center gap-1">
+              <button 
+                type="button" 
+                onclick="window.open('${c.dashboardUrl}', '_blank')" 
+                class="px-3 py-1.5 rounded-lg btn-gold text-[11px] font-sans font-semibold flex items-center gap-1.5 shadow-sm"
+                title="Abrir Centro de Mando del Cliente"
+              >
+                <span>Dashboard</span>
+                <i data-lucide="external-link" class="w-3 h-3"></i>
+              </button>
+
+              <button 
+                type="button" 
+                onclick="showClientCredentials('${c.clientId}', '${escapeHtml(c.companyName)}', '${c.clientPin}', '${c.dashboardUrl}', '${c.deployTarget}')" 
+                class="p-1.5 rounded-lg bg-surface hover:bg-white/[0.05] border border-white/[0.08] text-slate-300 hover:text-white text-[11px] transition"
+                title="Ver Clave Maestra (PIN)"
+              >
+                <i data-lucide="key" class="w-3.5 h-3.5 text-gold"></i>
+              </button>
+
+              ${c.deployTarget === 'vps' ? `
+                <button 
+                  type="button" 
+                  onclick="copyVpsInstallCommand('${c.clientId}')" 
+                  class="p-1.5 rounded-lg bg-surface hover:bg-white/[0.05] border border-white/[0.08] text-slate-300 hover:text-white text-[11px] transition"
+                  title="Copiar comando de instalación en 1 línea para VPS"
+                >
+                  <i data-lucide="terminal" class="w-3.5 h-3.5 text-purple-400"></i>
+                </button>
+              ` : ''}
+            </div>
+
+            <button 
+              type="button" 
+              onclick="handleDeleteClient('${c.clientId}', '${escapeHtml(c.companyName)}')" 
+              class="p-1.5 rounded-lg bg-surface hover:bg-rose-500/10 border border-white/[0.06] text-slate-500 hover:text-rose-400 transition"
+              title="Eliminar nodo de la flota"
+            >
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    if (window.lucide) lucide.createIcons();
+  } catch (err) {
+    console.error('Error cargando flota SaaR:', err);
+  }
+}
+
+function openProvisionModal() {
+  const modal = document.getElementById('provisionModal');
+  const form = document.getElementById('provisionForm');
+  const successView = document.getElementById('provSuccessView');
+  const errorBox = document.getElementById('provErrorBox');
+
+  if (form) form.classList.remove('hidden');
+  if (successView) successView.classList.add('hidden');
+  if (errorBox) errorBox.classList.add('hidden');
+  generateRandomClientPin();
+
+  if (modal) modal.classList.remove('hidden');
+  if (window.lucide) lucide.createIcons();
+}
+
+function closeProvisionModal() {
+  const modal = document.getElementById('provisionModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function handleProvCompanyInput(val) {
+  const pinInput = document.getElementById('provClientPin');
+  if (!val || !val.trim()) return;
+  const clean = val.split(' ')[0].replace(/[^a-zA-Z0-9]/g, '');
+  if (clean && (!pinInput.dataset.manual || pinInput.dataset.manual === 'false')) {
+    pinInput.value = `${clean}QP#2026`;
+  }
+}
+
+function generateRandomClientPin() {
+  const pinInput = document.getElementById('provClientPin');
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  if (pinInput) {
+    pinInput.value = `ClienteQP#${rand}`;
+    pinInput.dataset.manual = 'true';
+  }
+}
+
+async function handleProvisionSubmit(e) {
+  e.preventDefault();
+  const form = document.getElementById('provisionForm');
+  const btn = document.getElementById('provSubmitBtn');
+  const btnText = document.getElementById('provSubmitBtnText');
+  const errorBox = document.getElementById('provErrorBox');
+
+  const companyName = document.getElementById('provCompanyName').value.trim();
+  const adminPhone = document.getElementById('provAdminPhone').value.trim();
+  const niche = document.getElementById('provNicheSelect').value;
+  const closingMode = document.getElementById('provClosingMode').value;
+  const clientPin = document.getElementById('provClientPin').value.trim();
+  const deployTarget = document.querySelector('input[name="provDeployTarget"]:checked')?.value || 'railway';
+
+  if (!companyName || !adminPhone) {
+    if (errorBox) {
+      errorBox.textContent = 'Nombre de empresa y WhatsApp de notificaciones son obligatorios.';
+      errorBox.classList.remove('hidden');
+    }
+    return;
+  }
+
+  btn.disabled = true;
+  btnText.textContent = 'Aprovisionando Infraestructura Desacoplada...';
+  if (errorBox) errorBox.classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/master/provision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-client-pin': currentPin
+      },
+      body: JSON.stringify({
+        companyName,
+        adminPhone,
+        niche,
+        closingMode,
+        clientPin,
+        deployTarget
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Error al aprovisionar satélite');
+    }
+
+    // Mostrar vista de éxito
+    form.classList.add('hidden');
+    const successView = document.getElementById('provSuccessView');
+    successView.classList.remove('hidden');
+
+    document.getElementById('provSuccessCompany').textContent = `${companyName} (${data.clientId})`;
+    const urlEl = document.getElementById('provSuccessUrl');
+    urlEl.textContent = data.dashboardUrl;
+    urlEl.href = data.dashboardUrl;
+
+    document.getElementById('provSuccessPin').textContent = data.clientPin;
+    document.getElementById('provSuccessOpenBtn').href = data.dashboardUrl;
+
+    const vpsBox = document.getElementById('provSuccessVpsBox');
+    if (data.deployTarget === 'vps' && data.installCommand) {
+      vpsBox.classList.remove('hidden');
+      document.getElementById('provSuccessCommand').textContent = data.installCommand;
+    } else {
+      vpsBox.classList.add('hidden');
+    }
+
+    // Recargar datos de la flota en segundo plano
+    loadFleetData();
+
+  } catch (err) {
+    if (errorBox) {
+      errorBox.textContent = err.message;
+      errorBox.classList.remove('hidden');
+    }
+  } finally {
+    btn.disabled = false;
+    btnText.textContent = 'Aprovisionar Nodo en 1 Clic';
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
+function copyProvDashboardUrl() {
+  const url = document.getElementById('provSuccessUrl').textContent;
+  if (url) {
+    navigator.clipboard.writeText(url);
+    alert('✅ URL del Dashboard copiada al portapapeles.');
+  }
+}
+
+function copyProvPin() {
+  const pin = document.getElementById('provSuccessPin').textContent;
+  if (pin) {
+    navigator.clipboard.writeText(pin);
+    alert('✅ Clave Maestra (PIN) copiada al portapapeles.');
+  }
+}
+
+function copyProvCommand() {
+  const cmd = document.getElementById('provSuccessCommand').textContent;
+  if (cmd) {
+    navigator.clipboard.writeText(cmd);
+    alert('✅ Comando de instalación VPS copiado al portapapeles.');
+  }
+}
+
+function copyVpsInstallCommand(clientId) {
+  const masterOrigin = window.location.origin;
+  const cmd = `curl -fsSL ${masterOrigin}/api/master/install/${clientId} | bash`;
+  navigator.clipboard.writeText(cmd);
+  alert(`✅ Comando de instalación para "${clientId}" copiado:\n\n${cmd}\n\nEjecútalo como root en el VPS.`);
+}
+
+function showClientCredentials(clientId, companyName, pin, url, deployTarget) {
+  alert(`🔐 CREDENCIALES DEL NODO SATÉLITE\n\nEmpresa: ${companyName}\nID: ${clientId}\nTipo: ${deployTarget.toUpperCase()}\n\nURL Dashboard: ${url}\nPIN de Acceso: ${pin}`);
+}
+
+async function handleDeleteClient(clientId, name) {
+  if (!confirm(`¿Estás seguro de eliminar a "${name}" (${clientId}) de la flota SaaR? Esta acción no se puede deshacer.`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/master/client/${clientId}`, {
+      method: 'DELETE',
+      headers: { 'x-client-pin': currentPin }
+    });
+    if (res.ok) {
+      loadFleetData();
+    } else {
+      alert('Error eliminando cliente de la flota');
+    }
+  } catch (err) {
+    alert('Error de conexión: ' + err.message);
+  }
+}
+
+// =================================================================
+// 23. ONBOARDING WIZARD DE 3 PASOS (PARA INSTANCIAS CLIENTE VÍRGENES)
+// =================================================================
+
+function openOnboardingWizard() {
+  const modal = document.getElementById('onboardingWizardModal');
+  if (!modal) return;
+  currentWizardStep = 1;
+  renderWizardStep(1);
+  modal.classList.remove('hidden');
+  startWizardQrPolling();
+  if (window.lucide) lucide.createIcons();
+}
+
+function closeOnboardingWizard() {
+  const modal = document.getElementById('onboardingWizardModal');
+  if (modal) modal.classList.add('hidden');
+  stopWizardQrPolling();
+}
+
+function renderWizardStep(step) {
+  currentWizardStep = step;
+  const content1 = document.getElementById('wizardStepContent1');
+  const content2 = document.getElementById('wizardStepContent2');
+  const content3 = document.getElementById('wizardStepContent3');
+  const tab1 = document.getElementById('wizardStepTab1');
+  const tab2 = document.getElementById('wizardStepTab2');
+  const tab3 = document.getElementById('wizardStepTab3');
+  const badge = document.getElementById('wizardStepNumberBadge');
+  const prevBtn = document.getElementById('wizardPrevBtn');
+  const nextBtnText = document.getElementById('wizardNextBtnText');
+
+  if (content1) content1.classList.toggle('hidden', step !== 1);
+  if (content2) content2.classList.toggle('hidden', step !== 2);
+  if (content3) content3.classList.toggle('hidden', step !== 3);
+
+  const activeTab = 'pb-1 border-b-2 border-gold text-gold font-semibold flex items-center justify-center gap-1.5';
+  const inactiveTab = 'pb-1 border-b-2 border-white/[0.1] text-slate-500 flex items-center justify-center gap-1.5';
+
+  if (tab1) tab1.className = step === 1 ? activeTab : inactiveTab;
+  if (tab2) tab2.className = step === 2 ? activeTab : inactiveTab;
+  if (tab3) tab3.className = step === 3 ? activeTab : inactiveTab;
+
+  if (badge) badge.textContent = `Paso ${step} de 3`;
+  if (prevBtn) prevBtn.classList.toggle('hidden', step === 1);
+
+  if (nextBtnText) {
+    if (step === 1) nextBtnText.textContent = 'Continuar al Paso 2: IA & Scraping →';
+    else if (step === 2) nextBtnText.textContent = 'Continuar al Paso 3: Activación →';
+    else if (step === 3) nextBtnText.textContent = '🚀 Finalizar y Activar Motor Comercial';
+  }
+
+  if (step === 1) {
+    refreshWizardQr();
+  }
+
+  if (window.lucide) lucide.createIcons();
+}
+
+function wizardNextStep() {
+  if (currentWizardStep === 1) {
+    renderWizardStep(2);
+  } else if (currentWizardStep === 2) {
+    renderWizardStep(3);
+  } else if (currentWizardStep === 3) {
+    submitCompleteOnboarding();
+  }
+}
+
+function wizardPrevStep() {
+  if (currentWizardStep > 1) {
+    renderWizardStep(currentWizardStep - 1);
+  }
+}
+
+async function refreshWizardQr() {
+  const qrImg = document.getElementById('wizardQrImg');
+  const qrLoading = document.getElementById('wizardQrLoading');
+  const statusBadge = document.getElementById('wizardWaStatusBadge');
+
+  if (!qrImg) return;
+
+  try {
+    const res = await fetch('/api/client/overview', {
+      headers: { 'x-client-pin': currentPin }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.isWhatsAppReady) {
+        if (qrLoading) qrLoading.classList.add('hidden');
+        if (statusBadge) {
+          statusBadge.className = 'mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono bg-emerald-500/10 border border-emerald-500/25 text-emerald-400';
+          statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span><span>✅ ¡WhatsApp Conectado Exitosamente!</span>';
+        }
+        return;
+      }
+
+      if (data.qrData) {
+        qrImg.src = data.qrData;
+        if (qrLoading) qrLoading.classList.add('hidden');
+      }
+    }
+  } catch (e) {
+    console.warn('Error refrescando QR de wizard:', e);
+  }
+}
+
+function startWizardQrPolling() {
+  stopWizardQrPolling();
+  wizardQrPollInterval = setInterval(refreshWizardQr, 4000);
+}
+
+function stopWizardQrPolling() {
+  if (wizardQrPollInterval) {
+    clearInterval(wizardQrPollInterval);
+    wizardQrPollInterval = null;
+  }
+}
+
+async function submitCompleteOnboarding() {
+  const aiProvider = document.getElementById('wizardAiProvider')?.value || 'openrouter';
+  const aiApiKey = document.getElementById('wizardAiApiKey')?.value?.trim() || '';
+  const apifyToken = document.getElementById('wizardApifyToken')?.value?.trim() || '';
+  const directorName = document.getElementById('wizardDirectorName')?.value?.trim() || '';
+  const directorPhone = document.getElementById('wizardDirectorPhone')?.value?.trim() || '';
+
+  const nextBtn = document.getElementById('wizardNextBtn');
+  if (nextBtn) {
+    nextBtn.disabled = true;
+    nextBtn.innerHTML = '<span>Guardando y Activando...</span>';
+  }
+
+  try {
+    const payload = {
+      aiProvider,
+      aiApiKey,
+      apifyToken,
+      useCustomApify: !!apifyToken,
+      adminWhatsAppPhone: directorPhone,
+      onboardingCompleted: true
+    };
+
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-client-pin': currentPin
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      closeOnboardingWizard();
+      alert('🎉 ¡Felicitaciones! Tu Centro de Mando SaaR ha sido configurado y activado exitosamente.');
+      fetchOverview();
+    } else {
+      const errData = await res.json();
+      alert('Error guardando configuración: ' + (errData.error || 'Desconocido'));
+    }
+  } catch (err) {
+    alert('Error de conexión al guardar configuración: ' + err.message);
+  } finally {
+    if (nextBtn) {
+      nextBtn.disabled = false;
+      nextBtn.innerHTML = '<span>🚀 Finalizar y Activar Motor Comercial</span>';
+    }
+  }
 }
