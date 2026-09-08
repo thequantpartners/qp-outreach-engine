@@ -705,11 +705,22 @@ function renderLeadsStream() {
     filtered = filtered.filter(l => l.assignedRepName === currentRepFilter);
   }
 
-  // Filtrar por canal (Meta Ads vs Prospección)
-  if (currentSourceFilter === 'meta_ads') {
+  // Filtrar por canal (Orgánico vs Meta Ads vs Prospección)
+  if (currentSourceFilter === 'organic') {
+    filtered = filtered.filter(l => 
+      l.source === 'direct_whatsapp' || 
+      l.source === 'inbound' || 
+      l.source === 'organic' || 
+      (l.category && (l.category.toLowerCase().includes('organico') || l.category.toLowerCase().includes('inbound')))
+    );
+  } else if (currentSourceFilter === 'meta_ads') {
     filtered = filtered.filter(l => l.source === 'meta_ads' || (l.category && l.category.toLowerCase().includes('metaads')));
   } else if (currentSourceFilter === 'outbound') {
-    filtered = filtered.filter(l => l.source !== 'meta_ads' && !(l.category && l.category.toLowerCase().includes('metaads')));
+    filtered = filtered.filter(l => {
+      const isMeta = l.source === 'meta_ads' || (l.category && l.category.toLowerCase().includes('metaads'));
+      const isOrg = l.source === 'direct_whatsapp' || l.source === 'inbound' || l.source === 'organic' || (l.category && (l.category.toLowerCase().includes('organico') || l.category.toLowerCase().includes('inbound')));
+      return !isMeta && !isOrg;
+    });
   }
 
   // Filtrar por búsqueda
@@ -771,9 +782,16 @@ function renderLeadsStream() {
     const repLabel = lead.assignedRepName || 'Sin asignar';
     const campLabel = lead.serviceName || (lead.serviceId ? lead.serviceId : 'Directo');
     const isMetaAd = lead.source === 'meta_ads' || (lead.category && lead.category.toLowerCase().includes('metaads'));
-    const channelBadgeHtml = isMetaAd
-      ? `<span class="text-[9px] font-mono text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30 flex items-center gap-1" title="Canal: Meta Ads"><span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span><span>🎯 Meta Ads</span></span>`
-      : `<span class="text-[9px] font-mono text-sky-300 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/30 flex items-center gap-1" title="Canal: Prospección Fría"><i data-lucide="bot" class="w-2.5 h-2.5 flex-shrink-0"></i><span>Prospección</span></span>`;
+    const isOrganic = lead.source === 'direct_whatsapp' || lead.source === 'inbound' || lead.source === 'organic' || (lead.category && (lead.category.toLowerCase().includes('organico') || lead.category.toLowerCase().includes('inbound')));
+    
+    let channelBadgeHtml = '';
+    if (isOrganic) {
+      channelBadgeHtml = `<span class="text-[9px] font-mono text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1" title="Canal: Chat Orgánico / Inbound"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span><span>💬 Orgánico</span></span>`;
+    } else if (isMetaAd) {
+      channelBadgeHtml = `<span class="text-[9px] font-mono text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30 flex items-center gap-1" title="Canal: Meta Ads"><span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span><span>🎯 Meta Ads</span></span>`;
+    } else {
+      channelBadgeHtml = `<span class="text-[9px] font-mono text-sky-300 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/30 flex items-center gap-1" title="Canal: Prospección Fría"><i data-lucide="bot" class="w-2.5 h-2.5 flex-shrink-0"></i><span>Prospección</span></span>`;
+    }
 
     item.innerHTML = `
       <div class="flex items-center justify-between gap-2 mb-1">
@@ -809,13 +827,13 @@ function renderLeadsStream() {
 
 function setSourceFilter(source) {
   currentSourceFilter = source;
-  ['ALL', 'meta_ads', 'outbound'].forEach(s => {
+  ['ALL', 'organic', 'meta_ads', 'outbound'].forEach(s => {
     const btn = document.getElementById(`sourceFilter_${s}`);
     if (btn) {
       if (s === source) {
-        btn.className = 'flex-1 py-1 px-2 rounded-lg text-[11px] font-sans font-medium transition text-white bg-white/[0.08] shadow-sm text-center flex items-center justify-center gap-1';
+        btn.className = 'flex-1 py-1 px-1.5 rounded-lg text-[10px] font-sans font-medium transition text-white bg-white/[0.08] shadow-sm text-center flex items-center justify-center gap-1';
       } else {
-        btn.className = 'flex-1 py-1 px-2 rounded-lg text-[11px] font-sans font-medium transition text-slate-400 hover:text-white text-center flex items-center justify-center gap-1';
+        btn.className = 'flex-1 py-1 px-1.5 rounded-lg text-[10px] font-sans font-medium transition text-slate-400 hover:text-white text-center flex items-center justify-center gap-1';
       }
     }
   });
@@ -1017,9 +1035,13 @@ async function selectLeadForDetail(phone) {
   const catBadge = document.getElementById('intelCategoryBadge');
   const catInput = document.getElementById('intelCategoryInput');
   const isMetaAd = lead.source === 'meta_ads' || (lead.category && lead.category.toLowerCase().includes('metaads'));
+  const isOrganic = lead.source === 'direct_whatsapp' || lead.source === 'inbound' || lead.source === 'organic' || (lead.category && (lead.category.toLowerCase().includes('organico') || lead.category.toLowerCase().includes('inbound')));
 
   if (sourceBadge) {
-    if (isMetaAd) {
+    if (isOrganic) {
+      sourceBadge.className = 'text-[10px] font-mono px-2 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 font-medium flex items-center gap-1';
+      sourceBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span><span>💬 Orgánico / Inbound</span>';
+    } else if (isMetaAd) {
       sourceBadge.className = 'text-[10px] font-mono px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300 font-medium flex items-center gap-1';
       sourceBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span><span>🎯 Meta Ads</span>';
     } else {
@@ -1029,7 +1051,7 @@ async function selectLeadForDetail(phone) {
   }
 
   if (catBadge) {
-    catBadge.textContent = lead.category || (isMetaAd ? '#MetaAds' : '#Prospección');
+    catBadge.textContent = lead.category || (isOrganic ? '#Inbound-Orgánico' : isMetaAd ? '#MetaAds' : '#Prospección');
   }
   if (catInput) {
     catInput.value = lead.category || '';
@@ -1078,9 +1100,13 @@ function updateActiveLeadHeader() {
     if (intelCampaignBadge) intelCampaignBadge.textContent = lead.serviceName || (lead.serviceId ? lead.serviceId : 'Directo / Orgánico');
     
     const isMetaAd = lead.source === 'meta_ads' || (lead.category && lead.category.toLowerCase().includes('metaads'));
+    const isOrganic = lead.source === 'direct_whatsapp' || lead.source === 'inbound' || lead.source === 'organic' || (lead.category && (lead.category.toLowerCase().includes('organico') || lead.category.toLowerCase().includes('inbound')));
     const sourceBadge = document.getElementById('intelSourceBadge');
     if (sourceBadge) {
-      if (isMetaAd) {
+      if (isOrganic) {
+        sourceBadge.className = 'text-[10px] font-mono px-2 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 font-medium flex items-center gap-1';
+        sourceBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span><span>💬 Orgánico / Inbound</span>';
+      } else if (isMetaAd) {
         sourceBadge.className = 'text-[10px] font-mono px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300 font-medium flex items-center gap-1';
         sourceBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span><span>🎯 Meta Ads</span>';
       } else {
@@ -1089,7 +1115,7 @@ function updateActiveLeadHeader() {
       }
     }
     const catBadge = document.getElementById('intelCategoryBadge');
-    if (catBadge) catBadge.textContent = lead.category || (isMetaAd ? '#MetaAds' : '#Prospección');
+    if (catBadge) catBadge.textContent = lead.category || (isOrganic ? '#Inbound-Orgánico' : isMetaAd ? '#MetaAds' : '#Prospección');
   }
 }
 

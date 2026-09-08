@@ -442,21 +442,29 @@
           </div>
         </div>
 
-        <!-- Filtro por Canal de Origen (Meta Ads vs Prospección Fría) -->
+        <!-- Filtro por Canal de Origen (Orgánico vs Meta Ads vs Prospección) -->
         <div class="flex items-center gap-1 bg-card p-1 rounded-xl border border-white/[0.08]">
           <button 
             type="button" 
             onclick="setSourceFilter('ALL')" 
             id="sourceFilter_ALL" 
-            class="flex-1 py-1 px-2 rounded-lg text-[11px] font-sans font-medium transition text-white bg-white/[0.08] shadow-sm text-center"
+            class="flex-1 py-1 px-1.5 rounded-lg text-[10px] font-sans font-medium transition text-white bg-white/[0.08] shadow-sm text-center"
           >
             Todos
           </button>
           <button 
             type="button" 
+            onclick="setSourceFilter('organic')" 
+            id="sourceFilter_organic" 
+            class="flex-1 py-1 px-1.5 rounded-lg text-[10px] font-sans font-medium transition text-slate-400 hover:text-emerald-300 text-center flex items-center justify-center gap-1"
+          >
+            <span>💬</span><span>Orgánico</span>
+          </button>
+          <button 
+            type="button" 
             onclick="setSourceFilter('meta_ads')" 
             id="sourceFilter_meta_ads" 
-            class="flex-1 py-1 px-2 rounded-lg text-[11px] font-sans font-medium transition text-slate-400 hover:text-white text-center flex items-center justify-center gap-1"
+            class="flex-1 py-1 px-1.5 rounded-lg text-[10px] font-sans font-medium transition text-slate-400 hover:text-amber-300 text-center flex items-center justify-center gap-1"
           >
             <span>🎯</span><span>Meta Ads</span>
           </button>
@@ -464,7 +472,7 @@
             type="button" 
             onclick="setSourceFilter('outbound')" 
             id="sourceFilter_outbound" 
-            class="flex-1 py-1 px-2 rounded-lg text-[11px] font-sans font-medium transition text-slate-400 hover:text-white text-center flex items-center justify-center gap-1"
+            class="flex-1 py-1 px-1.5 rounded-lg text-[10px] font-sans font-medium transition text-slate-400 hover:text-sky-300 text-center flex items-center justify-center gap-1"
           >
             <span>🤖</span><span>Prospección</span>
           </button>
