@@ -4477,6 +4477,133 @@ async function handleSaveNewCampaign() {
   }
 }
 
+let scrapingProgressInterval = null;
+
+async function handleSaveAndLaunchScraping() {
+  const name = document.getElementById('newCampName')?.value.trim();
+  const niche = document.getElementById('newCampNiche')?.value.trim();
+  const solution = document.getElementById('newCampSolution')?.value.trim();
+  const location = document.getElementById('newCampLocation')?.value.trim() || 'Lima, Peru';
+  const outreachTemplate = document.getElementById('newCampTemplate')?.value.trim();
+  const followUpTemplate = document.getElementById('newCampFollowUp')?.value.trim();
+  const aiInstructions = document.getElementById('newCampPrompt')?.value.trim();
+  const type = document.getElementById('newCampType')?.value || 'OUTBOUND';
+  const inboundMode = document.getElementById('newCampInboundMode')?.value || 'COPILOT_ONLY';
+  const maxResults = parseInt(document.getElementById('newCampScrapeLimit')?.value || '15', 10);
+
+  const alertBox = document.getElementById('newCampAlertBox');
+  const btn = document.getElementById('btnSaveAndScrapeCamp');
+
+  if (!name) {
+    if (alertBox) {
+      alertBox.className = 'p-3 rounded-xl text-xs font-sans bg-rose-500/10 border border-rose-500/20 text-rose-400 block';
+      alertBox.textContent = 'Por favor ingresa un nombre para la campaña.';
+    }
+    return;
+  }
+
+  if (btn) btn.disabled = true;
+
+  // 1. Guardar o registrar la campaña en PostgreSQL
+  let serviceId = activeCampaignId;
+  try {
+    const resCamp = await fetch('/api/client/services', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-client-pin': currentPin },
+      body: JSON.stringify({
+        name,
+        targetLocations: [location],
+        outreachTemplate,
+        followUpTemplate,
+        aiInstructions,
+        type,
+        inboundMode,
+        active: true
+      })
+    });
+    const dataCamp = await resCamp.json();
+    if (resCamp.ok && dataCamp.service?.id) {
+      serviceId = dataCamp.service.id;
+      activeCampaignId = serviceId;
+    }
+  } catch (e) {
+    console.warn('Error registrando campaña:', e);
+  }
+
+  // 2. Generar query óptima a partir del nicho y ubicación
+  let query = niche || name;
+  const cleanCity = location.split(',')[0].trim().toLowerCase();
+  if (!query.toLowerCase().includes(cleanCity)) {
+    query = `${query} ${cleanCity}`;
+  }
+
+  // Cerrar modal de creación y abrir modal de progreso de scraping
+  closeCreateCampaignModal();
+
+  const progressModal = document.getElementById('scrapingProgressModal');
+  const progressQuery = document.getElementById('scrapeProgressQuery');
+  const progressTimer = document.getElementById('scrapeProgressTimer');
+  const progressTitle = document.getElementById('scrapeProgressTitle');
+
+  if (progressModal) progressModal.classList.remove('hidden');
+  if (progressQuery) progressQuery.textContent = `Buscando: "${query}"`;
+  if (progressTitle) progressTitle.textContent = `Extrayendo ${maxResults} prospectos en Google Maps...`;
+
+  let elapsed = 0;
+  if (scrapingProgressInterval) clearInterval(scrapingProgressInterval);
+  scrapingProgressInterval = setInterval(() => {
+    elapsed++;
+    if (progressTimer) progressTimer.textContent = `${elapsed}s transcurridos`;
+  }, 1000);
+
+  try {
+    const resScrape = await fetch('/api/client/scrape/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-client-pin': currentPin },
+      body: JSON.stringify({
+        source: 'google_maps',
+        query,
+        location,
+        maxResults,
+        countryCode: 'pe'
+      })
+    });
+
+    const scrapeData = await resScrape.json();
+    if (!resScrape.ok) throw new Error(scrapeData.error || 'Error ejecutando scraping');
+
+    currentDiscoveredLeads = scrapeData.leads || [];
+    
+    // Cambiar a la vista de prospección si no estamos en ella
+    switchMainView('discovery');
+    
+    await loadAllCampaigns();
+    if (serviceId) {
+      const previewSel = document.getElementById('previewServiceSelect');
+      if (previewSel) previewSel.value = serviceId;
+      const batchSel = document.getElementById('batchServiceSelect');
+      if (batchSel) batchSel.value = serviceId;
+    }
+
+    renderScrapedLeadsPreview(currentDiscoveredLeads);
+
+    const previewCard = document.getElementById('scrapePreviewCard');
+    if (previewCard) {
+      previewCard.classList.remove('hidden');
+      previewCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    await fetchOverview();
+    showNotificationToast(`✅ ${currentDiscoveredLeads.length} prospectos listos para revisar y despachar`);
+  } catch (err) {
+    alert('Error al extraer prospectos en Apify: ' + err.message);
+  } finally {
+    if (scrapingProgressInterval) clearInterval(scrapingProgressInterval);
+    if (progressModal) progressModal.classList.add('hidden');
+    if (btn) btn.disabled = false;
+  }
+}
+
 // =================================================================
 // 17. NUEVO CHAT DIRECTO (+ NUEVO CHAT)
 // =================================================================
