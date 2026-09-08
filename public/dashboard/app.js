@@ -3113,8 +3113,38 @@ function showNotificationToast(message) {
   }, 5000);
 }
 
+// Notificaciones de Escritorio Nativas (Web Notifications API)
+function requestDesktopNotificationPermission() {
+  try {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  } catch (err) {}
+}
+
+function showDesktopNotification(title, body, phone) {
+  try {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      const notif = new Notification(title, {
+        body: body,
+        icon: 'https://cdn-icons-png.flaticon.com/512/124/124034.png',
+        tag: `qp-chat-${phone || 'general'}`
+      });
+      notif.onclick = () => {
+        window.focus();
+        if (phone) {
+          selectLeadForDetail(phone);
+        }
+        notif.close();
+      };
+    }
+  } catch (err) {}
+}
+
 // 15. Real-Time SSE
 function initSSE() {
+  requestDesktopNotificationPermission();
+
   if (eventSource) {
     eventSource.close();
   }
@@ -3134,7 +3164,14 @@ function initSSE() {
 
         if (event.role === 'user') {
           playNotificationSound();
-          showNotificationToast(`📩 Mensaje de ${event.companyName || ('+' + cleanEventPhone)}: "${(event.content || '').slice(0, 50)}"`);
+          const senderName = event.companyName || ('+' + cleanEventPhone);
+          const snippet = (event.content || '').slice(0, 80);
+          showNotificationToast(`📩 Mensaje de ${senderName}: "${snippet}"`);
+          showDesktopNotification(`📩 Mensaje de ${senderName}`, snippet, cleanEventPhone);
+          
+          if (document.hidden) {
+            document.title = `(1) 📩 Mensaje de ${senderName} · QP`;
+          }
         }
 
         if (cleanActivePhone && cleanActivePhone === cleanEventPhone) {
@@ -3146,7 +3183,10 @@ function initSSE() {
       if (event.type === 'lead_updated') {
         if (event.assignedRepName && currentUserRole === 'sales_rep' && event.assignedRepName === currentUserName) {
           playNotificationSound();
-          showNotificationToast(`👤 ¡Se te ha asignado un nuevo chat! (+${event.phone})`);
+          const title = `👤 ¡Nuevo lead asignado!`;
+          const body = `Se te ha asignado el prospecto +${event.phone}`;
+          showNotificationToast(`${title} (+${event.phone})`);
+          showDesktopNotification(title, body, event.phone);
         }
         fetchOverview();
       }
@@ -3175,6 +3215,7 @@ function initSSE() {
 
 // Sincronización instantánea al regresar a la pestaña del navegador
 window.addEventListener('focus', () => {
+  document.title = 'The Quant Partners · Centro Comercial Autónomo';
   if (currentPin) {
     if (activeLeadPhone) {
       selectLeadForDetail(activeLeadPhone);

@@ -13,6 +13,7 @@ import path from 'path';
 import dotenv from 'dotenv';
 import { OutreachRepo } from '../db/repo.js';
 import { OpenRouterCloser } from '../ai/openrouter_closer.js';
+import { SlaAlertManager } from './sla_manager.js';
 
 dotenv.config();
 
@@ -303,6 +304,7 @@ export class BaileysEngine {
 
         // 1. Mensaje saliente manual enviado desde el teléfono del dueño (fromMe)
         if (m.key.fromMe) {
+          SlaAlertManager.getInstance().cancelSlaTimer(senderPhone);
           const adminClean = settings.adminWhatsAppPhone ? settings.adminWhatsAppPhone.replace(/[^0-9]/g, '') : '';
           if (senderPhone && senderPhone !== adminClean) {
             console.log(`[BaileysEngine] Mensaje saliente manual detectado en chat con ${senderPhone}. Registrando como human_agent.`);
@@ -452,28 +454,73 @@ export class BaileysEngine {
           }
         }
 
-        // 6. Notificar inmediatamente al asesor asignado (o admin) a su WhatsApp personal
-        const targetPhone = (lead.assignedRepPhone || settings.adminWhatsAppPhone || process.env.ADMIN_WHATSAPP_PHONE || '').replace(/[^0-9]/g, '');
-        const repDisplayName = lead.assignedRepName || 'Asesor Asignado';
+        // 6. Enrutamiento inteligente de notificaciones:
+        // - Fuera de horario: Notificación inmediata de WhatsApp al asesor (o admin) porque no están en oficina
+        // - En horario comercial: Cero spam a WhatsApp. Atención 100% en Dashboard (SSE + Sonido + Push).
+        //   Se inicia temporizador SLA de 15 min. Si nadie responde en 15 min, escala a WhatsApp.
+        if (!isWorkingHours) {
+          const targetPhone = (lead.assignedRepPhone || settings.adminWhatsAppPhone || process.env.ADMIN_WHATSAPP_PHONE || '').replace(/[^0-9]/g, '');
+          const repDisplayName = lead.assignedRepName || 'Asesor Asignado';
+          const isMetaAd = lead.source === 'meta_ads';
+          const sourceLabel = isMetaAd ? '🎯 *NUEVO LEAD DE META ADS (FUERA DE HORARIO)*' : '🌙 *NUEVO MENSAJE DE PROSPECTO (FUERA DE HORARIO)*';
+          const campaignLabel = lead.serviceName ? `\n📢 Campaña: *${lead.serviceName}*` : '';
 
-        const isMetaAd = lead.source === 'meta_ads';
-        const sourceLabel = isMetaAd ? '🎯 *NUEVO LEAD DE META ADS (Click-to-WhatsApp)*' : '🚨 *NUEVO MENSAJE DE PROSPECTO*';
-        const campaignLabel = lead.serviceName ? `\n📢 Campaña: *${lead.serviceName}*` : '';
+          const alertMsg = 
+            `${sourceLabel} (Round Robin: ${repDisplayName})\n\n` +
+            `👤 Asesor: *${repDisplayName}*\n` +
+            `🏢 Empresa: *${lead.companyName || 'Contacto WhatsApp'}*` +
+            `${campaignLabel}\n` +
+            `📱 Teléfono: *+${senderPhone}*\n` +
+            `💬 Mensaje: "${incomingText}"\n\n` +
+            `💡 *QPartner Co-Pilot* ha generado sugerencias tácticas en tu Dashboard:\n` +
+            `👉 https://qp-outreach-engine.vercel.app/#chat=${senderPhone}`;
 
-        const alertMsg = 
-          `${sourceLabel} (Round Robin: ${repDisplayName})\n\n` +
-          `👤 Asesor: *${repDisplayName}*\n` +
-          `🏢 Empresa: *${lead.companyName || 'Contacto WhatsApp'}*` +
-          `${campaignLabel}\n` +
-          `📱 Teléfono: *+${senderPhone}*\n` +
-          `💬 Mensaje: "${incomingText}"\n\n` +
-          `💡 *QPartner Co-Pilot* ha generado 3 sugerencias tácticas en tu Dashboard para responder con 1 clic:\n` +
-          `👉 https://qp-outreach-engine.vercel.app/#chat=${senderPhone}`;
-
-        if (targetPhone) {
-          await this.notifyPhone(targetPhone, alertMsg);
+          if (targetPhone) {
+            await this.notifyPhone(targetPhone, alertMsg);
+          } else {
+            await this.notifyAdmin(alertMsg);
+          }
         } else {
-          await this.notifyAdmin(alertMsg);
+          // En horario comercial: Silenciar alertas inmediatas de WhatsApp y activar temporizador SLA de 15 min
+          SlaAlertManager.getInstance().recordInboundMessage({
+            leadPhone: senderPhone,
+            incomingText,
+            lead,
+            onEscalate: async (details) => {
+              const countLabel = details.unrepliedCount > 1 ? ` (${details.unrepliedCount} mensajes acumulados sin atender)` : '';
+              const campaignLabel = details.serviceName ? `\n📢 Campaña: *${details.serviceName}*` : '';
+              const repDisplayName = details.assignedRepName || 'Asesor Asignado';
+              const adminPhone = (settings.adminWhatsAppPhone || process.env.ADMIN_WHATSAPP_PHONE || '').replace(/[^0-9]/g, '');
+              const repPhone = (details.assignedRepPhone || '').replace(/[^0-9]/g, '');
+
+              const slaAlertMsg = 
+                `⚠️ *ALERTA DE SLA: PROSPECTO SIN ATENDER (+15 min)*${countLabel}\n\n` +
+                `👤 Asesor Asignado: *${repDisplayName}*\n` +
+                `🏢 Empresa: *${details.companyName}*` +
+                `${campaignLabel}\n` +
+                `📱 Teléfono: *+${details.leadPhone}*\n` +
+                `💬 Último Mensaje: "${details.lastMessageText}"\n\n` +
+                `⏰ El prospecto escribió hace más de 15 minutos en horario comercial y aún no ha sido atendido en el CRM.\n\n` +
+                `👉 Atender de inmediato en el Dashboard:\n` +
+                `https://qp-outreach-engine.vercel.app/#chat=${details.leadPhone}`;
+
+              // 1. Notificar primero al asesor asignado
+              if (repPhone) {
+                await this.notifyPhone(repPhone, slaAlertMsg);
+              }
+
+              // 2. Si el asesor es distinto al Director Kenneth (o no tiene teléfono asignado), alertar al Director
+              if (adminPhone && adminPhone !== repPhone) {
+                const directorMsg = 
+                  `🚨 *INCUMPLIMIENTO DE SLA EN EQUIPO COMERCIAL*\n` +
+                  `El prospecto asignado a *${repDisplayName}* lleva +15 min sin respuesta en el CRM:\n\n` +
+                  slaAlertMsg;
+                await this.notifyAdmin(directorMsg);
+              } else if (!repPhone && adminPhone) {
+                await this.notifyAdmin(slaAlertMsg);
+              }
+            }
+          });
         }
       }
     });
@@ -536,13 +583,14 @@ export class BaileysEngine {
       }
 
       console.log(`[BaileysEngine] Enviando mensaje a ${limpio}...`);
-      const sent = await this.sock.sendMessage(jid, { text: mensaje });
+      const sentMsg = await this.sock.sendMessage(jid, { text: mensaje });
+      SlaAlertManager.getInstance().cancelSlaTimer(limpio);
       console.log(`✅ [BaileysEngine] Mensaje entregado a ${limpio}!`);
 
-      if (sent?.key) {
-        const alt = ((sent.key as any).remoteJidAlt || '').replace(/[^0-9]/g, '');
-        const remote = (sent.key.remoteJid || '').replace(/[^0-9]/g, '');
-        const lidCandidate = (sent.key.remoteJid || '').endsWith('@lid') ? remote : ((sent.key as any).remoteJidAlt || '').endsWith('@lid') ? alt : '';
+      if (sentMsg?.key) {
+        const alt = ((sentMsg.key as any).remoteJidAlt || '').replace(/[^0-9]/g, '');
+        const remote = (sentMsg.key.remoteJid || '').replace(/[^0-9]/g, '');
+        const lidCandidate = (sentMsg.key.remoteJid || '').endsWith('@lid') ? remote : ((sentMsg.key as any).remoteJidAlt || '').endsWith('@lid') ? alt : '';
         if (lidCandidate && limpio && lidCandidate !== limpio) {
           BaileysEngine.lidToPhoneCache.set(lidCandidate, limpio);
           BaileysEngine.phoneToLidCache.set(limpio, lidCandidate);

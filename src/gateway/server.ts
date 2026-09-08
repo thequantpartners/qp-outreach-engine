@@ -30,6 +30,7 @@ import { Deployer } from '../master/deployer.js';
 import { BlueprintsManager } from '../master/blueprints_manager.js';
 import { VpsInstaller } from '../master/vps_installer.js';
 import { OpenRouterCloser } from '../ai/openrouter_closer.js';
+import { SlaAlertManager } from '../whatsapp/sla_manager.js';
 
 dotenv.config();
 
@@ -801,6 +802,7 @@ app.post('/api/client/chat/send', authenticateClientPin, async (req: Request, re
     }
 
     if (sendSuccess) {
+      SlaAlertManager.getInstance().cancelSlaTimer(clean);
       await OutreachRepo.updateLeadStatus(clean, 'HUMAN_TAKEOVER', {
         humanTakeoverAt: new Date().toISOString()
       });
@@ -837,6 +839,9 @@ app.post('/api/client/chat/:phone/message', authenticateClientPin, async (req: R
     if (!content) {
       res.status(400).json({ error: 'content es requerido' });
       return;
+    }
+    if (role === 'human_agent' || !role) {
+      SlaAlertManager.getInstance().cancelSlaTimer(clean);
     }
     await OutreachRepo.addChatMessage(clean, role || 'human_agent', content);
     broadcastDashboardEvent({
