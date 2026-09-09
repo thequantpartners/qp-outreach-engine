@@ -741,19 +741,34 @@ export class OutreachRepo {
     }
   }
 
-  public static async getLeadsForOutreach(limit: number = 30): Promise<Lead[]> {
+  public static async getLeadsForOutreach(serviceId?: string, limit: number = 30): Promise<Lead[]> {
     if (DbConnection.isPg()) {
-      const res = await DbConnection.getPool().query(
-        `SELECT * FROM leads 
-         WHERE status IN ('DISCOVERED', 'QUEUED')
-         ORDER BY id ASC LIMIT $1`,
-        [limit]
-      );
+      let query = `
+        SELECT l.* FROM leads l
+        LEFT JOIN services s ON l.service_id = s.id
+        WHERE l.status IN ('DISCOVERED', 'QUEUED')
+      `;
+      const params: any[] = [];
+      if (serviceId) {
+        params.push(serviceId);
+        query += ` AND l.service_id = $${params.length}`;
+      } else {
+        query += ` AND (s.is_active = true OR l.service_id IS NULL)`;
+      }
+      params.push(limit);
+      query += ` ORDER BY l.id ASC LIMIT $${params.length}`;
+
+      const res = await DbConnection.getPool().query(query, params);
       return res.rows.map(r => OutreachRepo.mapLeadRow(r));
     } else {
       const data = DbConnection.getFallbackData();
       return (data.leads || [])
-        .filter((l: Lead) => l.status === 'DISCOVERED' || l.status === 'QUEUED')
+        .filter((l: Lead) => {
+          const statusOk = l.status === 'DISCOVERED' || l.status === 'QUEUED';
+          if (!statusOk) return false;
+          if (serviceId) return l.serviceId === serviceId;
+          return true;
+        })
         .slice(0, limit);
     }
   }

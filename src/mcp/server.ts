@@ -772,7 +772,16 @@ export class McpServerManager {
               trigger_immediate = true
             } = args as any;
 
-            // 1. Registrar o actualizar la definición del servicio
+            // 1. Pausar automáticamente cualquier otra campaña outbound previa para blindar aislamiento total
+            const existingServices = await OutreachRepo.getServices();
+            for (const s of existingServices) {
+              if (s.id !== service_id && s.type !== 'INBOUND_ADS' && s.isActive) {
+                console.log(`⏸️ [MCP:launch_campaign] Pausando campaña previa "${s.name}" (${s.id}) para evitar colisión de mensajes.`);
+                await OutreachRepo.toggleService(s.id, false);
+              }
+            }
+
+            // 2. Registrar o actualizar la definición del servicio
             const service: ServiceDefinition = {
               id: service_id,
               name: service_name,

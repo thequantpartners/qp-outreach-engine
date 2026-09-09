@@ -169,19 +169,24 @@ export class AutonomousPipeline {
       await this.triggerScrape(activeService);
     }
 
-    // 8. PRIORIDAD 2: Siguiente nuevo lead en frío
-    const leadsToContact = await OutreachRepo.getLeadsForOutreach(1);
+    // 8. PRIORIDAD 2: Siguiente nuevo lead en frío estrictamente para la campaña activa
+    const leadsToContact = await OutreachRepo.getLeadsForOutreach(activeService.id, 1);
     if (leadsToContact.length === 0) {
-      console.log('ℹ️ [AutonomousPipeline] No hay prospectos pendientes en cola. Esperando recarga de buffer...');
+      console.log(`ℹ️ [AutonomousPipeline] No hay prospectos pendientes en cola para la campaña "${activeService.name}".`);
       this.scheduleNextTick(30000);
       return;
     }
 
     const lead = leadsToContact[0];
     let leadService = activeService;
-    if (lead.serviceId) {
+    if (lead.serviceId && lead.serviceId !== activeService.id) {
       const specificService = await OutreachRepo.getServiceById(lead.serviceId);
-      if (specificService) leadService = specificService;
+      if (!specificService || !specificService.isActive) {
+        console.warn(`⚠️ [AutonomousPipeline] Lead ${lead.phone} pertenece a campaña inactiva "${lead.serviceId}". Saltando.`);
+        this.scheduleNextTick(5000);
+        return;
+      }
+      leadService = specificService;
     }
     await this.dispatchLead(lead, leadService, effectiveSettings);
   }
