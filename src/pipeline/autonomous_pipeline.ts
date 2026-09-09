@@ -178,7 +178,12 @@ export class AutonomousPipeline {
     }
 
     const lead = leadsToContact[0];
-    await this.dispatchLead(lead, activeService, effectiveSettings);
+    let leadService = activeService;
+    if (lead.serviceId) {
+      const specificService = await OutreachRepo.getServiceById(lead.serviceId);
+      if (specificService) leadService = specificService;
+    }
+    await this.dispatchLead(lead, leadService, effectiveSettings);
   }
 
   /**
@@ -294,6 +299,16 @@ export class AutonomousPipeline {
     let message = service.outreachTemplate;
     message = message.replace(/{{name}}/g, lead.companyName);
     message = message.replace(/{{phone}}/g, lead.phone);
+
+    // Saludo contextual automático según la hora de Lima
+    const currentHour = new Date().getHours();
+    const saludo = currentHour < 12 ? 'Buenos días' : (currentHour < 19 ? 'Buenas tardes' : 'Buenas noches');
+    message = message.replace(/{{saludo}}/gi, saludo);
+    if (currentHour < 12) {
+      message = message.replace(/^Buenas tardes/i, 'Buenos días');
+    } else if (currentHour < 19) {
+      message = message.replace(/^Buenos días/i, 'Buenas tardes');
+    }
 
     console.log(`🚀 [AutonomousPipeline] Despachando prospección a ${lead.companyName} (${lead.phone})...`);
 
