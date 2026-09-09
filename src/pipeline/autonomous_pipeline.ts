@@ -315,6 +315,11 @@ export class AutonomousPipeline {
       message = message.replace(/^Buenos días/i, 'Buenas tardes');
     }
 
+    if (!message || message.trim().length === 0) {
+      console.error(`🚨 [AutonomousPipeline] ERROR CRÍTICO: Mensaje vacío para lead ${lead.companyName} (${lead.phone}). Envío ABORTADO.`);
+      return;
+    }
+
     console.log(`🚀 [AutonomousPipeline] Despachando prospección a ${lead.companyName} (${lead.phone})...`);
 
     const provider = settings.whatsappProvider || 'direct_qr';

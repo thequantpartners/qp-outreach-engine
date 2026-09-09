@@ -585,6 +585,11 @@ export class BaileysEngine {
    * Envía un mensaje individual con validación previa de número
    */
   public async send(telefono: string, mensaje: string): Promise<{ success: boolean; jid?: string; error?: string }> {
+    if (!mensaje || !mensaje.trim()) {
+      console.error(`🚨 [BaileysEngine] Rechazado intento de enviar mensaje vacío a ${telefono}.`);
+      return { success: false, error: 'El mensaje está vacío o en blanco.' };
+    }
+
     if (!this.sock || !this.isReady) {
       return { success: false, error: 'WhatsApp no está conectado o autenticado.' };
     }

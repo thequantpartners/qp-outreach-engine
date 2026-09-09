@@ -299,7 +299,7 @@ export class OutreachRepo {
 
   public static async getActiveService(): Promise<ServiceDefinition | null> {
     const services = await OutreachRepo.getServices();
-    return services.find(s => s.isActive) || services[0] || null;
+    return services.find(s => s.isActive && (s.type === 'OUTBOUND' || !s.type) && s.outreachTemplate && s.outreachTemplate.trim().length > 0) || null;
   }
 
   public static async saveService(s: ServiceDefinition): Promise<void> {
