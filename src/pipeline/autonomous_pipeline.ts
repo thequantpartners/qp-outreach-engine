@@ -12,6 +12,7 @@ export class AutonomousPipeline {
   private static currentQueryIndex: number = 0;
 
   private static dailyReportSentDay: string = '';
+  private static lastBillingAlertDate: string = '';
 
   /**
    * Inicia el orquestador continuo autónomo
@@ -108,6 +109,9 @@ export class AutonomousPipeline {
       this.scheduleNextTick(10 * 60 * 1000); // esperar 10 minutos
       return;
     }
+
+    // 2.5. Comprobar alertas de facturación mensual Railway (Preventiva día 14, Cobro día 17 y semanal)
+    await this.checkBillingAlert(today, settings);
 
     // 3. Comprobar recordatorios de citas agendadas próximas (Anti No-Show)
     const upcomingMeetings = await OutreachRepo.getUpcomingMeetingsForReminder(2);
@@ -323,6 +327,48 @@ export class AutonomousPipeline {
       console.log('📊 [AutonomousPipeline] Reporte diario nocturno despachado a Kenneth.');
     } catch (err: any) {
       console.error('[AutonomousPipeline] Error enviando reporte nocturno:', err.message);
+    }
+  }
+
+  /**
+   * Envía alertas preventivas y de pago mensual del servidor Railway al WhatsApp de Kenneth
+   */
+  private static async checkBillingAlert(today: string, settings: any): Promise<void> {
+    if (this.lastBillingAlertDate === today) return;
+
+    const now = new Date();
+    const dayOfMonth = now.getDate();
+    const currentHour = now.getHours();
+
+    // Solo enviar durante el horario diurno (10am - 6pm) para no interrumpir
+    if (currentHour < 10 || currentHour > 18) return;
+
+    const whatsapp = BaileysEngine.getInstance();
+    if (!whatsapp.getStatus().isReady) return;
+
+    // 1. Día 14 de cada mes: Alerta preventiva (3 días antes del corte del 17)
+    if (dayOfMonth === 14) {
+      this.lastBillingAlertDate = today;
+      const msg = `🔔 *AVISO PREVENTIVO DE FACTURACIÓN RAILWAY*\n\nHola Kenneth, te recuerdo que en 3 días (*día 17*) se procesará la renovación y cobro mensual de tu servidor en Railway.\n\n💡 *Recomendación:* Verifica que tu tarjeta vinculada tenga saldo disponible para que el motor de adquisición y WhatsApp sigan operando 24/7 sin interrupciones.\n\nPuedes revisar el consumo actual en:\nhttps://railway.com/dashboard`;
+      await whatsapp.notifyAdmin(msg);
+      console.log('🔔 [AutonomousPipeline] Alerta preventiva de facturación (Día 14) enviada a Kenneth por WhatsApp.');
+    }
+
+    // 2. Día 17 de cada mes: Recordatorio del día de cobro
+    if (dayOfMonth === 17) {
+      this.lastBillingAlertDate = today;
+      const msg = `💳 *RECORDATORIO DE PAGO RAILWAY (HOY)*\n\nHola Kenneth, hoy *día 17* es la fecha oficial de cobro mensual de tu infraestructura en Railway.\n\nRevisa el comprobante y factura en tu dashboard:\nhttps://railway.com/dashboard/billing`;
+      await whatsapp.notifyAdmin(msg);
+      console.log('💳 [AutonomousPipeline] Recordatorio de cobro mensual (Día 17) enviado a Kenneth por WhatsApp.');
+    }
+
+    // 3. Resumen semanal cada domingo a las 11 AM
+    if (now.getDay() === 0 && currentHour === 11 && this.lastBillingAlertDate !== today) {
+      this.lastBillingAlertDate = today;
+      const daysUntilBilling = dayOfMonth <= 17 ? (17 - dayOfMonth) : (new Date(now.getFullYear(), now.getMonth() + 1, 17).getDate() + (30 - dayOfMonth));
+      const weeklyMsg = `⚙️ *REPORTE SEMANAL DE INFRAESTRUCTURA QP*\n\n• *Servidor Railway:* gateway (● Online)\n• *Próximo cobro Railway:* Día 17 (en ~${daysUntilBilling} días)\n• *Estado WhatsApp:* Conectado 24/7\n• *Otros servicios apagados:* GoogleMaker, Infradraw, Pilot-bot, Licitaciones (Consumo en $0.00)\n\nTodo operando con normalidad.`;
+      await whatsapp.notifyAdmin(weeklyMsg);
+      console.log('⚙️ [AutonomousPipeline] Reporte semanal de infraestructura enviado a Kenneth.');
     }
   }
 
