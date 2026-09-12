@@ -118,30 +118,17 @@ export class AutonomousPipeline {
       return;
     }
 
-    // 4. Obtener servicio activo
-    const activeService = await OutreachRepo.getActiveService();
-    if (!activeService) {
+    // 4. Obtener todos los servicios activos
+    const allServices = await OutreachRepo.getServices();
+    const activeServices = allServices.filter(s => s.isActive && (s.type === 'OUTBOUND' || !s.type) && s.outreachTemplate && s.outreachTemplate.trim().length > 0);
+    if (activeServices.length === 0) {
       console.log('⚠️ [AutonomousPipeline] No hay servicios activos configurados.');
       this.scheduleNextTick(60000);
       return;
     }
 
-    // 5. Rampa Automática de Calentamiento Anti-Ban (Warm-up Ramping)
-    let activeDays = 5;
-    if (activeService.createdAt) {
-      const diffMs = Date.now() - new Date(activeService.createdAt).getTime();
-      activeDays = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1);
-    }
-    const isWarmupActive = activeDays <= 4;
-    const effectiveDailyLimit = activeDays <= 2 
-      ? Math.min(settings.dailyLimit, 10)
-      : (activeDays <= 4 ? Math.min(settings.dailyLimit, 20) : settings.dailyLimit);
-
+    const effectiveDailyLimit = settings.dailyLimit || 35;
     const effectiveSettings = { ...settings, dailyLimit: effectiveDailyLimit };
-
-    if (isWarmupActive) {
-      console.log(`🔥 [AutonomousPipeline] Rampa de Calentamiento Activa (Día ${activeDays}/4): Límite de seguridad restringido a ${effectiveDailyLimit} msgs/día (Límite normal: ${settings.dailyLimit}).`);
-    }
 
     // Comprobar cuota diaria anti-ban
     if (this.sentTodayCount >= effectiveDailyLimit) {
@@ -151,44 +138,78 @@ export class AutonomousPipeline {
     }
 
     // 6. PRIORIDAD 1: Prospectos pendientes de Follow-Up (>48h sin respuesta)
-    const followUpsDue = await OutreachRepo.getLeadsForFollowUp(activeService.id, 1);
-    if (followUpsDue.length > 0) {
-      const followUpLead = followUpsDue[0];
-      await this.dispatchFollowUp(followUpLead, activeService, effectiveSettings);
+    let followUpLead: any = null;
+    let followUpService: any = null;
+    for (const s of activeServices) {
+      const due = await OutreachRepo.getLeadsForFollowUp(s.id, 1);
+      if (due.length > 0) {
+        followUpLead = due[0];
+        followUpService = s;
+        break;
+      }
+    }
+    if (followUpLead && followUpService) {
+      await this.dispatchFollowUp(followUpLead, followUpService, effectiveSettings);
       return;
     }
 
-    // 7. Monitorear buffer de prospectos no contactados
-    const uncontactedCount = await OutreachRepo.countUncontactedLeads(activeService.id);
-    const minBuffer = 10;
-
-    // Si el buffer es bajo y ha pasado al menos 15 minutos desde el último scraping
+    // 7. Monitorear buffer de prospectos no contactados por campaña activa (Flujo Constante de Adquisición)
     const timeSinceLastScrape = Date.now() - this.lastScrapeTime;
-    if (uncontactedCount < minBuffer && timeSinceLastScrape > 15 * 60 * 1000) {
-      console.log(`🔍 [AutonomousPipeline] Buffer bajo (${uncontactedCount} prospectos). Disparando scraping en Apify...`);
-      await this.triggerScrape(activeService);
+    const scrapeCooldownMs = 5 * 60 * 1000; // 5 minutos para auto-alimentar la cola constantemente
+    if (timeSinceLastScrape > scrapeCooldownMs) {
+      for (const s of activeServices) {
+        if (!s.apifyQueries || s.apifyQueries.length === 0) continue;
+        const uncontactedCount = await OutreachRepo.countUncontactedLeads(s.id);
+        if (uncontactedCount < 15) {
+          console.log(`🔄 [AutonomousPipeline - Flujo Constante] Buffer bajo para "${s.name}" (${uncontactedCount} prospectos). Auto-alimentando cola desde Apify...`);
+          await this.triggerScrape(s);
+          break; // Un scrape por ciclo
+        }
+      }
     }
 
-    // 8. PRIORIDAD 2: Siguiente nuevo lead en frío estrictamente para la campaña activa
-    const leadsToContact = await OutreachRepo.getLeadsForOutreach(activeService.id, 1);
+    // 8. PRIORIDAD 2: Siguiente nuevo lead en frío (con aislamiento estricto por campaña)
+    const leadsToContact = await OutreachRepo.getLeadsForOutreach(undefined, 1);
     if (leadsToContact.length === 0) {
-      console.log(`ℹ️ [AutonomousPipeline] No hay prospectos pendientes en cola para la campaña "${activeService.name}".`);
-      this.scheduleNextTick(30000);
+      console.log(`⚠️ [AutonomousPipeline - Flujo Constante] Cola vacía. Disparando recarga automática inmediata desde Apify...`);
+      for (const s of activeServices) {
+        if (s.apifyQueries && s.apifyQueries.length > 0) {
+          await this.triggerScrape(s);
+          break;
+        }
+      }
+      this.scheduleNextTick(20000);
       return;
     }
 
     const lead = leadsToContact[0];
-    let leadService = activeService;
-    if (lead.serviceId && lead.serviceId !== activeService.id) {
-      const specificService = await OutreachRepo.getServiceById(lead.serviceId);
-      if (!specificService || !specificService.isActive) {
-        console.warn(`⚠️ [AutonomousPipeline] Lead ${lead.phone} pertenece a campaña inactiva "${lead.serviceId}". Saltando.`);
-        this.scheduleNextTick(5000);
-        return;
-      }
-      leadService = specificService;
+    const specificService = lead.serviceId ? await OutreachRepo.getServiceById(lead.serviceId) : null;
+    if (!specificService || !specificService.isActive) {
+      console.warn(`⚠️ [AutonomousPipeline] Lead ${lead.phone} pertenece a campaña inactiva o inexistente "${lead.serviceId}". Saltando.`);
+      this.scheduleNextTick(5000);
+      return;
     }
-    await this.dispatchLead(lead, leadService, effectiveSettings);
+    await this.dispatchLead(lead, specificService, effectiveSettings);
+  }
+
+  /**
+   * Extrae la ciudad o zona de forma limpia a partir de la dirección del prospecto
+   */
+  public static extractCity(address?: string | null): string {
+    if (!address || typeof address !== 'string') return 'su zona';
+    const trimmed = address.trim();
+    if (!trimmed) return 'su zona';
+
+    const parts = trimmed.split(',').map(p => p.trim());
+    if (parts.length >= 2) {
+      const candidate = parts.length >= 3 ? parts[parts.length - 2] : parts[0];
+      let cleanCity = candidate.replace(/^(ste|suite|apt|unit|floor|fl|#)\s*\S+/i, '').trim();
+      cleanCity = cleanCity.replace(/\s+\d{4,5}.*$/, '').trim();
+      if (cleanCity && cleanCity.length > 2 && cleanCity.length < 35 && !/^\d+$/.test(cleanCity)) {
+        return cleanCity;
+      }
+    }
+    return 'su zona';
   }
 
   /**
@@ -206,8 +227,17 @@ export class AutonomousPipeline {
         : 'Hola {{name}}, solo para cerrar este contacto con respeto: si más adelante desean evaluar la solución, quedo a su disposición por aquí. Saludos cordiales!';
     }
 
-    let message = template.replace(/{{name}}/g, lead.companyName);
-    message = message.replace(/{{phone}}/g, lead.phone);
+    const city = this.extractCity(lead.address);
+    const sector = lead.category ? lead.category.trim() : 'su sector';
+
+    let message = template;
+    message = message.replace(/{{\s*name\s*}}|\{\s*name\s*\}/gi, lead.companyName);
+    message = message.replace(/{{\s*empresa\s*}}|\{\s*empresa\s*\}/gi, lead.companyName);
+    message = message.replace(/{{\s*phone\s*}}|\{\s*phone\s*\}/gi, lead.phone);
+    message = message.replace(/{{\s*(city|location|ciudad|zona)\s*}}|\{\s*(city|location|ciudad|zona)\s*\}/gi, city);
+    message = message.replace(/{{\s*(sector|niche|nicho|rubro)\s*}}|\{\s*(sector|niche|nicho|rubro)\s*\}/gi, sector);
+    message = message.replace(/{{\s*saludo\s*}}|\{\s*saludo\s*\}/gi, 'Hola');
+    message = message.replace(/^(Buenas tardes|Buenos días|Buenas noches)/i, 'Hola');
 
     console.log(`🔁 [AutonomousPipeline] Despachando Follow-up #${nextCount} a ${lead.companyName} (${lead.phone})...`);
     const provider = settings.whatsappProvider || 'direct_qr';
@@ -300,27 +330,42 @@ export class AutonomousPipeline {
    * Despacha el mensaje de prospección con plantilla y pausa anti-ban
    */
   private static async dispatchLead(lead: any, service: any, settings: any): Promise<void> {
-    // Formatear mensaje
-    let message = service.outreachTemplate;
-    message = message.replace(/{{name}}/g, lead.companyName);
-    message = message.replace(/{{phone}}/g, lead.phone);
+    // Selección A/B Testing determinista
+    let chosenTemplate = service.outreachTemplate || '';
+    let variant: 'A' | 'B' = 'A';
 
-    // Saludo contextual automático según la hora de Lima
-    const currentHour = new Date().getHours();
-    const saludo = currentHour < 12 ? 'Buenos días' : (currentHour < 19 ? 'Buenas tardes' : 'Buenas noches');
-    message = message.replace(/{{saludo}}/gi, saludo);
-    if (currentHour < 12) {
-      message = message.replace(/^Buenas tardes/i, 'Buenos días');
-    } else if (currentHour < 19) {
-      message = message.replace(/^Buenos días/i, 'Buenas tardes');
+    const tmplB = service.outreachTemplateB || (service.outreachTemplate?.includes('===SPLIT_B===') ? service.outreachTemplate.split('===SPLIT_B===')[1]?.trim() : null);
+    const tmplA = service.outreachTemplate?.includes('===SPLIT_B===') ? service.outreachTemplate.split('===SPLIT_B===')[0]?.trim() : service.outreachTemplate;
+
+    if (tmplB && tmplB.length > 0) {
+      const leadNum = Number(lead.id) || (lead.phone ? parseInt(lead.phone.slice(-2), 10) : 0);
+      variant = leadNum % 2 === 0 ? 'A' : 'B';
+      chosenTemplate = variant === 'A' ? tmplA : tmplB;
     }
+
+    // Formatear mensaje con variables dinámicas agnósticas
+    let message = chosenTemplate;
+    const city = this.extractCity(lead.address);
+    const sector = lead.category ? lead.category.trim() : 'su sector';
+
+    message = message.replace(/{{\s*name\s*}}|\{\s*name\s*\}/gi, lead.companyName);
+    message = message.replace(/{{\s*empresa\s*}}|\{\s*empresa\s*\}/gi, lead.companyName);
+    message = message.replace(/{{\s*phone\s*}}|\{\s*phone\s*\}/gi, lead.phone);
+    message = message.replace(/{{\s*(city|location|ciudad|zona)\s*}}|\{\s*(city|location|ciudad|zona)\s*\}/gi, city);
+    message = message.replace(/{{\s*(sector|niche|nicho|rubro)\s*}}|\{\s*(sector|niche|nicho|rubro)\s*\}/gi, sector);
+    message = message.replace(/{{\s*saludo\s*}}|\{\s*saludo\s*\}/gi, 'Hola');
+
+    // Normalización de saludo atemporal (evita desfases "buenas tardes" vs "buenos días")
+    message = message.replace(/^(Buenas tardes|Buenos días|Buenas noches)/i, 'Hola');
 
     if (!message || message.trim().length === 0) {
       console.error(`🚨 [AutonomousPipeline] ERROR CRÍTICO: Mensaje vacío para lead ${lead.companyName} (${lead.phone}). Envío ABORTADO.`);
+      await OutreachRepo.updateLeadStatus(lead.phone, 'CLOSED_LOST');
+      this.scheduleNextTick(5000);
       return;
     }
 
-    console.log(`🚀 [AutonomousPipeline] Despachando prospección a ${lead.companyName} (${lead.phone})...`);
+    console.log(`🚀 [AutonomousPipeline] Despachando prospección (Variante ${variant}) a ${lead.companyName} (${lead.phone})...`);
 
     const provider = settings.whatsappProvider || 'direct_qr';
     let result: { success: boolean; error?: string };
@@ -336,8 +381,9 @@ export class AutonomousPipeline {
     if (result.success) {
       this.sentTodayCount++;
       await OutreachRepo.updateLeadStatus(lead.phone, 'OUTREACH_SENT');
+      await OutreachRepo.updateLeadCustomFields(lead.phone, { abVariant: variant });
       await OutreachRepo.addChatMessage(lead.phone, 'assistant', message);
-      console.log(`✅ [AutonomousPipeline] Enviado con éxito a ${lead.companyName}! (${this.sentTodayCount}/${settings.dailyLimit} hoy)`);
+      console.log(`✅ [AutonomousPipeline] Enviado con éxito a ${lead.companyName} (Variante ${variant})! (${this.sentTodayCount}/${settings.dailyLimit} hoy)`);
 
       // Pausa aleatoria anti-ban entre minDelaySeconds y maxDelaySeconds (ej. 180s - 300s)
       const min = settings.minDelaySeconds || 180;
@@ -367,18 +413,21 @@ export class AutonomousPipeline {
     const location = locations[this.currentQueryIndex % locations.length];
     this.currentQueryIndex++;
 
+    const isUSA = !!(location + ' ' + query).toLowerCase().match(/\b(usa|united states|eeuu|fl|florida|miami|doral|orlando|tampa|kissimmee|tx|texas|houston|dallas|austin|ny|new york|ca|california)\b/);
+    const countryCode = isUSA ? 'us' : 'pe';
+
     try {
-      console.log(`[AutonomousPipeline] Ejecutando Apify para "${query}" en "${location}"...`);
+      console.log(`[AutonomousPipeline] Ejecutando Apify para "${query}" en "${location}" (País: ${countryCode.toUpperCase()})...`);
       const scraped = await ApifyScraper.scrapeGoogleMaps({
         query,
         location,
-        maxResults: 15,
+        maxResults: 20,
         scrapeContacts: true,
-        countryCode: 'pe'
+        countryCode
       });
 
       const { inserted, skipped } = await OutreachRepo.saveLeadsFromScraper(service.id, scraped);
-      console.log(`✅ [AutonomousPipeline] Scraping finalizado: ${inserted} prospectos nuevos insertados, ${skipped} omitidos/duplicados.`);
+      console.log(`✅ [AutonomousPipeline] Scraping finalizado para "${service.name}": ${inserted} prospectos nuevos insertados, ${skipped} omitidos/duplicados.`);
       return { inserted, skipped };
     } catch (err: any) {
       console.error('❌ [AutonomousPipeline] Fallo al raspar Apify:', err.message);

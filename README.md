@@ -23,7 +23,9 @@
 [Cómo se Conecta WhatsApp](#-2-conexión-y-sesión-de-whatsapp) •
 [Conexión MCP para IAs](#-3-servidor-mcp-para-agentes-de-ia) •
 [Comandos CLI](#-4-referencia-de-comandos-cli) •
-[Despliegue en Railway](#-5-despliegue-en-producción-railway)
+[Reglas Anti-Ban](#-5-reglas-de-oro-anti-ban-de-meta) •
+[Despliegue en Railway](#-6-despliegue-en-producción-railway) •
+[Metodología SDD](#-7-metodología-de-desarrollo-spec-driven-development-sdd)
 
 ---
 
@@ -241,7 +243,43 @@ node ./bin/qp-outreach.js mcp
 
 ---
 
+## 📐 7. Metodología de Desarrollo: Spec-Driven Development (SDD)
+
+Este proyecto se construye y evoluciona bajo el estándar estricto de **Spec-Driven Development (SDD)**. Tanto los desarrolladores humanos como los agentes de IA (**Antigravity**, **Cursor**, **Smith**, **Claude**) deben adherirse a este ciclo de 4 fases antes y durante la implementación de cualquier funcionalidad, refactor o integración:
+
+```mermaid
+flowchart LR
+    A["1. The Spec\n(Contratos & Tipos)"] --> B["2. Review Gate\n(Visto Bueno de Kenneth)"]
+    B --> C["3. Implementación\n(Determinista contra Spec)"]
+    C --> D["4. Verificación\n(Tipos, Tests & Runtime)"]
+```
+
+### Protocolo Obligatorio de Construcción SDD:
+
+1. **Fase 1: Especificación Formal (The Spec)**
+   - **Prohibido codificar a ciegas:** Antes de modificar o crear archivos de código (`.ts`, endpoints o esquemas de base de datos), la IA o el desarrollador debe formalizar la especificación técnica completa:
+     - **Contratos de Datos:** Interfaces TypeScript y esquemas Zod con validación rigurosa de entradas y salidas.
+     - **Contratos de API / MCP:** Rutas, payloads requeridos/opcionales, respuestas JSON estructuradas y códigos de error.
+     - **Invariantes del Sistema:** Políticas anti-ban de Meta (delays mínimos de 180s, sin enlaces en frío), límites de tasa y persistencia de sesiones.
+     - **Edge Cases & Tolerancia a Fallas:** Respuestas ante desconexiones de socket de Baileys, saturación de Apify o cuotas de OpenRouter.
+
+2. **Fase 2: Puerta de Aprobación (Review Gate)**
+   - La especificación técnica se presenta en un formato sintético y claro a Kenneth.
+   - Solo se avanza a la escritura de código tras su validación o ajustes estratégicos.
+
+3. **Fase 3: Implementación Determinista**
+   - El código se implementa como un reflejo 1:1 de la especificación aprobada.
+   - Quedan prohibidas las modificaciones silenciosas de contratos, tipos o interfaces sin actualizar previamente la especificación.
+
+4. **Fase 4: Verificación y Validación de Contrato**
+   - Verificación estricta de compilación y tipos estáticos (`npm run build` o `npx tsc --noEmit`).
+   - Validación en tiempo de ejecución con parsing de Zod.
+   - Comprobación de integración de extremo a extremo contra las invariantes de negocio.
+
+---
+
 ## 📄 Licencia
 
 Desarrollado bajo licencia MIT para **The Quant Partners**.
 Arquitectura por Kenneth & Smith (2026).
+

@@ -25,6 +25,7 @@ export interface ServiceDefinition {
   apifyQueries: string[];
   targetLocations: string[];
   outreachTemplate: string;
+  outreachTemplateB?: string;
   followUpTemplate1?: string;
   followUpTemplate2?: string;
   assetFilePath?: string;

@@ -172,8 +172,14 @@ export class BaileysEngine {
             console.log('[BaileysEngine] Reconectando en 5 segundos...');
             setTimeout(() => this.init(), 5000);
           } else {
-            console.warn('⚠️ [BaileysEngine] Sesión cerrada formalmente por el usuario. Escanear nuevo QR.');
-            await this.notifyExternalAlert('🚨 [QP Outreach Engine] Sesión cerrada formalmente. Se necesita nuevo QR para operar.');
+            console.warn('⚠️ [BaileysEngine] Sesión cerrada formalmente (401). Purgando credenciales expiradas para nuevo QR...');
+            try {
+              fs.rmSync(this.authDir, { recursive: true, force: true });
+              fs.mkdirSync(this.authDir, { recursive: true });
+            } catch (err: any) {
+              console.error('[BaileysEngine] Error purgando authDir:', err.message);
+            }
+            setTimeout(() => this.init(), 2000);
           }
         } else if (connection === 'open') {
           console.log('✅ [BaileysEngine] WhatsApp Conectado y Listo para Despachar!');
@@ -403,17 +409,18 @@ export class BaileysEngine {
         }
 
         // 3.5. Comprobar política de Opt-Out de Meta/WhatsApp (STOP, BAJA, CANCELAR, etc.)
+        // 3.5. Comprobar política de Opt-Out o Rechazo Respetuoso (STOP, BAJA, NO GRACIAS, etc.)
         const cleanUpper = incomingText.trim().toUpperCase();
-        const isOptOut = /^(STOP|BAJA|SALIR|CANCELAR|NO CONTACTAR|DETENER)$/i.test(cleanUpper);
+        const isOptOut = /^(STOP|BAJA|SALIR|CANCELAR|NO CONTACTAR|DETENER|NO GRACIAS|NO GRC|NO GRCS|NO ME INTERESA|NO INTERESADO)$/i.test(cleanUpper);
 
         if (isOptOut) {
-          console.log(`🛑 [BaileysEngine] Lead ${senderPhone} solicitó Opt-Out (${cleanUpper}). Bloqueando envíos automáticos.`);
+          console.log(`🛑 [BaileysEngine] Lead ${senderPhone} solicitó Opt-Out / Rechazo (${cleanUpper}). Bloqueando envíos automáticos.`);
           await OutreachRepo.addChatMessage(senderPhone, 'user', incomingText);
-          await OutreachRepo.updateLeadStatus(senderPhone, 'OPT_OUT', {
+          await OutreachRepo.updateLeadStatus(senderPhone, 'CLOSED_LOST', {
             humanTakeoverAt: new Date().toISOString(),
-            handoffNotes: `Opt-Out solicitado por el usuario: "${incomingText}"`
+            handoffNotes: `Rechazo respetuoso detectado: "${incomingText}"`
           });
-          await OutreachRepo.addChatMessage(senderPhone, 'system', '🔒 Prospecto dio de baja sus comunicaciones (Opt-Out). Se desactivó el bot y no se le enviarán más mensajes.');
+          await OutreachRepo.addChatMessage(senderPhone, 'system', '🔒 Prospecto indicó no tener interés (Rechazo respetuoso). Se desactivó el bot y no se le enviarán más mensajes ni follow-ups.');
           try {
             const { broadcastDashboardEvent } = await import('../gateway/server.js');
             broadcastDashboardEvent({
@@ -426,7 +433,7 @@ export class BaileysEngine {
             broadcastDashboardEvent({
               type: 'lead_updated',
               phone: senderPhone,
-              status: 'OPT_OUT'
+              status: 'CLOSED_LOST'
             });
           } catch {}
           continue;
@@ -440,21 +447,34 @@ export class BaileysEngine {
         });
 
         // Transmitir al Dashboard en tiempo real
-        try {
-          const { broadcastDashboardEvent } = await import('../gateway/server.js');
-          broadcastDashboardEvent({
-            type: 'new_message',
-            phone: senderPhone,
-            role: 'user',
-            content: incomingText,
-            assignedRepName: lead.assignedRepName,
-            createdAt: new Date().toISOString()
-          });
-        } catch {}
+        // 4.5. Comprobar si el prospecto está activando o avanzando en la DEMO interactiva de su nicho
+        const { InteractiveDemoEngine } = await import('../ai/demo_flow.js');
+        const demoRes = InteractiveDemoEngine.getStepResponse(lead, incomingText);
 
-        // 5. Comprobar si está fuera de horario comercial
+        if (demoRes.shouldReply && demoRes.replyText) {
+          console.log(`🤖 [BaileysEngine] Despachando paso de DEMO interactiva (Paso ${demoRes.nextStep}) a ${lead.companyName} (${senderPhone})...`);
+          const jid = `${senderPhone}@s.whatsapp.net`;
+          await this.sock?.sendMessage(jid, { text: demoRes.replyText });
+          await OutreachRepo.addChatMessage(senderPhone, 'assistant', demoRes.replyText);
+          await OutreachRepo.updateLeadCustomFields(senderPhone, { demoStep: demoRes.nextStep });
+
+          if (demoRes.isCompleted) {
+            const alertCompleted = 
+              `🎯 *¡DEMO INTERACTIVA COMPLETADA POR PROSPECTO!*\n\n` +
+              `🏢 Empresa: *${lead.companyName}*\n` +
+              `📢 Campaña: *${lead.serviceName || lead.serviceId}*\n` +
+              `📱 Teléfono: *+${senderPhone}*\n\n` +
+              `🔥 El prospecto completó la simulación en WhatsApp. Ingresa al chat para cerrar la llamada o propuesta:\n` +
+              `👉 https://wa.me/${senderPhone}`;
+            await this.notifyAdmin(alertCompleted);
+          }
+          continue;
+        }
+
+        // 5. Comprobar si está fuera de horario comercial (SÓLO para prospectos Inbound desconocidos, NUNCA para campañas Outbound en caliente)
+        const isOutboundLead = lead.serviceId && lead.serviceId !== 'inbound-general' && !!lead.lastOutreachAt;
         const isWorkingHours = this.isWithinWorkingHours(settings);
-        if (!isWorkingHours) {
+        if (!isWorkingHours && !isOutboundLead) {
           // Validar que no hayamos enviado el aviso fuera de hora recientemente (últimas 12h)
           const history = await OutreachRepo.getChatHistory(senderPhone, 5);
           const hasRecentOutOfHours = history.some(
@@ -585,9 +605,11 @@ export class BaileysEngine {
    * Envía un mensaje individual con validación previa de número
    */
   public async send(telefono: string, mensaje: string): Promise<{ success: boolean; jid?: string; error?: string }> {
-    if (!mensaje || !mensaje.trim()) {
-      console.error(`🚨 [BaileysEngine] Rechazado intento de enviar mensaje vacío a ${telefono}.`);
-      return { success: false, error: 'El mensaje está vacío o en blanco.' };
+    // Candado Anti-Mensajes Vacíos: eliminar caracteres invisibles/zero-width y validar longitud mínima
+    const textoLimpio = (mensaje || '').replace(/[\u200B-\u200D\uFEFF\u200E\u200F\u00A0]/g, '').trim();
+    if (!textoLimpio || textoLimpio.length < 15) {
+      console.error(`🚨 [BaileysEngine] Rechazado intento de enviar mensaje vacío o sospechosamente corto (${textoLimpio.length} chars) a ${telefono}.`);
+      return { success: false, error: 'El mensaje está vacío o es inferior a 15 caracteres legibles.' };
     }
 
     if (!this.sock || !this.isReady) {

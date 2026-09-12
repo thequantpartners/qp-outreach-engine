@@ -115,6 +115,7 @@ export class OutreachRepo {
       -- Migraciones dinámicas seguras para tablas existentes
       ALTER TABLE services ADD COLUMN IF NOT EXISTS follow_up_template_1 TEXT;
       ALTER TABLE services ADD COLUMN IF NOT EXISTS follow_up_template_2 TEXT;
+      ALTER TABLE services ADD COLUMN IF NOT EXISTS outreach_template_b TEXT;
       ALTER TABLE services ADD COLUMN IF NOT EXISTS asset_file_path VARCHAR(500);
       ALTER TABLE services ADD COLUMN IF NOT EXISTS asset_file_name VARCHAR(255);
       ALTER TABLE services ADD COLUMN IF NOT EXISTS type VARCHAR(50) DEFAULT 'OUTBOUND';
@@ -272,6 +273,7 @@ export class OutreachRepo {
         apifyQueries: r.apify_queries || [],
         targetLocations: r.target_locations || [],
         outreachTemplate: r.outreach_template,
+        outreachTemplateB: r.outreach_template_b || undefined,
         followUpTemplate1: r.follow_up_template_1 || undefined,
         followUpTemplate2: r.follow_up_template_2 || undefined,
         assetFilePath: r.asset_file_path || undefined,
@@ -307,11 +309,11 @@ export class OutreachRepo {
       await DbConnection.getPool().query(
         `INSERT INTO services (
            id, name, description, target_persona, apify_queries, target_locations, 
-           outreach_template, follow_up_template_1, follow_up_template_2, 
+           outreach_template, outreach_template_b, follow_up_template_1, follow_up_template_2, 
            asset_file_path, asset_file_name, closing_type, closing_payload, 
            ai_system_prompt, is_active, type, trigger_keywords, inbound_mode, tag_color
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
          ON CONFLICT (id) DO UPDATE SET
            name = EXCLUDED.name,
            description = EXCLUDED.description,
@@ -319,6 +321,7 @@ export class OutreachRepo {
            apify_queries = EXCLUDED.apify_queries,
            target_locations = EXCLUDED.target_locations,
            outreach_template = EXCLUDED.outreach_template,
+           outreach_template_b = EXCLUDED.outreach_template_b,
            follow_up_template_1 = EXCLUDED.follow_up_template_1,
            follow_up_template_2 = EXCLUDED.follow_up_template_2,
            asset_file_path = EXCLUDED.asset_file_path,
@@ -339,6 +342,7 @@ export class OutreachRepo {
           JSON.stringify(s.apifyQueries || []),
           JSON.stringify(s.targetLocations || []),
           s.outreachTemplate || '',
+          s.outreachTemplateB || null,
           s.followUpTemplate1 || null,
           s.followUpTemplate2 || null,
           s.assetFilePath || null,
@@ -442,7 +446,83 @@ export class OutreachRepo {
     }
   }
 
+  /**
+   * Obtiene métricas consolidadas de conversión por variante A/B
+   */
+  public static async getAbTestingStats(): Promise<{
+    variantA: { sent: number; replied: number; qualified: number; meetings: number; conversionRate: string };
+    variantB: { sent: number; replied: number; qualified: number; meetings: number; conversionRate: string };
+  }> {
+    if (DbConnection.isPg()) {
+      const res = await DbConnection.getPool().query(`
+        SELECT 
+          COALESCE(custom_fields->>'abVariant', 'A') as variant,
+          COUNT(*) FILTER (WHERE status IN ('OUTREACH_SENT', 'FOLLOW_UP_SENT', 'REPLIED', 'QUALIFIED', 'MEETING_SCHEDULED', 'CLOSED_WON', 'CLOSED_LOST', 'HUMAN_TAKEOVER')) as sent,
+          COUNT(*) FILTER (WHERE status IN ('REPLIED', 'QUALIFIED', 'MEETING_SCHEDULED', 'CLOSED_WON', 'HUMAN_TAKEOVER')) as replied,
+          COUNT(*) FILTER (WHERE status IN ('QUALIFIED', 'MEETING_SCHEDULED', 'CLOSED_WON')) as qualified,
+          COUNT(*) FILTER (WHERE status = 'MEETING_SCHEDULED') as meetings
+        FROM leads
+        WHERE custom_fields->>'abVariant' IS NOT NULL
+        GROUP BY COALESCE(custom_fields->>'abVariant', 'A');
+      `);
+
+      let a = { sent: 0, replied: 0, qualified: 0, meetings: 0, conversionRate: '0%' };
+      let b = { sent: 0, replied: 0, qualified: 0, meetings: 0, conversionRate: '0%' };
+
+      for (const row of res.rows) {
+        const sent = parseInt(row.sent, 10) || 0;
+        const replied = parseInt(row.replied, 10) || 0;
+        const qualified = parseInt(row.qualified, 10) || 0;
+        const meetings = parseInt(row.meetings, 10) || 0;
+        const cr = sent > 0 ? ((replied / sent) * 100).toFixed(1) + '%' : '0%';
+        if (row.variant === 'A') {
+          a = { sent, replied, qualified, meetings, conversionRate: cr };
+        } else if (row.variant === 'B') {
+          b = { sent, replied, qualified, meetings, conversionRate: cr };
+        }
+      }
+      return { variantA: a, variantB: b };
+    }
+    return {
+      variantA: { sent: 0, replied: 0, qualified: 0, meetings: 0, conversionRate: '0%' },
+      variantB: { sent: 0, replied: 0, qualified: 0, meetings: 0, conversionRate: '0%' }
+    };
+  }
+
   // --- LEADS ---
+  public static cleanCompanyName(raw: string): string {
+    if (!raw) return 'su despacho';
+    let clean = raw.trim();
+
+    // 1. Quitar subtítulos y eslóganes tras guiones, barras, pipes o dos puntos
+    clean = clean.split(/\s*[-–—|:]\s*/)[0].trim();
+
+    // 2. Quitar prefijos comunes en inglés/español
+    clean = clean.replace(/^(Law Offices? of|The Law Office of|Bufete de Abogados de|Abogados? de|Firma Legal)\s+/i, '');
+
+    // 3. Quitar sufijos corporativos legales (P.A., LLC, PLLC, Inc, Corp, etc.) asegurando límite de palabra para no cortar "Spa"
+    clean = clean.replace(/\s*,?\s*\b(P\.?A\.?|L\.?L\.?C\.?|P\.?L\.?L\.?C\.?|Inc\.?|Corp\.?|P\.?C\.?|S\.?A\.?C\.?|S\.?R\.?L\.?|L\.?L\.?P\.?)$/i, '');
+
+    // 4. Si está en MAYÚSCULAS sostenidas (>70% mayúsculas), convertir a Title Case
+    const letters = clean.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ]/g, '');
+    if (letters.length > 3) {
+      const upperCount = (clean.match(/[A-ZÁÉÍÓÚÑ]/g) || []).length;
+      if (upperCount / letters.length > 0.7) {
+        clean = clean
+          .toLowerCase()
+          .split(' ')
+          .map(word => {
+            if (['de', 'la', 'el', 'los', 'las', 'y', '&', 'del'].includes(word)) return word;
+            return word.charAt(0).toUpperCase() + word.slice(1);
+          })
+          .join(' ');
+      }
+    }
+
+    clean = clean.trim();
+    if (!clean || clean.length < 2) return 'su despacho';
+    return clean;
+  }
   public static async saveLeadsFromScraper(serviceId: string, items: ScrapedLead[]): Promise<{ inserted: number; skipped: number }> {
     let inserted = 0;
     let skipped = 0;
@@ -453,10 +533,12 @@ export class OutreachRepo {
         continue;
       }
 
-      // Estandarizar teléfonos peruanos si tienen 9 dígitos
+      // Estandarizar teléfonos peruanos si tienen 9 dígitos o estadounidenses si tienen 10 dígitos
       let clean = item.phoneClean;
       if (clean.length === 9 && clean.startsWith('9')) {
         clean = `51${clean}`;
+      } else if (clean.length === 10) {
+        clean = `1${clean}`;
       }
 
       let assignedRep: SalesRep | null = null;
@@ -466,7 +548,7 @@ export class OutreachRepo {
 
       const leadData: Lead = {
         serviceId,
-        companyName: item.title || 'Empresa B2B',
+        companyName: OutreachRepo.cleanCompanyName(item.title || 'Empresa B2B'),
         phone: clean,
         website: item.website,
         address: item.address,
@@ -751,9 +833,9 @@ export class OutreachRepo {
       const params: any[] = [];
       if (serviceId) {
         params.push(serviceId);
-        query += ` AND l.service_id = $${params.length}`;
+        query += ` AND l.service_id = $${params.length} AND s.outreach_template IS NOT NULL AND length(trim(s.outreach_template)) > 0`;
       } else {
-        query += ` AND (s.is_active = true OR l.service_id IS NULL)`;
+        query += ` AND s.is_active = true AND (s.type = 'OUTBOUND' OR s.type IS NULL) AND s.outreach_template IS NOT NULL AND length(trim(s.outreach_template)) > 0`;
       }
       params.push(limit);
       query += ` ORDER BY l.id ASC LIMIT $${params.length}`;
@@ -871,6 +953,30 @@ export class OutreachRepo {
       if (lead) {
         lead.status = 'MEETING_SCHEDULED';
         lead.scheduledMeetingAt = scheduledMeetingAt;
+        lead.customFields = { ...(lead.customFields || {}), ...(customFields || {}) };
+        lead.updatedAt = new Date().toISOString();
+        DbConnection.saveFallbackData(data);
+      }
+    }
+  }
+
+  /**
+   * Actualiza campos personalizados (custom_fields) de un lead
+   */
+  public static async updateLeadCustomFields(phone: string, customFields: Record<string, any>): Promise<void> {
+    const clean = phone.replace(/[^0-9]/g, '');
+    if (DbConnection.isPg()) {
+      await DbConnection.getPool().query(
+        `UPDATE leads SET 
+           custom_fields = custom_fields || $1::jsonb,
+           updated_at = NOW() 
+         WHERE phone = $2`,
+        [JSON.stringify(customFields || {}), clean]
+      );
+    } else {
+      const data = DbConnection.getFallbackData();
+      const lead = (data.leads || []).find((l: Lead) => l.phone === clean);
+      if (lead) {
         lead.customFields = { ...(lead.customFields || {}), ...(customFields || {}) };
         lead.updatedAt = new Date().toISOString();
         DbConnection.saveFallbackData(data);

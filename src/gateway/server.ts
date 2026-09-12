@@ -873,6 +873,15 @@ app.get('/api/client/chat/:phone/suggest', authenticateClientPin, async (req: Re
   }
 });
 
+app.get('/api/client/stats/ab-testing', authenticateClientPin, async (_req: Request, res: Response) => {
+  try {
+    const stats = await OutreachRepo.getAbTestingStats();
+    res.json({ success: true, stats });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/client/chat/send-document', authenticateClientPin, async (req: Request, res: Response) => {
   try {
     const { phone, filePathOrUrl, fileName, caption } = req.body || {};
@@ -1229,6 +1238,7 @@ app.get('/api/client/services', authenticateClientPin, async (_req: Request, res
         isActive: r.is_active,
         targetLocations: r.target_locations || [],
         outreachTemplate: r.outreach_template || '',
+        outreachTemplateB: r.outreach_template_b || '',
         followUpTemplate1: r.follow_up_template_1 || '',
         aiSystemPrompt: r.ai_system_prompt || '',
         closingType: r.closing_type || 'HUMAN_TAKEOVER',
@@ -1249,6 +1259,7 @@ app.get('/api/client/services', authenticateClientPin, async (_req: Request, res
           isActive: s.isActive,
           targetLocations: s.targetLocations,
           outreachTemplate: s.outreachTemplate,
+          outreachTemplateB: s.outreachTemplateB || '',
           followUpTemplate1: s.followUpTemplate1 || '',
           aiSystemPrompt: s.aiSystemPrompt,
           closingType: s.closingType,
@@ -1690,14 +1701,39 @@ async function runNextBatchStep() {
     activeBatchJob.currentLeadName = nextLead.companyName;
     activeBatchJob.currentLeadPhone = nextLead.phone;
 
-    const personalized = (service.outreachTemplate || 'Buenas tardes {{name}}')
-      .replace(/{{name}}/g, nextLead.companyName || 'estimado equipo')
-      .replace(/{{empresa}}/g, nextLead.companyName || 'su empresa');
+    // Candado Anti-Duplicados: Validar que no se haya enviado ya por otro proceso
+    if (nextLead.status !== 'DISCOVERED' && nextLead.status !== 'QUEUED') {
+      console.warn(`⚠️ [BatchDispatch] Lead ${nextLead.phone} ya tiene estado ${nextLead.status}. Saltando para evitar duplicado.`);
+      const delayMs = 2000;
+      activeBatchJob.timeoutId = setTimeout(() => runNextBatchStep(), delayMs);
+      return;
+    }
+
+    const tmplB = service.outreachTemplateB || (service.outreachTemplate?.includes('===SPLIT_B===') ? service.outreachTemplate.split('===SPLIT_B===')[1]?.trim() : null);
+    const tmplA = service.outreachTemplate?.includes('===SPLIT_B===') ? service.outreachTemplate.split('===SPLIT_B===')[0]?.trim() : service.outreachTemplate;
+    const leadNum = Number(nextLead.id) || (nextLead.phone ? parseInt(nextLead.phone.slice(-2), 10) : 0);
+    const variant: 'A' | 'B' = (tmplB && tmplB.length > 0 && leadNum % 2 !== 0) ? 'B' : 'A';
+    const chosenTmpl = variant === 'B' ? tmplB : tmplA;
+
+    const city = AutonomousPipeline.extractCity(nextLead.address);
+    const sector = nextLead.category ? nextLead.category.trim() : 'su sector';
+
+    let personalized = (chosenTmpl || 'Hola al equipo de {{name}}')
+      .replace(/{{\s*name\s*}}|\{\s*name\s*\}/gi, nextLead.companyName || 'su equipo')
+      .replace(/{{\s*empresa\s*}}|\{\s*empresa\s*\}/gi, nextLead.companyName || 'su empresa')
+      .replace(/{{\s*phone\s*}}|\{\s*phone\s*\}/gi, nextLead.phone)
+      .replace(/{{\s*(city|location|ciudad|zona)\s*}}|\{\s*(city|location|ciudad|zona)\s*\}/gi, city)
+      .replace(/{{\s*(sector|niche|nicho|rubro)\s*}}|\{\s*(sector|niche|nicho|rubro)\s*\}/gi, sector)
+      .replace(/{{\s*saludo\s*}}|\{\s*saludo\s*\}/gi, 'Hola');
+    personalized = personalized.replace(/^(Buenas tardes|Buenos días|Buenas noches)/i, 'Hola');
 
     const result = await whatsapp.send(nextLead.phone, personalized);
     if (result.success) {
       activeBatchJob.sentCount++;
-      await OutreachRepo.updateLeadStatus(nextLead.phone, 'OUTREACH_SENT');
+      await OutreachRepo.updateLeadStatus(nextLead.phone, 'OUTREACH_SENT', {
+        lastCustomerMessageAt: undefined
+      });
+      await OutreachRepo.updateLeadCustomFields(nextLead.phone, { abVariant: variant });
       await OutreachRepo.addChatMessage(nextLead.phone, 'assistant', personalized);
       broadcastDashboardEvent({
         type: 'new_message',

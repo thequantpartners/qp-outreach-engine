@@ -61,6 +61,17 @@ Agrega esto a tu configuración MCP (`.cursor/mcp.json`, `claude_desktop_config.
 
 ---
 
+## 2.4. Protocolo Obligatorio para IAs: Desarrollo con SDD (Spec-Driven Development)
+> [!IMPORTANT]
+> **REGLA DE CONSTRUCCIÓN DE CÓDIGO (Antigravity, Cursor, Smith, Claude):**  
+> Ningún agente debe programar código a ciegas. Cualquier nueva feature, refactor, endpoint o integración debe seguir el ciclo SDD:
+> 1. **Fase 1 (The Spec):** Definir contratos de datos (TypeScript / Zod), firmas de endpoints, invariantes de negocio (reglas anti-ban) y edge cases antes de tocar archivos de código.
+> 2. **Fase 2 (Review Gate):** Presentar la spec sintética a Kenneth para validación rápida.
+> 3. **Fase 3 (Implementación):** Implementar de forma determinista respetando los contratos al 100%.
+> 4. **Fase 4 (Verificación):** Comprobar compilación estricta (`npm run build` / `tsc`), runtime validation y tests.
+
+---
+
 ## 3. Catálogo de Herramientas MCP para IAs
 
 | Herramienta MCP | Categoría | Descripción |
