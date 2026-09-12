@@ -18,7 +18,7 @@ Agrega esto a tu configuración MCP (`.cursor/mcp.json`, `claude_desktop_config.
 {
   "mcpServers": {
     "qp-outreach": {
-      "url": "https://qp-outreach-engine.up.railway.app/sse"
+      "url": "https://gateway-production-2264.up.railway.app/sse"
     }
   }
 }

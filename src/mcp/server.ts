@@ -691,9 +691,26 @@ export class McpServerManager {
         switch (name) {
           case 'outreach_status': {
             const wa = BaileysEngine.getInstance();
-            const waStatus = wa.getStatus();
+            let waStatus = wa.getStatus();
             const stats = await OutreachRepo.getStats();
-            const pipeStatus = AutonomousPipeline.getStatus();
+            let pipeStatus = AutonomousPipeline.getStatus();
+
+            // Si el motor local no está listo, consultar el nodo cloud en Railway
+            if (!waStatus.isReady) {
+              const remoteUrl = process.env.GATEWAY_URL || 'https://gateway-production-2264.up.railway.app';
+              try {
+                const res = await fetch(`${remoteUrl}/api/status`, {
+                  headers: { 'x-api-key': process.env.API_SECRET_KEY || 'qp-master-secret-2026' }
+                });
+                if (res.ok) {
+                  const cloudStatus: any = await res.json();
+                  if (cloudStatus.isWhatsAppReady) {
+                    waStatus = { isReady: true, hasQr: false };
+                    pipeStatus = { isRunning: cloudStatus.autonomousPipelineActive, sentToday: 0, day: '', lastScrapeTime: null };
+                  }
+                }
+              } catch {}
+            }
 
             return {
               content: [
@@ -890,7 +907,26 @@ export class McpServerManager {
           case 'send_whatsapp_message': {
             const { to, message } = args as any;
             const wa = BaileysEngine.getInstance();
-            const result = await wa.sendManualReply(to, message);
+            let result;
+
+            if (wa.getStatus().isReady) {
+              result = await wa.sendManualReply(to, message);
+            } else {
+              const remoteUrl = process.env.GATEWAY_URL || 'https://gateway-production-2264.up.railway.app';
+              try {
+                const res = await fetch(`${remoteUrl}/api/send`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': process.env.API_SECRET_KEY || 'qp-master-secret-2026'
+                  },
+                  body: JSON.stringify({ to, message })
+                });
+                result = await res.json();
+              } catch (err: any) {
+                result = { success: false, error: err.message };
+              }
+            }
 
             return {
               content: [
