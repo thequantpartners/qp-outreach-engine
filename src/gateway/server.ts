@@ -2,7 +2,6 @@ import express, { Request, Response, NextFunction } from 'express';
 import dotenv from 'dotenv';
 import { BaileysEngine } from '../whatsapp/baileys_engine.js';
 import { MetaCloudEngine } from '../whatsapp/meta_cloud_engine.js';
-import { ApifyScraper } from '../scraper/apify_scraper.js';
 import { DripOrchestrator } from '../queue/drip_orchestrator.js';
 import { OutreachRepo } from '../db/repo.js';
 import { DbConnection } from '../db/connection.js';
@@ -2037,29 +2036,31 @@ app.post('/api/client/scrape/suggest', authenticateClientPin, requireOwnerRole, 
   }
 });
 
-// Ejecutor de Scraping Multi-Fuente para Previsualización en Dashboard (Solo Dueño)
-app.post('/api/client/scrape/execute', authenticateClientPin, requireOwnerRole, async (req: Request, res: Response) => {
-  try {
-    const { source = 'google_maps', query, location = 'Lima, Peru', maxResults = 15, countryCode = 'pe' } = req.body || {};
-    if (!query || !String(query).trim()) {
-      res.status(400).json({ error: 'El término de búsqueda (query) es requerido' });
-      return;
-    }
+// Ejecutor de Scraping Multi-Fuente para Previsualización (Exclusivo Central Maestra de Kenneth)
+if (process.env.MODE !== 'client') {
+  app.post('/api/client/scrape/execute', authenticateClientPin, requireOwnerRole, async (req: Request, res: Response) => {
+    try {
+      const { source = 'google_maps', query, location = 'Lima, Peru', maxResults = 15, countryCode = 'pe' } = req.body || {};
+      if (!query || !String(query).trim()) {
+        res.status(400).json({ error: 'El término de búsqueda (query) es requerido' });
+        return;
+      }
 
-    const safeMax = Math.min(Math.max(1, parseInt(String(maxResults), 10) || 15), 30);
-    const cleanQuery = String(query).trim();
-    const cleanLocation = String(location).trim() || 'Lima, Peru';
+      const safeMax = Math.min(Math.max(1, parseInt(String(maxResults), 10) || 15), 30);
+      const cleanQuery = String(query).trim();
+      const cleanLocation = String(location).trim() || 'Lima, Peru';
 
-    let rawLeads: any[] = [];
-    if (source === 'meta_ads') {
-      rawLeads = await ApifyScraper.scrapeMetaAds({ query: cleanQuery, maxResults: safeMax, countryCode });
-    } else if (source === 'instagram') {
-      rawLeads = await ApifyScraper.scrapeInstagram({ query: cleanQuery, maxResults: safeMax });
-    } else if (source === 'multi_source') {
-      rawLeads = await ApifyScraper.scrapeMultiSource({ source: 'google_maps', query: cleanQuery, location: cleanLocation, maxResults: safeMax, countryCode });
-    } else {
-      rawLeads = await ApifyScraper.scrapeGoogleMaps({ query: cleanQuery, location: cleanLocation, maxResults: safeMax, countryCode });
-    }
+      const { ApifyScraper } = await import('../scraper/apify_scraper.js');
+      let rawLeads: any[] = [];
+      if (source === 'meta_ads') {
+        rawLeads = await ApifyScraper.scrapeMetaAds({ query: cleanQuery, maxResults: safeMax, countryCode });
+      } else if (source === 'instagram') {
+        rawLeads = await ApifyScraper.scrapeInstagram({ query: cleanQuery, maxResults: safeMax });
+      } else if (source === 'multi_source') {
+        rawLeads = await ApifyScraper.scrapeMultiSource({ source: 'google_maps', query: cleanQuery, location: cleanLocation, maxResults: safeMax, countryCode });
+      } else {
+        rawLeads = await ApifyScraper.scrapeGoogleMaps({ query: cleanQuery, location: cleanLocation, maxResults: safeMax, countryCode });
+      }
 
     // Identificar prospectos que ya están en PostgreSQL para advertir duplicados
     const cleanPhones = rawLeads
@@ -2107,6 +2108,7 @@ app.post('/api/client/scrape/execute', authenticateClientPin, requireOwnerRole, 
     res.status(500).json({ error: 'Error ejecutando scraping en Apify', details: err.message });
   }
 });
+}
 
 app.get('/api/client/stream', authenticateClientPin, (req: Request, res: Response) => {
 
@@ -2547,169 +2549,12 @@ app.get('/api/campaigns', authenticate, (_req: Request, res: Response) => {
   res.json(DripOrchestrator.listCampaigns());
 });
 
-// Bloqueo estricto de Scraping en Nodos Cliente (Cero Fugas / Privilegio Exclusivo del Master Hub)
-app.use('/api/scrape', (req: Request, res: Response, next: NextFunction) => {
-  if (process.env.MODE === 'client') {
-    res.status(403).json({
-      error: 'Acceso denegado: El motor de scraping de prospectos es exclusivo de la Central Maestra de Kenneth / The Quant Partners. En los nodos cliente solo se permiten reportes comerciales e inbound.'
-    });
-    return;
-  }
-  next();
-});
-
-// 15. Scraping Google Maps manual
-app.post('/api/scrape/google-maps', authenticate, async (req: Request, res: Response) => {
-  const parseResult = ScrapeGoogleMapsSchema.safeParse(req.body);
-  if (!parseResult.success) {
-    res.status(400).json({ error: 'Parámetros de scraping inválidos', details: parseResult.error.format() });
-    return;
-  }
-
-  try {
-    const leads = await ApifyScraper.scrapeGoogleMaps(parseResult.data);
-    
-    // Si viene serviceId o hay servicio activo, guardar en DB
-    if (parseResult.data.serviceId) {
-      await OutreachRepo.saveLeadsFromScraper(parseResult.data.serviceId, leads);
-    }
-
-    res.json({
-      success: true,
-      query: parseResult.data.query,
-      location: parseResult.data.location,
-      totalFound: leads.length,
-      leads
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Error ejecutando scraping en Apify', details: err.message });
-  }
-});
-
-// 15b. Scraping Meta Ads Library (Empresas con Pauta Publicitaria Activa)
-app.post('/api/scrape/meta-ads', authenticate, async (req: Request, res: Response) => {
-  const parseResult = ScrapeMetaAdsSchema.safeParse(req.body);
-  if (!parseResult.success) {
-    res.status(400).json({ error: 'Parámetros inválidos para Meta Ads', details: parseResult.error.format() });
-    return;
-  }
-
-  try {
-    const leads = await ApifyScraper.scrapeMetaAds(parseResult.data);
-    if (parseResult.data.serviceId) {
-      await OutreachRepo.saveLeadsFromScraper(parseResult.data.serviceId, leads);
-    }
-    res.json({
-      success: true,
-      source: 'meta_ads',
-      query: parseResult.data.query,
-      totalFound: leads.length,
-      leads
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Error ejecutando scraping en Meta Ads', details: err.message });
-  }
-});
-
-// 15c. Scraping Instagram Business
-app.post('/api/scrape/instagram', authenticate, async (req: Request, res: Response) => {
-  const parseResult = ScrapeInstagramSchema.safeParse(req.body);
-  if (!parseResult.success) {
-    res.status(400).json({ error: 'Parámetros inválidos para Instagram', details: parseResult.error.format() });
-    return;
-  }
-
-  try {
-    const leads = await ApifyScraper.scrapeInstagram(parseResult.data);
-    if (parseResult.data.serviceId) {
-      await OutreachRepo.saveLeadsFromScraper(parseResult.data.serviceId, leads);
-    }
-    res.json({
-      success: true,
-      source: 'instagram',
-      query: parseResult.data.query,
-      totalFound: leads.length,
-      leads
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Error ejecutando scraping en Instagram', details: err.message });
-  }
-});
-
-// 15d. Scraping Apollo / B2B Leads
-app.post('/api/scrape/apollo', authenticate, async (req: Request, res: Response) => {
-  const parseResult = ScrapeApolloSchema.safeParse(req.body);
-  if (!parseResult.success) {
-    res.status(400).json({ error: 'Parámetros inválidos para Apollo', details: parseResult.error.format() });
-    return;
-  }
-
-  try {
-    const leads = await ApifyScraper.scrapeApollo(parseResult.data);
-    if (parseResult.data.serviceId) {
-      await OutreachRepo.saveLeadsFromScraper(parseResult.data.serviceId, leads);
-    }
-    res.json({
-      success: true,
-      source: 'apollo_b2b',
-      query: parseResult.data.query,
-      totalFound: leads.length,
-      leads
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Error ejecutando scraping en Apollo B2B', details: err.message });
-  }
-});
-
-// 15e. Scraping Google Search
-app.post('/api/scrape/google-search', authenticate, async (req: Request, res: Response) => {
-  const parseResult = ScrapeGoogleSearchSchema.safeParse(req.body);
-  if (!parseResult.success) {
-    res.status(400).json({ error: 'Parámetros inválidos para Google Search', details: parseResult.error.format() });
-    return;
-  }
-
-  try {
-    const leads = await ApifyScraper.scrapeGoogleSearch(parseResult.data);
-    if (parseResult.data.serviceId) {
-      await OutreachRepo.saveLeadsFromScraper(parseResult.data.serviceId, leads);
-    }
-    res.json({
-      success: true,
-      source: 'google_search',
-      query: parseResult.data.query,
-      totalFound: leads.length,
-      leads
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Error ejecutando scraping en Google Search', details: err.message });
-  }
-});
-
-// 15f. Scraping Multi-Fuente Unificado
-app.post('/api/scrape/multi', authenticate, async (req: Request, res: Response) => {
-  const parseResult = UnifiedScrapeSchema.safeParse(req.body);
-  if (!parseResult.success) {
-    res.status(400).json({ error: 'Parámetros inválidos para Scraping Multi-Fuente', details: parseResult.error.format() });
-    return;
-  }
-
-  try {
-    const leads = await ApifyScraper.scrapeMultiSource(parseResult.data);
-    if (parseResult.data.serviceId) {
-      await OutreachRepo.saveLeadsFromScraper(parseResult.data.serviceId, leads);
-    }
-    res.json({
-      success: true,
-      source: parseResult.data.source,
-      query: parseResult.data.query,
-      totalFound: leads.length,
-      leads
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Error ejecutando scraping multi-fuente', details: err.message });
-  }
-});
+// 15. Rutas de Scraping de Prospectos (Exclusivas de la Central Maestra de Kenneth)
+// En modo cliente (MODE=client) las rutas NO se registran en Express; devuelven 404 natural (no existen)
+if (process.env.MODE !== 'client') {
+  const { scraperRouter } = await import('../scraper/scraper_router.js');
+  app.use('/api/scrape', authenticate, scraperRouter);
+}
 
 // 16. Importación masiva de prospectos (CSV / JSON)
 app.post('/api/leads/import', authenticate, async (req: Request, res: Response) => {

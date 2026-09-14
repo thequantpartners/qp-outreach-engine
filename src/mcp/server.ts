@@ -8,7 +8,6 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { OutreachRepo } from '../db/repo.js';
 import { BaileysEngine } from '../whatsapp/baileys_engine.js';
-import { ApifyScraper } from '../scraper/apify_scraper.js';
 import { AutonomousPipeline } from '../pipeline/autonomous_pipeline.js';
 import { ServiceDefinition, ClosingType } from '../types/index.js';
 import { ClientRegistry } from '../master/client_registry.js';
@@ -710,7 +709,7 @@ export class McpServerManager {
       const isClientNode = process.env.MODE === 'client';
 
       if (isClientNode && SCRAPING_TOOL_NAMES.has(name)) {
-        throw new Error('Acceso denegado: El motor de scraping de prospectos es exclusivo de la Central Maestra de Kenneth / The Quant Partners. En los nodos cliente solo se permiten reportes comerciales e inbound.');
+        throw new Error(`Herramienta no encontrada: ${name}`);
       }
 
       try {
@@ -870,6 +869,7 @@ export class McpServerManager {
             if (trigger_immediate && search_queries.length > 0) {
               const query = search_queries[0];
               const location = target_locations[0] || 'Lima, Peru';
+              const { ApifyScraper } = await import('../scraper/apify_scraper.js');
               const scraped = await ApifyScraper.scrapeGoogleMaps({
                 query,
                 location,
@@ -1021,6 +1021,7 @@ export class McpServerManager {
               service_id
             } = args as any;
 
+            const { ApifyScraper } = await import('../scraper/apify_scraper.js');
             const scraped = await ApifyScraper.scrapeMultiSource({
               source,
               query,
@@ -1045,7 +1046,7 @@ export class McpServerManager {
                       totalFound: scraped.length,
                       insertedNewLeads: inserted,
                       skippedDuplicates: skipped,
-                      leads: scraped.slice(0, 10).map(l => ({
+                      leads: scraped.slice(0, 10).map((l: any) => ({
                         title: l.title,
                         phone: l.phoneClean || l.phone,
                         source: l.source,
@@ -1062,6 +1063,7 @@ export class McpServerManager {
 
           case 'scrape_meta_ads': {
             const { query, country_code = 'PE', max_results = 15, service_id } = args as any;
+            const { ApifyScraper } = await import('../scraper/apify_scraper.js');
             const scraped = await ApifyScraper.scrapeMetaAds({
               query,
               countryCode: country_code,
@@ -1091,6 +1093,7 @@ export class McpServerManager {
 
           case 'scrape_instagram': {
             const { query, max_results = 15, service_id } = args as any;
+            const { ApifyScraper } = await import('../scraper/apify_scraper.js');
             const scraped = await ApifyScraper.scrapeInstagram({
               query,
               maxResults: max_results,
@@ -1118,6 +1121,7 @@ export class McpServerManager {
 
           case 'scrape_apollo_b2b': {
             const { query, country_code = 'pe', max_results = 15, service_id } = args as any;
+            const { ApifyScraper } = await import('../scraper/apify_scraper.js');
             const scraped = await ApifyScraper.scrapeApollo({
               query,
               countryCode: country_code,
@@ -1146,6 +1150,7 @@ export class McpServerManager {
 
           case 'scrape_google_search': {
             const { query, country_code = 'pe', max_results = 15, service_id } = args as any;
+            const { ApifyScraper } = await import('../scraper/apify_scraper.js');
             const scraped = await ApifyScraper.scrapeGoogleSearch({
               query,
               countryCode: country_code,

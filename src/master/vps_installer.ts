@@ -47,8 +47,7 @@ export class VpsInstaller {
       `META_TEST_EVENT_CODE=""`,
       ``,
       `# POLÍTICA CERO FUGAS: Claves de Kenneth vacías (El cliente ingresa las suyas en el Onboarding Wizard)`,
-      `OPENROUTER_API_KEY=""`,
-      `APIFY_TOKEN=""`
+      `OPENROUTER_API_KEY=""`
     ].filter(line => line !== '').join('\n');
   }
 
