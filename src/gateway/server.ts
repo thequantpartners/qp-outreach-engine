@@ -246,17 +246,23 @@ app.post('/api/webhook/whatsapp', async (req: Request, res: Response) => {
           AutonomousPipeline.recordLeadReply(rawPhone);
         } catch {}
 
-        // Cumplimiento estricto de política Meta: Opt-Out / Baja automática
-        const cleanUpper = text.trim().toUpperCase();
-        const isOptOut = /^(STOP|BAJA|SALIR|CANCELAR|NO CONTACTAR|DETENER)$/i.test(cleanUpper);
+        // Cumplimiento estricto de política Meta y Blindaje Anti-Insistencia
+        const { RejectionDetector } = await import('../utils/rejection_detector.js');
+        const rejection = RejectionDetector.analyze(text);
 
-        if (isOptOut) {
-          console.log(`🛑 [MetaWebhook] Lead ${rawPhone} solicitó Opt-Out (${cleanUpper}).`);
-          await OutreachRepo.updateLeadStatus(rawPhone, 'OPT_OUT', {
+        if (rejection.isRejection) {
+          const finalStatus = rejection.category === 'EXPLICIT_OPTOUT' ? 'OPT_OUT' : 'CLOSED_LOST';
+          console.log(`🛑 [MetaWebhook] Lead ${rawPhone} rechazó la propuesta o solicitó baja (${rejection.category}: ${rejection.reason}).`);
+          await OutreachRepo.updateLeadStatus(rawPhone, finalStatus, {
             humanTakeoverAt: new Date().toISOString(),
-            handoffNotes: `Opt-Out solicitado por el usuario: "${text}"`
+            handoffNotes: rejection.reason
           });
-          await OutreachRepo.addChatMessage(rawPhone, 'system', '🔒 Prospecto dio de baja sus comunicaciones (Opt-Out). Se desactivó el bot y no se le enviarán más mensajes.');
+          await OutreachRepo.updateLeadCustomFields(rawPhone, {
+            rejectionAcknowledged: true,
+            rejectionReason: rejection.reason,
+            rejectionCategory: rejection.category
+          });
+          await OutreachRepo.addChatMessage(rawPhone, 'system', `🔒 ${rejection.reason}. Se desactivó el bot y no se le enviarán más mensajes.`);
           broadcastDashboardEvent({
             type: 'new_message',
             phone: rawPhone,
@@ -267,15 +273,34 @@ app.post('/api/webhook/whatsapp', async (req: Request, res: Response) => {
           broadcastDashboardEvent({
             type: 'lead_updated',
             phone: rawPhone,
-            status: 'OPT_OUT'
+            status: finalStatus
           });
           continue;
         }
 
-        // Registrar timestamp para la ventana de atención al cliente de 24h
+        // Comprobar si el lead YA está en estado terminal o control humano (inmunidad terminal)
+        const isTerminalOrLocked = ['CLOSED_LOST', 'OPT_OUT', 'CLOSED_WON', 'HUMAN_TAKEOVER'].includes(lead.status) || !!lead.humanTakeoverAt;
         const nowIso = new Date().toISOString();
+
+        if (isTerminalOrLocked) {
+          console.log(`🔇 [MetaWebhook] Lead ${rawPhone} en estado terminal (${lead.status}) o control humano. Mensaje guardado en silencio.`);
+          await OutreachRepo.updateLeadStatus(rawPhone, lead.status, {
+            lastCustomerMessageAt: nowIso,
+            lastMessageAt: nowIso
+          });
+          broadcastDashboardEvent({
+            type: 'new_message',
+            phone: rawPhone,
+            role: 'user',
+            content: text,
+            assignedRepName: lead?.assignedRepName,
+            createdAt: nowIso
+          });
+          continue;
+        }
+
+        // Registrar timestamp para la ventana de atención al cliente de 24h (Lead Activo)
         await OutreachRepo.updateLeadStatus(rawPhone, 'REPLIED', {
-          humanTakeoverAt: nowIso,
           lastCustomerMessageAt: nowIso,
           lastMessageAt: nowIso
         });

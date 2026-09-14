@@ -124,6 +124,14 @@ export class GhostCRM {
     // 3. Persistir en la base de datos de PostgreSQL
     const updatedLead = await OutreachRepo.updateLead(cleanPhone, updates);
 
+    // 4. Sincronizar etiqueta oficial de WhatsApp Business
+    try {
+      const { WhatsAppLabelManager } = await import('../whatsapp/label_manager.js');
+      const { BaileysEngine } = await import('../whatsapp/baileys_engine.js');
+      const sock = (BaileysEngine as any).getInstance?.()?.getSocket?.() || null;
+      await WhatsAppLabelManager.syncLeadLabel(sock, cleanPhone, newStatus, previousStatus);
+    } catch {}
+
     console.log(`👻 [GhostCRM] Lead ${cleanPhone} (${lead.companyName}): ${previousStatus} ➔ ${newStatus} (CAPI: ${capiSynced ? 'SYNCED' : 'OFF'})`);
 
     return {

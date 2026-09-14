@@ -34,7 +34,13 @@ TU MISIÓN:
    - NUNCA transfieras en el primer mensaje.
    - SOLO cuando el prospecto demuestre interés real y responda positivamente a los filtros, activa la transferencia diciendo:
      "Excelente [Nombre], por tu perfil calificas perfectamente para la asesoría de diagnóstico sin costo. Le comparto en este momento tus datos y requerimientos directamente a Kenneth Herrera para que coordine la sesión contigo."
-   - Incluye al final el tag técnico secreto: [ACTION:TRANSFER_KENNETH:necesidad|urgencia|presupuesto]`;
+   - Incluye al final el tag técnico secreto: [ACTION:TRANSFER_KENNETH:necesidad|urgencia|presupuesto]
+
+5. REGLA ANTI-INSISTENCIA ABSOLUTA (ZERO-CHURN):
+   - Si el prospecto dice que NO, que no le interesa, que por ahora no, que es un canal de pacientes/médico, que es número personal, que ya tienen proveedor o que no desea compartir detalles:
+     * ESTRICTAMENTE PROHIBIDO INSISTIR, REBATIR OBJECIONES O VOLVER A OFRECER LA ASESORÍA.
+     * Tu única respuesta debe ser una despedida educada, humilde y breve (máximo 1 oración, ej: "Entendido perfectamente y disculpa la molestia. ¡Que tengas un excelente día!").
+     * Incluye al final el tag técnico obligatorio: [ACTION:OPT_OUT:motivo_del_rechazo]`;
   }
 
   /**
@@ -72,7 +78,8 @@ REGLAS CONVERSACIONALES ESTRICTAS:
 3. Respuestas ágiles y breves (máximo 2 a 3 oraciones por mensaje) para diagnosticar la necesidad y urgencia.
 4. TRANSICIÓN A ESPECIALISTA (HANDOFF): Cuando el cliente muestre interés explícito, pida cotización, solicite reunión, llamada o hablar con un asesor humano:
    - Agradécele con calidez y envíale un mensaje puente humano: "Perfecto, le paso la información de inmediato a uno de nuestros especialistas del equipo para que continúe con usted por aquí y le brinde la atención a la medida. En breve le escribirá por este chat."
-   - Incluye al final el tag técnico exacto: [ACTION:QUALIFIED:necesidad|urgencia|presupuesto]`;
+   - Incluye al final el tag técnico exacto: [ACTION:QUALIFIED:necesidad|urgencia|presupuesto]
+5. REGLA ANTI-INSISTENCIA ABSOLUTA: Si el prospecto indica que no le interesa, que no desea el servicio o que no es el canal, despídete amablemente en 1 frase corta y agrega al final: [ACTION:OPT_OUT:motivo_del_rechazo]`;
     } else {
       systemPrompt = this.getKennethSetterPrompt();
     }
@@ -143,6 +150,36 @@ REGLAS CONVERSACIONALES ESTRICTAS:
           await SalesDispatcher.dispatchQualifiedLead(cleanPhone, details, service?.name);
           isTransferred = true;
         }
+      }
+
+      // 4.1. Analizar si la IA activó Opt-Out / Rechazo por falta de interés o canal no comercial
+      const optOutMatch = rawReply.match(/\[ACTION:OPT_OUT:(.*?)\]/);
+      if (optOutMatch) {
+        const reason = optOutMatch[1]?.trim() || 'Rechazo respetuoso indicado por prospecto';
+        cleanReply = rawReply.replace(optOutMatch[0], '').trim();
+
+        await OutreachRepo.updateLeadStatus(cleanPhone, 'CLOSED_LOST', {
+          humanTakeoverAt: new Date().toISOString(),
+          handoffNotes: `Rechazo respetuoso detectado por Setter IA: "${reason}"`
+        });
+        await OutreachRepo.updateLeadCustomFields(cleanPhone, {
+          rejectionAcknowledged: true,
+          rejectionReason: reason
+        });
+        await OutreachRepo.addChatMessage(cleanPhone, 'system', `🔒 Prospecto declinó la propuesta (${reason}). Se desactivó el bot y se blindó el contacto.`);
+
+        try {
+          const { WhatsAppLabelManager } = await import('../whatsapp/label_manager.js');
+          const { BaileysEngine } = await import('../whatsapp/baileys_engine.js');
+          const sock = (BaileysEngine as any).getInstance?.()?.getSocket?.() || null;
+          await WhatsAppLabelManager.syncLeadLabel(sock, cleanPhone, 'CLOSED_LOST', lead.status);
+        } catch {}
+
+        return {
+          replyText: cleanReply,
+          isQualified: false,
+          isTransferred: false
+        };
       }
 
       return {

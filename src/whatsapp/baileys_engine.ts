@@ -14,6 +14,7 @@ import dotenv from 'dotenv';
 import { OutreachRepo } from '../db/repo.js';
 import { OpenRouterCloser } from '../ai/openrouter_closer.js';
 import { SlaAlertManager } from './sla_manager.js';
+import { LeadStatus } from '../types/index.js';
 
 dotenv.config();
 
@@ -53,6 +54,10 @@ export class BaileysEngine {
       BaileysEngine.instance = new BaileysEngine();
     }
     return BaileysEngine.instance;
+  }
+
+  public getSocket(): WASocket | null {
+    return this.sock;
   }
 
   /**
@@ -196,6 +201,14 @@ export class BaileysEngine {
             HermesC2.initScheduler();
           } catch (err: any) {
             console.warn('[BaileysEngine] No se pudo inicializar Hermes C2 scheduler:', err.message);
+          }
+
+          // Inicializar etiquetas oficiales de WhatsApp Business vinculadas a Ghost CRM
+          try {
+            const { WhatsAppLabelManager } = await import('./label_manager.js');
+            await WhatsAppLabelManager.initLabels(this.sock);
+          } catch (lblErr: any) {
+            console.warn('[BaileysEngine] No se pudieron inicializar etiquetas de WhatsApp:', lblErr.message);
           }
 
           await this.notifyExternalAlert('✅ [QP Outreach Engine] WhatsApp conectado exitosamente y listo para despachar.');
@@ -441,23 +454,58 @@ export class BaileysEngine {
           senderPhone = lead.phone;
         }
 
-        // 3.5. Comprobar política de Opt-Out de Meta/WhatsApp (STOP, BAJA, CANCELAR, etc.)
-        // 3.5. Comprobar política de Opt-Out o Rechazo Respetuoso (STOP, BAJA, NO GRACIAS, etc.)
-        const cleanUpper = incomingText.trim().toUpperCase();
-        const isOptOut = /^(STOP|BAJA|SALIR|CANCELAR|NO CONTACTAR|DETENER|NO GRACIAS|NO GRC|NO GRCS|NO ME INTERESA|NO INTERESADO)$/i.test(cleanUpper);
+        // 3.5. Analizar política de Opt-Out / Rechazo / Desinterés / Canal Médico / No Insistir
+        const { RejectionDetector } = await import('../utils/rejection_detector.js');
+        const rejection = RejectionDetector.analyze(incomingText);
 
-        if (isOptOut) {
-          console.log(`🛑 [BaileysEngine] Lead ${senderPhone} solicitó Opt-Out / Rechazo (${cleanUpper}). Bloqueando envíos automáticos.`);
+        if (rejection.isRejection) {
+          console.log(`🛑 [BaileysEngine] Lead ${senderPhone} rechazó la propuesta o indicó canal exclusivo (${rejection.category}: ${rejection.reason}).`);
           await OutreachRepo.addChatMessage(senderPhone, 'user', incomingText);
+
           try {
             const { AutonomousPipeline } = await import('../pipeline/autonomous_pipeline.js');
             AutonomousPipeline.recordLeadReply(senderPhone);
           } catch {}
-          await OutreachRepo.updateLeadStatus(senderPhone, 'CLOSED_LOST', {
+
+          const alreadyAcknowledged = lead.customFields?.rejectionAcknowledged === true || lead.status === 'CLOSED_LOST' || lead.status === 'OPT_OUT';
+
+          // Enviar exactamente 1 mensaje de despedida y disculpas educadas (si aún no se ha despedido)
+          if (!alreadyAcknowledged && rejection.suggestedSignoff) {
+            try {
+              const jid = `${senderPhone}@s.whatsapp.net`;
+              await this.sock?.sendMessage(jid, { text: rejection.suggestedSignoff });
+              await OutreachRepo.addChatMessage(senderPhone, 'assistant', rejection.suggestedSignoff);
+              console.log(`🛑 [BaileysEngine] Despedida única enviada a ${senderPhone}: "${rejection.suggestedSignoff}"`);
+            } catch (sendErr: any) {
+              console.warn('[BaileysEngine] Error enviando mensaje de despedida:', sendErr.message);
+            }
+          }
+
+          const finalStatus: LeadStatus = rejection.category === 'EXPLICIT_OPTOUT' ? 'OPT_OUT' : 'CLOSED_LOST';
+
+          await OutreachRepo.updateLeadStatus(senderPhone, finalStatus, {
             humanTakeoverAt: new Date().toISOString(),
-            handoffNotes: `Rechazo respetuoso detectado: "${incomingText}"`
+            handoffNotes: rejection.reason
           });
-          await OutreachRepo.addChatMessage(senderPhone, 'system', '🔒 Prospecto indicó no tener interés (Rechazo respetuoso). Se desactivó el bot y no se le enviarán más mensajes ni follow-ups.');
+
+          await OutreachRepo.updateLeadCustomFields(senderPhone, {
+            rejectionAcknowledged: true,
+            rejectionReason: rejection.reason,
+            rejectionCategory: rejection.category
+          });
+
+          await OutreachRepo.addChatMessage(
+            senderPhone,
+            'system',
+            `🔒 ${rejection.reason}. Se desactivó el bot y no se le enviarán más mensajes ni follow-ups.`
+          );
+
+          // Sincronizar etiqueta nativa de WhatsApp Business (🔴 No Interesado o 🚫 Baja)
+          try {
+            const { WhatsAppLabelManager } = await import('./label_manager.js');
+            await WhatsAppLabelManager.syncLeadLabel(this.sock, senderPhone, finalStatus, lead.status);
+          } catch {}
+
           try {
             const { broadcastDashboardEvent } = await import('../gateway/server.js');
             broadcastDashboardEvent({
@@ -470,17 +518,45 @@ export class BaileysEngine {
             broadcastDashboardEvent({
               type: 'lead_updated',
               phone: senderPhone,
-              status: 'CLOSED_LOST'
+              status: finalStatus
             });
           } catch {}
           continue;
         }
 
-        // 4. Registrar mensaje del usuario en la base de datos
+        // 3.6. Comprobar si el lead YA está en estado terminal o control humano (Rompe bucle de ping-pong)
+        const isTerminalOrLocked = ['CLOSED_LOST', 'OPT_OUT', 'CLOSED_WON', 'HUMAN_TAKEOVER'].includes(lead.status) || !!lead.humanTakeoverAt;
+        if (isTerminalOrLocked) {
+          console.log(`🔇 [BaileysEngine] Lead ${senderPhone} en estado terminal (${lead.status}) o control humano. Mensaje guardado en silencio sin respuesta.`);
+          await OutreachRepo.addChatMessage(senderPhone, 'user', incomingText);
+          await OutreachRepo.updateLeadStatus(senderPhone, lead.status, {
+            lastCustomerMessageAt: new Date().toISOString()
+          });
+
+          try {
+            const { broadcastDashboardEvent } = await import('../gateway/server.js');
+            broadcastDashboardEvent({
+              type: 'new_message',
+              phone: senderPhone,
+              role: 'user',
+              content: incomingText,
+              createdAt: new Date().toISOString()
+            });
+          } catch {}
+          continue;
+        }
+
+        // 4. Registrar mensaje del usuario en la base de datos (Lead Activo)
         await OutreachRepo.addChatMessage(senderPhone, 'user', incomingText);
         await OutreachRepo.updateLeadStatus(senderPhone, 'REPLIED', {
           lastCustomerMessageAt: new Date().toISOString()
         });
+
+        // Sincronizar etiqueta de WhatsApp a "💬 En Conversación"
+        try {
+          const { WhatsAppLabelManager } = await import('./label_manager.js');
+          await WhatsAppLabelManager.syncLeadLabel(this.sock, senderPhone, 'REPLIED', lead.status);
+        } catch {}
 
         // Notificar al AutonomousPipeline que hubo respuesta (resetea contador del Circuit Breaker anti-ban)
         try {
@@ -489,24 +565,21 @@ export class BaileysEngine {
         } catch {}
 
         // 4.1. Evaluar si el AI Setter debe calificar y responder en 5s
-        const isHumanLocked = lead.status === 'HUMAN_TAKEOVER' || lead.status === 'CLOSED_WON' || lead.status === 'CLOSED_LOST';
-        if (!isHumanLocked) {
-          try {
-            const { SetterEngine } = await import('../ai/setter_engine.js');
-            const setterRes = await SetterEngine.processMessage(lead, incomingText, matchedService);
-            if (setterRes.replyText && setterRes.replyText.trim().length > 0) {
-              const jid = `${senderPhone}@s.whatsapp.net`;
-              await this.sock?.sendMessage(jid, { text: setterRes.replyText });
-              await OutreachRepo.addChatMessage(senderPhone, 'assistant', setterRes.replyText);
-              console.log(`🤖 [SetterEngine] Respuesta enviada a ${senderPhone}: "${setterRes.replyText.substring(0, 70)}..."`);
-            }
-            if (setterRes.isTransferred) {
-              // El Setter ya ejecutó el traspaso vía SalesDispatcher y activó HUMAN_TAKEOVER
-              continue;
-            }
-          } catch (setterErr: any) {
-            console.error('[BaileysEngine] Error ejecutando SetterEngine:', setterErr.message);
+        try {
+          const { SetterEngine } = await import('../ai/setter_engine.js');
+          const setterRes = await SetterEngine.processMessage(lead, incomingText, matchedService);
+          if (setterRes.replyText && setterRes.replyText.trim().length > 0) {
+            const jid = `${senderPhone}@s.whatsapp.net`;
+            await this.sock?.sendMessage(jid, { text: setterRes.replyText });
+            await OutreachRepo.addChatMessage(senderPhone, 'assistant', setterRes.replyText);
+            console.log(`🤖 [SetterEngine] Respuesta enviada a ${senderPhone}: "${setterRes.replyText.substring(0, 70)}..."`);
           }
+          if (setterRes.isTransferred) {
+            // El Setter ya ejecutó el traspaso vía SalesDispatcher y activó HUMAN_TAKEOVER
+            continue;
+          }
+        } catch (setterErr: any) {
+          console.error('[BaileysEngine] Error ejecutando SetterEngine:', setterErr.message);
         }
 
         // Transmitir al Dashboard en tiempo real

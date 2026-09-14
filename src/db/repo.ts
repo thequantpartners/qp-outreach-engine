@@ -929,6 +929,14 @@ LÍNEAS ROJAS:
         DbConnection.saveFallbackData(data);
       }
     }
+
+    // Sincronizar etiqueta oficial de WhatsApp Business vinculada a Ghost CRM
+    try {
+      const { WhatsAppLabelManager } = await import('../whatsapp/label_manager.js');
+      const { BaileysEngine } = await import('../whatsapp/baileys_engine.js');
+      const sock = (BaileysEngine as any).getInstance?.()?.getSocket?.() || null;
+      await WhatsAppLabelManager.syncLeadLabel(sock, clean, status);
+    } catch {}
   }
 
   public static async assignLeadToRep(
