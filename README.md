@@ -1,156 +1,323 @@
 <div align="center">
 
-# ⚡ QP Outreach Engine
+# 🏛️ QP Outreach Engine & Hermes C2
 
-**Autonomous B2B Lead Generation, Drip WhatsApp Outreach & AI Conversational Closer**
+**Plataforma Autónoma de Adquisición B2B, Prospección Escalonada en WhatsApp, AI Setter de Alta Conversión y Servidor MCP Nativo**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg?style=flat-square)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green.svg?style=flat-square)](https://nodejs.org/)
 [![MCP Native](https://img.shields.io/badge/MCP-Native%20Server-purple.svg?style=flat-square)](https://modelcontextprotocol.io/)
-[![Baileys](https://img.shields.io/badge/WhatsApp-Baileys%20v7-25D366.svg?style=flat-square)](https://github.com/WhiskeySockets/Baileys)
-[![Apify](https://img.shields.io/badge/Scraping-Apify%20Google%20Places-FF6B6B.svg?style=flat-square)](https://apify.com)
+[![Baileys](https://img.shields.io/badge/WhatsApp-Baileys%20v7%20%2F%20Meta%20Cloud-25D366.svg?style=flat-square)](https://github.com/WhiskeySockets/Baileys)
+[![Outscraper](https://img.shields.io/badge/Scraping-Outscraper%20API%20v2-00C49F.svg?style=flat-square)](https://outscraper.com)
 [![OpenRouter](https://img.shields.io/badge/AI%20Engine-OpenRouter%20%2F%20Gemini%202.5-orange.svg?style=flat-square)](https://openrouter.ai)
+[![Meta CAPI](https://img.shields.io/badge/Meta%20Ads-Conversions%20API%20v21.0-0081FB.svg?style=flat-square)](https://developers.facebook.com/)
 [![Railway Ready](https://img.shields.io/badge/Deploy-Railway%20Cloud-0B0D0E.svg?style=flat-square)](https://railway.app)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
 
 <p align="center">
-  A production-grade, 100% headless AI gateway engineered for high-ticket B2B agencies and SaaS holdings.<br/>
-  <b>Acquires leads continuously with Apify, reaches out with human anti-ban cadences, and closes deals via an autonomous conversational WhatsApp bot.</b>
+  <b>Manual Operativo e Institucional Maestro de The Quant Partners (Kenneth & Smith)</b><br/>
+  Diseñado para operar adquisiciones masivas en frío, triplicar conversiones con IA en WhatsApp Business Oficial,<br/>
+  sincronizar ventas con Meta Ads y comandar toda la infraestructura directamente desde WhatsApp con Hermes C2.
 </p>
 
-[Quickstart](#-guía-de-inicio-rápido-desde-cero) •
-[Cómo Funciona Apify](#-1-adquisición-de-leads-con-apify) •
-[Cómo se Conecta WhatsApp](#-2-conexión-y-sesión-de-whatsapp) •
-[Conexión MCP para IAs](#-3-servidor-mcp-para-agentes-de-ia) •
-[Comandos CLI](#-4-referencia-de-comandos-cli) •
-[Reglas Anti-Ban](#-5-reglas-de-oro-anti-ban-de-meta) •
-[Despliegue en Railway](#-6-despliegue-en-producción-railway) •
-[Metodología SDD](#-7-metodología-de-desarrollo-spec-driven-development-sdd)
+[Arquitectura de Sistemas](#-1-arquitectura-global-de-sistemas) •
+[Horarios y Anti-Ban](#-2-horarios-de-adquisición-y-blindaje-anti-ban-dual-region) •
+[Hermes C2 en WhatsApp](#-3-hermes-c2-centro-de-mando-y-control-por-whatsapp) •
+[Doctrina Comercial Setter IA](#-4-doctrina-comercial-de-cierre-y-reglas-del-setter-ia) •
+[Etiquetas WhatsApp Business](#-5-sincronización-de-etiquetas-nativas-en-whatsapp-business) •
+[Scraping Outscraper & Apify](#-6-adquisición-de-prospectos-outscraper-api-v2--apify) •
+[Arquitectura SaaR Multi-Tenant](#-7-arquitectura-saar-multi-tenant-master-hub-vs-satélites) •
+[Servidor MCP para IAs](#-8-servidor-mcp-nativo-para-agentes-de-ia-y-api-rest) •
+[Despliegue en Producción](#-9-guía-de-despliegue-en-producción-railway--docker) •
+[Metodología SDD](#-10-metodología-de-desarrollo-spec-driven-development-sdd)
 
 ---
 
 </div>
 
-## 🏗️ Arquitectura del Sistema
+## 🏛️ Identidad, Misión y Ecosistema
+
+**`QP Outreach Engine`** es el corazón comercial y tecnológico de **The Quant Partners**. Opera como un microservicio headless que desacopla la adquisición y atención comercial del tiempo de las personas:
+
+* **Ecosistema:** The Quant Partners.
+* **El Dúo Estratégico:**
+  * **Kenneth Herrera:** Fundador, estratega comercial y cerrador de cuentas clave.
+  * **Smith / Antigravity:** Agente Copiloto de Inteligencia Artificial a cargo de la arquitectura, operaciones autónomas, control del pipeline y desarrollo de software.
+* **Misión Central:**
+  1. Adquirir prospectos calificados B2B de forma continua y limpia en Google Maps (Perú y USA).
+  2. Iniciar prospección en frío con cadencia humana y técnica de permiso en 2 pasos para proteger la línea contra bloqueos de Meta.
+  3. Atender consultas en 5 segundos (24/7), filtrar a los curiosos sin presupuesto y entregar a los vendedores únicamente prospectos listos para comprar.
+  4. Permitir que la gerencia y los vendedores comanden todo el sistema directamente por WhatsApp (sin plataformas web complejas ni descargas de software).
+  5. Conectar como Servidor MCP Nativo para que cualquier Agente de IA externo controle la empresa.
+
+---
+
+## 🏗️ 1. Arquitectura Global de Sistemas
 
 ```mermaid
-flowchart LR
-    subgraph Adquisicion ["1. Adquisición Continua"]
-        Apify[Apify Google Places] --> Dedupl[Deduplicador PostgreSQL / Local]
-        Dedupl --> Queue[(Cola de Prospectos)]
+flowchart TB
+    subgraph Adquisicion ["1. Adquisición Continua & Buffers"]
+        Outscraper["Outscraper API v2 (Síncrono Maps)"] --> Dedupl["Deduplicador Telefónico Internacional"]
+        Apify["Apify Places Crawler (Secundario)"] --> Dedupl
+        Dedupl --> PG[(PostgreSQL / Buffers por Campaña)]
     end
 
-    subgraph Prospeccion ["2. Prospección Escalonada"]
-        Queue --> Pacer[Pausas Anti-Ban: 3-5 min\nHorario Laboral 9am-7pm]
-        Pacer --> Permiso[Plantilla 2 Pasos\nSin Enlaces en Frío]
-        Permiso --> WASend[Baileys WhatsApp Gateway]
+    subgraph Pipeline ["2. Orquestador Autónomo Anti-Ban"]
+        PG --> AutoPipe["AutonomousPipeline (Monitor de Turnos)"]
+        AutoPipe --> Turnos{"Bloque Activo (Hora Lima)"}
+        Turnos -- "09:00 - 13:00 PET" --> SlotUSA["🇺🇸 Outbound USA (Realtors / Abogados)"]
+        Turnos -- "13:00 - 14:00 PET" --> SlotLunch["🍽️ Pausa Almuerzo Anti-Bot (Cero Envíos)"]
+        Turnos -- "14:00 - 18:30 PET" --> SlotPeru["🇵🇪 Outbound Perú (Clínicas / Constructoras)"]
+        Turnos -- "18:30 - 09:00 PET" --> SlotNight["🌙 Pausa Nocturna (Outbound en Silencio)"]
+        SlotUSA --> Pacer["Cadencia Anti-Ban: Delays 180s-300s (Máx 35/día)"]
+        SlotPeru --> Pacer
+        Pacer --> CircuitBreaker{"¿10 mensajes seguidos\nsin respuesta?"}
+        CircuitBreaker -- Sí --> Cooldown["🚨 Pausa Preventiva 45 min"]
+        CircuitBreaker -- No --> WASend["Baileys v7 / Meta Cloud API Engine"]
     end
 
-    subgraph Cierre ["3. Bot Conversacional & Cierre"]
-        WAReply[Respuesta del Lead] --> Listener[Inbound Upsert]
-        Listener --> TakeoverCheck{¿Human Takeover\nActivo? <24h}
-        TakeoverCheck -- Sí --> Silencio[IA en Silencio]
-        TakeoverCheck -- No / >24h --> AICloser[OpenRouter Gemini 2.5]
-        AICloser --> Intents{Intención}
-        Intents -- Objeción --> Empathy[Manejo Consultivo Humano]
-        Intents -- Calificado / Cierre --> LinkClose[Link Meet / Cal.com / Pago]
-        Intents -- Pide Asesor --> AdminAlert[Alerta WhatsApp a Kenneth]
+    subgraph Setter ["3. Inbound Setter IA & Cierre (24/7)"]
+        WASend --> Inbound["Prospecto Responde por WhatsApp"]
+        Inbound --> RejectionCheck{"RejectionDetector\n(Rechazo / Canal Médico)"}
+        RejectionCheck -- "Rechazo / No Interés" --> OptOut["Despedida Corta + [ACTION:OPT_OUT] (Silencio)"]
+        RejectionCheck -- "Conversación Activa" --> SetterEngine["SetterEngine (Gemini 2.5 Flash)"]
+        SetterEngine --> MultiQuestion{"¿Pregunta Precio / Cómo Funciona?"}
+        MultiQuestion -- Sí --> Transparente["Síntesis Limpia 2-3 Párrafos ($350-$600/mes)"]
+        MultiQuestion -- Conversión Real --> HandoffTag["[ACTION:TRANSFER_KENNETH / QUALIFIED]"]
+        Transparente --> WaitConversion["Espera Intención de Conversión (No Califica)"]
+    end
+
+    subgraph CRM_Labels ["4. Sincronización & Centro de Mando"]
+        HandoffTag --> GhostCRM["Ghost CRM State Machine"]
+        OptOut --> GhostCRM
+        GhostCRM --> LabelsSync["WhatsApp Business Labels (10 Estados AppState)"]
+        GhostCRM --> HermesAlert["Hermes C2: Alerta a WhatsApp de Kenneth / Vendedor"]
+        GhostCRM --> MetaCAPI["Meta Conversions API (CAPI v21.0 al Pixel)"]
+        HermesAdmin["Kenneth escribe a WhatsApp"] --> NLPRouter["NLPRouter (Comandos Naturales)"]
+        NLPRouter --> HermesC2["Hermes C2 (Control /horarios, /saldo, /won)"]
     end
 ```
 
 ---
 
-## 🚀 Guía de Inicio Rápido (Desde Cero)
+## ⏰ 2. Horarios de Adquisición y Blindaje Anti-Ban (Dual-Region)
 
-### 1. Clonar e Instalar Dependencias
+Para cumplir con las normativas anti-spam de Meta (2026) y proteger el número de WhatsApp, el orquestador continuo (`autonomous_pipeline.ts`) **divide el día en turnos regionales estrictos tomando la Zona Horaria de Lima (PET / UTC-5)**:
 
-```bash
-git clone https://github.com/thequantpartners/qp-outreach-engine.git
-cd qp-outreach-engine
-npm install
+### 🕒 Matriz de Horarios Outbound (Prospección en Frío)
+
+| Bloque | Horario (Hora Lima / PET) | Región Activa | Campañas Despachadas | Comportamiento del Motor |
+| :--- | :---: | :---: | :--- | :--- |
+| 🇺🇸 **Mañanas USA** | **09:00 AM – 01:00 PM** | **USA** | Realtors en Florida/Texas, Abogados de Inmigración, MedSpas USA. | Activa 50% de la cuota diaria. Prospección fría en inglés o español latino según el nicho. |
+| 🍽️ **Almuerzo** | **01:00 PM – 02:00 PM** | *Pausa Total* | *Ninguna* | **Cero envíos en frío**. Emula la pausa humana de almuerzo para romper patrones algorítmicos. |
+| 🇵🇪 **Tardes Perú** | **02:00 PM – 06:30 PM** | **PERÚ** | Clínicas estéticas, empresas locales, constructoras, B2B. | Despacha el balance de la cuota diaria en Lima y provincias. |
+| 🌙 **Pausa Nocturna** | **06:30 PM – 09:00 AM** | *Pausa Total* | *Ninguna* | Suspensión total de prospección en frío para evitar reportes por contacto fuera de oficina. |
+
+### ⚡ La Regla Innegociable: Inbound Activo 24/7
+* Los horarios restringidos aplican **EXCLUSIVAMENTE a los primeros mensajes en frío (Outbound)**.
+* Si un prospecto de USA o Perú responde a las 8:00 PM, a las 11:00 PM o un domingo por la mañana, **el Setter IA responde de inmediato en 5 segundos**. La atención a prospectos que iniciaron conversación nunca duerme.
+
+### 🛡️ Los 4 Filtros del Blindaje Anti-Ban de Meta
+1. **La Técnica del Permiso en 2 Pasos:** Estrictamente prohibido enviar enlaces web (`http://...`) en el primer mensaje en frío. El primer contacto termina siempre con una pregunta de cortesía pidiendo permiso (*"¿Me permite compartirle un video de 3 minutos con la arquitectura?"*). El enlace solo se entrega tras respuesta afirmativa.
+2. **Cadencia Humana Aleatoria:** Delays obligatorios de **180 a 300 segundos (3 a 5 minutos)** entre cada mensaje saliente.
+3. **Tope Diario Estricto:** Máximo **35 prospectos nuevos por día** por número de teléfono.
+4. **Circuit Breaker Preventivo:** Si el motor despacha **10 mensajes consecutivos en frío sin recibir ninguna respuesta**, entra automáticamente en un **enfriamiento preventivo de 45 minutos** para salvaguardar el chip.
+
+---
+
+## 👑 3. Hermes C2 (Centro de Mando y Control por WhatsApp)
+
+**Hermes C2** es el copiloto operativo que permite a Kenneth y a sus clientes gerenciar toda la empresa sin abrir ninguna computadora, comunicándose directamente por WhatsApp con el número central (`51902105668`).
+
+```
+                              📱 WHATSAPP DE KENNETH (51902105668)
+                                              │
+                                              ▼
+                                   🏛️ HERMES C2 COPILOT
+                                              │
+                     ┌────────────────────────┼────────────────────────┐
+                     ▼                        ▼                        ▼
+             Supervisión & Estado    Scraping & Adquisición    Cierre de Ventas & CAPI
+           • /status (Gateway/CRM)  • /scraper (Diagnóstico)  • /won <tel> <monto>
+           • /horarios (Bloques)    • /scrape <query> [max]   • Meta Conversions API
+           • /saldo (Créditos)      • Auto-Recarga Buffers    • Notificación a Asesor
+           • /pipeline (Ghost CRM)  • Outscraper API v2       • Sincronización Etiquetas
 ```
 
-### 2. Configurar Variables de Entorno
+### 📋 Catálogo Completo de Comandos (Master Kenneth)
 
-Copia la plantilla `.env.example` a `.env`:
-
-```bash
-cp .env.example .env
-```
-
-Configura tus credenciales clave en `.env`:
-
-| Variable | Descripción | Dónde obtenerlo |
+| Comando | Sintaxis / Argumentos | Descripción Operativa |
 | :--- | :--- | :--- |
-| `APIFY_TOKEN` | Token de acceso para scrapers de Google Maps | [Apify Console > Settings > Integrations](https://console.apify.com/account/integrations) |
-| `OPENROUTER_API_KEY` | Llave para el motor de IA del bot de WhatsApp | [OpenRouter Keys](https://openrouter.ai/keys) |
-| `ADMIN_WHATSAPP_PHONE` | Tu número personal para alertas críticas (ej. `51987654321`) | Tu WhatsApp |
-| `DATABASE_URL` *(Opcional)* | Conexión a PostgreSQL (Railway / Supabase) | Si se omite, usa base de datos local automática |
-| `API_SECRET_KEY` | Clave maestra para autenticar llamadas REST | Genera una cadena segura (ej. `qp-secret-2026`) |
+| **`/status`** | `/status` o `"cómo vamos"` | Estado en vivo de WhatsApp, campañas activas, prospectos en cada etapa del embudo, ingresos acumulados y balance de plataformas. |
+| **`/horarios`** | `/horarios` o `"rango horario"` | Informa la hora actual de Lima (PET), el bloque activo en vivo (`Mañanas USA`, `Pausa Almuerzo`, `Tardes Perú`, `Noche`), y los parámetros anti-ban. |
+| **`/saldo`** | `/saldo` o `"cuánto saldo queda"` | Saldo exacto en dólares de **Outscraper** (búsquedas Maps) y **OpenRouter** (consumo de tokens del LLM), con alertas si está bajo. |
+| **`/pipeline`** | `/pipeline` o `"ver embudo"` | Resumen financiero: prospectos totales, respondieron, calificados, citas agendadas, ventas cerradas e ingresos totales en USD y PEN. |
+| **`/leads`** | `/leads` o `"ver prospectos"` | Lista los prospectos calientes más recientes pendientes de contacto humano. |
+| **`/lead`** | `/lead 51987654321` | Ficha técnica completa de un prospecto: empresa, necesidad detectada, estado comercial y último intercambio de chat. |
+| **`/won`** | `/won 51987654321 450 USD` | **Registra una venta cerrada ganada:** actualiza Ghost CRM a `CLOSED_WON`, asigna la etiqueta dorada en WhatsApp, notifica al equipo y dispara el evento oficial `Purchase` al Pixel de Meta (CAPI). |
+| **`/pausa`** | `/pausa` o `"detener prospección"` | Pausa inmediatamente todos los envíos en frío del motor outbound de forma segura. |
+| **`/reanudar`** | `/reanudar` o `"continuar"` | Reactiva la prospección escalonada manteniendo la cadencia anti-ban. |
+| **`/scraper`** | `/scraper` o `"estado del scraper"` | Diagnóstico de buffers por campaña: muestra cuántos prospectos no contactados quedan en cola y estado del Circuit Breaker. |
+| **`/scrape`** | `/scrape clinicas esteticas 25` | Dispara una extracción inmediata en Google Maps con Outscraper API v2, deduplica en PostgreSQL e inserta en la cola de la campaña. |
+| **`/mensaje`** | `/mensaje` | Previsualiza la plantilla de prospección activa con validación de variables (`{{name}}`, `{{location}}`). |
+| **`/setmensaje`**| `/setmensaje <nueva plantilla>` | Edita en caliente la plantilla de prospección sin reiniciar el servidor. |
+| **`/setter`** | `/setter` | Muestra el System Prompt y directivas de calificación activas en el Setter IA. |
+| **`/setsetter`** | `/setsetter <instrucciones>` | Ajusta en caliente las directivas de calificación del Setter IA. |
+| **`/provision`** | `/provision "Clínica X" clinicas_salud 51999... "Carlos:51911..."` | Aprovisiona una infraestructura cliente completa en un VPS o Railway en 60 segundos. |
+| **`/sop`** | `/sop` o `/manual` | Envía el manual operativo y checklist de onboarding por WhatsApp. |
+
+### 🧠 Enrutador de Lenguaje Natural (NLP Router)
+Kenneth no necesita recordar la barra diagonal (`/`). El sistema incluye un analizador semántico (`nlp_router.ts`) que resuelve intenciones naturales automáticamente:
+* *"¿Cómo vamos hoy?"* $\rightarrow$ Ejecuta `/status`.
+* *"¿Cuál es el rango horario de adquisición de USA y Perú?"* $\rightarrow$ Ejecuta `/horarios`.
+* *"¿Cuánto saldo tenemos en Outscraper?"* $\rightarrow$ Ejecuta `/saldo`.
+* *"Raspar estudios de abogados surco 30"* $\rightarrow$ Ejecuta `/scrape estudios de abogados surco 30`.
+* *"Para el bot un momento"* $\rightarrow$ Ejecuta `/pausa`.
+* *"Sigue con los mensajes"* $\rightarrow$ Ejecuta `/reanudar`.
 
 ---
 
-## 🔍 1. Adquisición de Leads con Apify
+## 🎯 4. Doctrina Comercial de Cierre y Reglas del Setter IA
 
-### ¿Cómo funciona?
-El sistema integra el crawler oficial `compass~crawler-google-places` de Apify directamente en código. No requiere configurar actores manuales en la web.
+Tanto el bot propio de **The Quant Partners** como los bots de los **clientes satélite** están programados con una doctrina estricta de ventas consultivas orientada a cerrar clientes de alto valor sin fricción:
 
-### ¿Te pedirá el API Key?
-Sí. El sistema lee `APIFY_TOKEN` desde tu `.env`. Si no está configurado, arrojará un mensaje claro con el enlace directo para crearte una cuenta gratuita en Apify.
+### 1. Precios Oficiales Estrictos (Cero Invención)
+* **Tarifa Plana:** **$350 a $600 USD/mes** según el volumen de conversaciones de la empresa.
+* **Modalidad:** Mes a mes por resultados (sin contratos de permanencia forzosa ni penalidades).
+* **Setup:** Único de implementación llave en mano (48 a 72 horas hábiles) completamente configurado y testeado.
+* **Retorno (ROI):** Se autofinancia con solo 2 a 3 ventas adicionales recuperadas en el mes.
+* *Regla innegociable:* La IA tiene terminantemente prohibido inventar precios, planes o descuentos fuera de este rango.
 
-### ¿Cómo se dispara la adquisición?
-1. **Automática (Buffer Inteligente):** El orquestador continuo monitorea la base de datos. Cuando los leads no contactados bajan de 15, ejecuta scraping rotando las palabras clave y ciudades configuradas.
-2. **Por MCP o CLI:** Cualquier IA o humano puede ordenar una extracción ad-hoc:
-   ```bash
-   node ./bin/qp-outreach.js launch --name="Clínicas Estéticas" --query="clinicas esteticas miraflores" --max=30
-   ```
-3. **Deduplicación Estricta:** Antes de guardar, limpia los prefijos internacionales (`+51 9...` -> `519...`) y verifica que el número no exista previamente en base de datos. **Cero prospectos duplicados.**
+### 2. Operación Diaria 100% por WhatsApp
+* Cero software nuevo que aprender, cero apps que descargar y cero webs complicadas.
+* Los asesores comerciales reciben la alerta del prospecto calificado con la necesidad detectada directo en su WhatsApp para entrar a cerrar.
+* La gerencia supervisa el avance del embudo por WhatsApp, recibe reportes automáticos y registra ventas ganadas por chat con `/won`.
+
+### 3. Los 4 Pilares de Beneficios Clave
+1. **Respuesta Instantánea en 5 Segundos (24/7):** Cero prospectos perdidos o enfriados por demoras de atención humana; atiende día, noche y feriados.
+2. **Filtrado Inteligente de Curiosos con IA:** Separa a los preguntones sin presupuesto para que los ejecutivos solo atiendan prospectos reales listos para comprar.
+3. **Manejo 100% Nativo en WhatsApp:** Operación comercial completa sin fricción técnica para el equipo.
+4. **Conexión Oficial Meta Cloud API & Meta Ads:** Conexión empresarial oficial anti-bloqueo que sincroniza ventas con el Pixel de Meta (CAPI) para abaratar el costo por lead en pauta publicitaria.
+
+### 4. Biblioteca de Respuestas a Objeciones Típicas
+* **"Ya tenemos recepcionistas o vendedores que atienden":**
+  *El sistema no reemplaza a tu equipo de cierre, lo potencia. Los humanos tardan minutos u horas en contestar y pierden el 70% de su tiempo atendiendo curiosos. El sistema filtra en 5 segundos 24/7 y le entrega a tus vendedores únicamente prospectos listos para pagar.*
+* **"¿Cómo lo manejamos nosotros? / ¿Tengo que usar un sistema?":**
+  *Todo se opera 100% por WhatsApp. Las alertas de prospectos calificados le llegan directo a tus vendedores por chat con la necesidad detectada, y tú como gerente supervisas el embudo sin tener que descargar apps ni usar webs complejas.*
+* **"¿Me pueden bloquear el número de WhatsApp? / ¿Es seguro?":**
+  *Trabajamos exclusivamente sobre la infraestructura oficial de Meta (WhatsApp Cloud API) cumpliendo al 100% las normativas de 2026. Cero riesgo de baneo porque no usamos bots piratas ni envíos masivos ilegales.*
+* **"¿Cómo se conecta con mis anuncios de Meta Ads (Facebook / Instagram)?":**
+  *Se conecta de forma nativa con Meta Ads. Cuando tu equipo cierra una venta, el sistema dispara el evento directamente al Pixel de Meta (CAPI), enseñándole al algoritmo a buscar compradores de mayor calidad y abaratando tu costo por lead.*
+* **"¿Y si el cliente pregunta algo muy técnico que el bot no sabe?":**
+  *Cuenta con reglas anti-alucinación: si un cliente hace una consulta técnica fuera de base o pide presupuesto a medida, el bot avisa amablemente que transfiere la consulta al especialista humano y notifica a tu equipo de inmediato.*
+* **"¿Cuánto tarda la implementación?":**
+  *La entrega es llave en mano y toma entre 48 a 72 horas hábiles. Nosotros configuramos el agente, las integraciones y los flujos; ustedes solo aprueban y empiezan a recibir prospectos filtrados.*
+* **"¿Tienen contrato de permanencia forzosa?":**
+  *No, trabajamos mes a mes por resultados. No amarramos a nadie; si el primer mes no ven el retorno y la calidad de los prospectos, no continúan.*
+
+### 5. Límites de Alcance Estrictos (Cero Promesas Fuera de Sistema)
+* Prohibido prometer llamadas telefónicas de voz automatizadas con IA (robocalls). Esto es infraestructura de mensajería WhatsApp.
+* Prohibido prometer desarrollo de aplicaciones móviles nativas para tiendas de apps (App Store / Play Store).
+* Prohibido prometer volúmenes mágicos de ventas si el cliente no tiene flujo de prospectos ni pauta: el sistema triplica la conversión, pero no genera ventas de la nada.
+
+### 6. Reglas Conversacionales en WhatsApp
+* **Regla Multi-Pregunta:** Si el prospecto hace varias preguntas a la vez (precio + beneficios + funcionamiento), responde en una síntesis ágil de **2 a 3 párrafos cortos sin rodeos**, cerrando con una pregunta conversacional.
+* **Pedir Información NO es Calificación:** Responder precios, beneficios o funcionamiento jamás activa la transferencia humana ni marca al lead como calificado.
+* **Handoff Únicamente con Intención Real de Conversión:** Solo cuando el prospecto acepte agendar reunión, pida contratar/pagar o solicite hablar con el cerrador humano, se activa `[ACTION:TRANSFER_KENNETH]` o `[ACTION:QUALIFIED]`.
+* **Blindaje Anti-Insistencia (Zero-Churn):** Si el prospecto dice que no, despedida educada en 1 sola frase corta y cierre con `[ACTION:OPT_OUT]`. Inmunidad de estado terminal para terminar cualquier bucle de ping-pong.
 
 ---
 
-## 📲 2. Conexión y Sesión de WhatsApp
+## 🏷️ 5. Sincronización de Etiquetas Nativas en WhatsApp Business
 
-### ¿Cómo se conecta desde cero?
-1. **Inicia el servicio:**
-   ```bash
-   npm run dev
-   ```
-2. **Escaneo del Código QR:**
-   - En la consola aparecerá inmediatamente un **código QR en texto**:
-     ```text
-     ================================================================
-     📲 QP OUTREACH ENGINE | ESCANEA EL CÓDIGO QR CON WHATSAPP:
-     ================================================================
-     ```
-   - Abre **WhatsApp** en tu teléfono móvil.
-   - Ve a: **Ajustes / Configuración > Dispositivos vinculados > Vincular dispositivo**.
-   - Escanea el código en la pantalla.
-   *(También se genera una imagen en `./storage/whatsapp_qr.png` y endpoint web `GET /api/qr?format=image` para servidores remotos).*
+El motor sincroniza el estado comercial de cada prospecto en tiempo real con las **Etiquetas Nativas de WhatsApp Business** mediante Baileys AppState Sync. Kenneth o los vendedores pueden ver el estado exacto del lead directamente en la lista de chats de su celular:
 
-3. **Persistencia Automática:**
-   - Una vez escaneado, la sesión se almacena en `./storage/whatsapp_auth/` y se genera un respaldo comprimido `whatsapp_auth.tar.gz`.
-   - **Nunca más tendrás que volver a escanear.** Si el servidor se reinicia o se despliega en Railway (con volumen persistente), la sesión se restaura automáticamente en 2 segundos.
+| Estado Ghost CRM | Etiqueta en WhatsApp Business | Color Baileys | Significado Comercial |
+| :--- | :--- | :---: | :--- |
+| `DISCOVERED` / `QUEUED` | 🟡 **Nuevo Prospecto** | Amarillo (5) | Extraído por el scraper, en cola de prospección. |
+| `OUTREACH_SENT` | 📤 **Primer Contacto** | Cyan (0) | Mensaje inicial de permiso enviado; esperando respuesta. |
+| `FOLLOW_UP_SENT` | ⏳ **Seguimiento Enviado** | Azul (1) | Mensaje de seguimiento 1 o 2 despachado. |
+| `REPLIED` | 💬 **En Conversación** | Naranja (2) | El prospecto respondió; el Setter IA está dialogando. |
+| `QUALIFIED` | 🟢 **Interesado / Calificado** | Verde Brillante (8) | Prospecto con intención real; transferido para cierre. |
+| `MEETING_SCHEDULED` | 📅 **Cita Agendada** | Morado (10) | Reunión agendada en calendario / Meet / Cal.com. |
+| `CLOSED_WON` | 🏆 **Venta Cerrada** | Verde Esmeralda (9) | Venta cobrada y evento `Purchase` enviado a Meta CAPI. |
+| `CLOSED_LOST` | 🔴 **No Interesado** | Rojo (14) | Prospecto declinó la propuesta amablemente. |
+| `OPT_OUT` | 🚫 **Baja / Opt-Out** | Gris Oscuro (19) | Solicitud de no contacto o canal equivocado/médico. |
+| `HUMAN_TAKEOVER` | 👤 **Control Humano** | Magenta (13) | Vendedor o Kenneth atendiendo manualmente (IA silenciada). |
 
 ---
 
-## 🤖 3. Servidor MCP para Agentes de IA
+## 🗺️ 6. Adquisición de Prospectos: Outscraper API v2 & Apify
 
-Cualquier agente de IA (**Antigravity, Cursor, Claude Desktop, Windsurf, Smith**) puede controlar este microservicio invocando herramientas nativas sin programar llamadas HTTP.
+El sistema cuenta con un motor de scraping híbrido de alta resiliencia:
 
-### Configuración en Claude Desktop o Cursor:
+```
+                            AUTOMONITOR DE BUFFERS (CADA 60s)
+                                          │
+                        ¿Buffer de Campaña < 15 Prospectos?
+                                ├── SÍ ──► Outscraper API v2 (Síncrono, Google Maps)
+                                │          └── (Respaldo: Apify Google Places Crawler)
+                                └── NO ──► Continúa despacho outbound normal
+```
 
-#### Modo Remoto (Servicio en Railway):
+1. **Outscraper API v2 (Motor Primario):**
+   - Ejecución síncrona en segundos (sin esperas de colas asíncronas).
+   - Extrae nombre de empresa, teléfono celular/WhatsApp, dirección, sitio web, puntuación y categoría.
+   - Supervisión de saldo en vivo mediante `/saldo`.
+2. **Apify Google Places Crawler (Motor de Respaldo):**
+   - Utilizado para rastreos profundos masivos de más de 100 prospectos por lote.
+3. **Deduplicador Telefónico Internacional:**
+   - Sanitiza números telefónicos eliminando espacios, guiones y símbolos (`+51 973-825-496` $\rightarrow$ `51973825496`).
+   - Verifica existencia previa en PostgreSQL. **Cero prospectos duplicados en base de datos.**
+
+---
+
+## 🏢 7. Arquitectura SaaR Multi-Tenant (Master Hub vs Satélites)
+
+El engine soporta el modelo **SaaR (Software as a Result)**: The Quant Partners despliega instancias dedicadas para clientes empresariales en minutos, garantizando aislamiento total de datos:
+
+```mermaid
+flowchart TD
+    MasterHub["👑 MASTER HUB (The Quant Partners)\n• Kenneth & Hermes C2\n• PostgreSQL Matriz\n• Orquestador Multi-Nicho"]
+    
+    MasterHub -- "/provision" --> Sat1["🏢 Satélite Clínica Sonrisas\n• WhatsApp Propio\n• DB Aislada (Zero Leakage)\n• Asignación a Vendedores\n• Pixel Meta Propio"]
+    MasterHub -- "/provision" --> Sat2["🏢 Satélite Inmobiliaria Prime\n• WhatsApp Propio\n• DB Aislada (Zero Leakage)\n• Citas a Sala de Ventas\n• Pixel Meta Propio"]
+    MasterHub -- "/provision" --> Sat3["🏢 Satélite Estudio Jurídico\n• WhatsApp Propio\n• DB Aislada (Zero Leakage)\n• Agenda de Audiencias\n• Pixel Meta Propio"]
+```
+
+### Catálogo de Blueprints Preconfigurados (`src/master/blueprints/`)
+* **`clinicas_salud.json`:** Especializado en odontología, medicina estética y centros médicos. Transparencia en valor de consulta inicial, cero diagnósticos a ciegas por chat, y 5 objeciones médicas resueltas.
+* **`inmobiliarias.json`:** Especializado en desarrolladoras y corretaje corporativo. Precios base por tipología, condiciones crediticias reales y agendamiento de visitas a departamento piloto.
+* **`estudios_abogados.json`:** Especializado en firmas legales corporativas y litigios. Honorarios de diagnóstico inicial, confidencialidad estricta y citas con socios.
+* **`construccion_b2b.json`:** Especializado en proveedores de materiales y contratistas de obra. Precios por volumen, pliegos técnicos y líneas de crédito comercial homologadas.
+
+### Aprovisionamiento en 60 Segundos
+Desde WhatsApp con Hermes C2:
+```text
+/provision "Clínica Sonrisas" clinicas_salud 51999888777 "Dr. Carlos:51911122233,Dra. Maria:51944455566"
+```
+Hermes genera los contenedores Docker aislados, las variables de entorno sin claves maestras (**Zero Leakage Policy**) y el script de instalación listo para ejecutar en el VPS del cliente.
+
+---
+
+## 🤖 8. Servidor MCP Nativo para Agentes de IA y API REST
+
+Cualquier IA (**Smith**, **Antigravity**, **Cursor**, **Claude Desktop**, **Windsurf**) puede conectarse como operador sin escribir código HTTP.
+
+### Configuración MCP
+
+#### Conexión Remota en Railway (Transporte SSE)
 ```json
 {
   "mcpServers": {
     "qp-outreach": {
-      "url": "https://qp-outreach-engine.up.railway.app/sse"
+      "url": "https://gateway-production-2264.up.railway.app/sse"
     }
   }
 }
 ```
 
-#### Modo Local (Desarrollo por Stdio):
+#### Conexión Local en Desarrollo (Transporte Stdio)
 ```json
 {
   "mcpServers": {
@@ -162,124 +329,74 @@ Cualquier agente de IA (**Antigravity, Cursor, Claude Desktop, Windsurf, Smith**
 }
 ```
 
-### Herramientas MCP Disponibles:
-
-| Herramienta | Argumentos Clave | Descripción |
-| :--- | :--- | :--- |
-| `launch_campaign` | `service_name`, `search_queries`, `outreach_template`, `ai_sales_instructions`, `closing_type` | Dispara adquisición continua, deduplica y activa prospección y bot de cierre. |
-| `outreach_status` | *(ninguno)* | Verifica conexión de WhatsApp, salud y métricas del embudo. |
-| `list_leads` | `status`, `search`, `limit` | Lista prospectos (`DISCOVERED`, `OUTREACH_SENT`, `REPLIED`, `QUALIFIED`, `CLOSED_WON`). |
-| `get_chat_history` | `phone` | Obtiene la transcripción completa de la conversación de un lead. |
-| `send_whatsapp_message` | `to`, `message` | Envío manual inmediato (silencia la IA para ese lead). |
-| `toggle_human_takeover` | `phone`, `active` | Pausa (`true`) o reanuda (`false`) el bot conversacional para un contacto. |
-### 📋 Creación de Campañas (Modo Co-Piloto Proactivo)
-Para ahorrar tiempo y evitar cuestionarios extensos, cualquier agente de IA opera como co-piloto estratégico:
-1. **Solo consulta 3 datos clave a Kenneth:** Nicho objetivo, Servicio/Entregable y Política de Precios.
-2. **La IA formula el trabajo pesado automáticamente:**
-   - 3 a 4 queries de búsqueda en Google Maps para Apify.
-   - Plantilla de prospección persuasiva (permiso en 2 pasos, sin links).
-   - Prompt del bot de cierre con objeciones típicas resueltas y reglas anti-alucinación.
-   - Handoff a Kenneth (`51902105668`) para cierre en WhatsApp.
-3. **Validación rápida:** Kenneth solo revisa la propuesta en 10 segundos, da el visto bueno y la campaña arranca.
+### Catálogo de Herramientas MCP Clave
+* `launch_campaign`: Dispara campaña completa (oferta, queries, plantilla 2 pasos, prompt del bot y cadencia anti-ban).
+* `outreach_status`: Diagnóstico completo de conexión WhatsApp, salud del servicio y pipeline Ghost CRM.
+* `list_leads`: Filtra prospectos por estado comercial.
+* `get_chat_history`: Lee la transcripción de chat de cualquier prospecto.
+* `send_whatsapp_message`: Envío manual directo (silencia la IA en Human Takeover).
+* `toggle_human_takeover`: Activa o desactiva el bot para un número específico.
+* `trigger_scraping`: Scraping ad-hoc con Outscraper o Apify.
+* `provision_client`: Aprovisiona un nuevo cliente satélite en 60 segundos.
+* `list_niche_blueprints`: Consulta las plantillas de nicho disponibles.
 
 ---
 
-## 💻 4. Referencia de Comandos CLI
+## 🚀 9. Guía de Despliegue en Producción (Railway & Docker)
 
-El ejecutable `qp-outreach` permite interactuar con el engine desde cualquier terminal:
-
+### 1. Despliegue Local (Desarrollo)
 ```bash
-# Consultar estado general del engine y métricas del embudo
-node ./bin/qp-outreach.js status
+# 1. Clonar repositorio
+git clone https://github.com/thequantpartners/qp-outreach-engine.git
+cd qp-outreach-engine
 
-# Lanzar una campaña de adquisición y prospección para cualquier servicio
-node ./bin/qp-outreach.js launch --name="Agentes IA" --query="inmobiliarias miraflores" --max=25
+# 2. Instalar dependencias
+npm install
 
-# Listar prospectos filtrando por estado
-node ./bin/qp-outreach.js leads --status=REPLIED
+# 3. Configurar entorno
+cp .env.example .env
 
-# Leer conversación completa con un lead
-node ./bin/qp-outreach.js chat 51987654321
-
-# Enviar mensaje manual (activa Human Takeover de inmediato)
-node ./bin/qp-outreach.js send 51987654321 "Buenas tardes, ¿le parece si nos reunimos a las 4pm?"
-
-# Silenciar la IA para un lead (o reactivarla con 'off')
-node ./bin/qp-outreach.js takeover 51987654321 on
-
-# Iniciar el servidor MCP en modo stdio
-node ./bin/qp-outreach.js mcp
+# 4. Iniciar en modo desarrollo
+npm run dev
 ```
 
----
+### 2. Despliegue en Producción (Railway)
+1. Conecta el repositorio en [Railway](https://railway.app).
+2. **Paso Crítico de Persistencia:** Agrega un **Persistent Volume** de 5 GB montado en la ruta `/app/storage` (así las sesiones de WhatsApp no se pierden tras un re-despliegue).
+3. Configura las variables de entorno principales:
 
-## 🛡️ 5. Reglas de Oro Anti-Ban de Meta
-
-1. **La Técnica del Permiso en 2 Pasos:**
-   - Prohibido enviar enlaces web (`http://...`) en el **primer mensaje en frío**.
-   - El primer mensaje debe ser corto (2 a 3 párrafos breves), personalizado con `{{name}}` y terminar con una pregunta de autorización (*"¿Me permite compartirle un video de 3 minutos con la arquitectura?"*).
-   - El enlace de valor (Cal.com / Loom / PDF) **solo se entrega cuando el prospecto responde afirmativamente**.
-2. **Cadencia Humana y Horario Comercial:**
-   - Intervalos de **180 a 300 segundos (3 a 5 minutos)** entre mensajes en frío.
-   - El pipeline despacha únicamente de **9:00 AM a 7:00 PM** hora local.
-   - Tope de seguridad: **25 a 40 mensajes diarios** por línea telefónica.
-3. **Human Takeover con Reenganche Automático:**
-   - Si Kenneth responde desde su celular o la web, la IA se apaga automáticamente para ese lead.
-   - Si transcurren **24 horas de inactividad**, el bot retoma el contacto con un mensaje de seguimiento cordial.
-
----
-
-## ☁️ 6. Despliegue en Producción (Railway)
-
-1. En [Railway](https://railway.app), crea un nuevo proyecto desde tu repositorio GitHub.
-2. Añade un **Persistent Volume** de 2 a 5 GB montado en `/app/storage` *(crucial para que las credenciales de WhatsApp no se pierdan entre re-despliegues)*.
-3. Agrega las variables de entorno en Railway:
-   - `PORT=3100`
-   - `APIFY_TOKEN=apify_api_...`
-   - `OPENROUTER_API_KEY=sk-or-v1-...`
-   - `ADMIN_WHATSAPP_PHONE=51987654321`
-   - `DATABASE_URL=${{Postgres.DATABASE_URL}}` *(si conectas el plugin de PostgreSQL de Railway)*
-4. Railway detectará el `Dockerfile` y levantará el servicio con HTTPS automático.
+| Variable | Propósito | Ejemplo |
+| :--- | :--- | :--- |
+| `PORT` | Puerto de escucha HTTP/SSE | `3100` |
+| `ADMIN_WHATSAPP_PHONE` | Celular de Kenneth para alertas y Hermes C2 | `51902105668` |
+| `OUTSCRAPER_API_KEY` | Llave oficial para scraping en Google Maps | `MGQz...` |
+| `OPENROUTER_API_KEY` | Llave del motor LLM (Gemini 2.5 Flash) | `sk-or-v1-...` |
+| `API_SECRET_KEY` | Clave para proteger endpoints REST | `qp-master-secret-2026` |
+| `DATABASE_URL` | Conexión a PostgreSQL (Railway / Supabase) | `postgresql://...` |
+| `META_DATASET_ID` | Dataset / Pixel de Meta Ads para CAPI | `1234567890` |
+| `META_CAPI_ACCESS_TOKEN` | Token de acceso para Conversions API de Meta | `EAA...` |
 
 ---
 
-## 📐 7. Metodología de Desarrollo: Spec-Driven Development (SDD)
+## 📐 10. Metodología de Desarrollo: Spec-Driven Development (SDD)
 
-Este proyecto se construye y evoluciona bajo el estándar estricto de **Spec-Driven Development (SDD)**. Tanto los desarrolladores humanos como los agentes de IA (**Antigravity**, **Cursor**, **Smith**, **Claude**) deben adherirse a este ciclo de 4 fases antes y durante la implementación de cualquier funcionalidad, refactor o integración:
+Cualquier cambio, nueva funcionalidad o refactor dentro de este repositorio debe seguir obligatoriamente el ciclo de 4 fases de **Spec-Driven Development (SDD)**:
 
 ```mermaid
 flowchart LR
-    A["1. The Spec\n(Contratos & Tipos)"] --> B["2. Review Gate\n(Visto Bueno de Kenneth)"]
-    B --> C["3. Implementación\n(Determinista contra Spec)"]
-    C --> D["4. Verificación\n(Tipos, Tests & Runtime)"]
+    Fase1["Fase 1: The Spec\n(Contratos TypeScript & Zod)"] --> Fase2["Fase 2: Review Gate\n(Validación con Kenneth)"]
+    Fase2 --> Fase3["Fase 3: Implementación\n(Determinista contra Spec)"]
+    Fase3 --> Fase4["Fase 4: Verificación\n(Tests Unitarios & Build Estricto)"]
 ```
 
-### Protocolo Obligatorio de Construcción SDD:
-
-1. **Fase 1: Especificación Formal (The Spec)**
-   - **Prohibido codificar a ciegas:** Antes de modificar o crear archivos de código (`.ts`, endpoints o esquemas de base de datos), la IA o el desarrollador debe formalizar la especificación técnica completa:
-     - **Contratos de Datos:** Interfaces TypeScript y esquemas Zod con validación rigurosa de entradas y salidas.
-     - **Contratos de API / MCP:** Rutas, payloads requeridos/opcionales, respuestas JSON estructuradas y códigos de error.
-     - **Invariantes del Sistema:** Políticas anti-ban de Meta (delays mínimos de 180s, sin enlaces en frío), límites de tasa y persistencia de sesiones.
-     - **Edge Cases & Tolerancia a Fallas:** Respuestas ante desconexiones de socket de Baileys, saturación de Apify o cuotas de OpenRouter.
-
-2. **Fase 2: Puerta de Aprobación (Review Gate)**
-   - La especificación técnica se presenta en un formato sintético y claro a Kenneth.
-   - Solo se avanza a la escritura de código tras su validación o ajustes estratégicos.
-
-3. **Fase 3: Implementación Determinista**
-   - El código se implementa como un reflejo 1:1 de la especificación aprobada.
-   - Quedan prohibidas las modificaciones silenciosas de contratos, tipos o interfaces sin actualizar previamente la especificación.
-
-4. **Fase 4: Verificación y Validación de Contrato**
-   - Verificación estricta de compilación y tipos estáticos (`npm run build` o `npx tsc --noEmit`).
-   - Validación en tiempo de ejecución con parsing de Zod.
-   - Comprobación de integración de extremo a extremo contra las invariantes de negocio.
+1. **Fase 1 (The Spec):** Definir interfaces TypeScript, invariantes anti-ban y flujos antes de tocar código.
+2. **Fase 2 (Review Gate):** Presentar la propuesta sintetizada a Kenneth para aprobación rápida.
+3. **Fase 3 (Implementación):** Codificar respetando los contratos al 100%.
+4. **Fase 4 (Verificación):** Comprobar compilación estricta (`npm run build`), pruebas unitarias automatizadas y verificar despliegue en Railway.
 
 ---
 
-## 📄 Licencia
-
-Desarrollado bajo licencia MIT para **The Quant Partners**.
-Arquitectura por Kenneth & Smith (2026).
-
+<div align="center">
+  <b>The Quant Partners · 2026</b><br/>
+  <i>Arquitectura de Sistemas y Operaciones por Kenneth Herrera & Smith.</i>
+</div>
