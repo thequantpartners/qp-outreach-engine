@@ -34,7 +34,60 @@ export class OutreachRepo {
         closingMessage: 'Excelente, podemos revisar los hallazgos críticos del dictamen en una sesión técnica de 15 minutos. Le comparto el enlace directo para agendar la fecha que mejor le acomode:\nhttps://cal.com/kenneth-qp/dictamen-licitaciones'
       },
       aiSystemPrompt: 'Eres Kenneth, socio consultor en Licitaciones QP. Tu objetivo es conversar con directivos de empresas contratistas con un tono consultivo, analítico, seguro y profesional. NUNCA envíes enlaces web en el primer mensaje. Si muestran interés o aceptan ver el dictamen, ofrece una breve reunión de 15 minutos compartiendo el enlace. Si tienen objeciones técnicas o de costo, aclara que el dictamen preliminar no tiene costo y busca blindar sus contratos.',
-      isActive: true
+      isActive: false
+    },
+    {
+      id: 'infraestructura-comercial-peru',
+      name: 'Infraestructura Comercial WhatsApp - Empresas con Tráfico/Ads (Perú)',
+      description: 'Infraestructura comercial en WhatsApp para empresas que ya invierten en anuncios o reciben tráfico constante.',
+      targetPersona: 'Dueños, gerentes generales y directores comerciales de empresas en Lima y provincias con anuncios activos.',
+      apifyQueries: [
+        'clinica estetica miraflores',
+        'centro odontologico san isidro',
+        'inmobiliaria santiago de surco',
+        'estudio de abogados san borja'
+      ],
+      targetLocations: ['Lima, Peru', 'Arequipa, Peru', 'Trujillo, Peru'],
+      outreachTemplate: `Buenas tardes al equipo de {{name}}, un gusto saludarlos.\n\nLe escribe Kenneth de The Quant Partners en Lima.\n\nEstuvimos revisando sus canales comerciales y notamos que tienen un flujo activo de potenciales clientes consultando por sus servicios.\n\nEn empresas de su sector vemos que muchas veces se pierde hasta el 70% de las consultas de personas que escriben por anuncios o redes, simplemente porque tardan minutos en responderles o porque el equipo de ventas pierde horas atendiendo a curiosos sin presupuesto.\n\nImplementamos una infraestructura comercial en WhatsApp que responde en 5 segundos 24/7, filtra a los curiosos y le entrega a sus asesores solo a los clientes calificados listos para agendar o comprar, aprovechando los anuncios y el tráfico que ustedes ya tienen activos.\n\n¿Me permite compartirle un breve resumen por aquí para ver si tendría sentido evaluar esta integración para {{name}}?`,
+      outreachTemplateB: `Buenas tardes al equipo de {{name}}, un gusto saludarlos.\n\nLe escribe Kenneth de The Quant Partners en Lima.\n\nRevisando empresas de su sector en {{location}}, notamos que el cuello de botella común al invertir en anuncios no es la falta de interesados, sino la velocidad de respuesta: un prospecto que escribe y no recibe atención inmediata, busca a la competencia.\n\nImplementamos una infraestructura comercial en WhatsApp que atiende en 5 segundos 24/7, califica el interés real del cliente y deriva a sus ejecutivos únicamente a los prospectos listos para cerrar, rentabilizando al máximo la pauta que ya tienen activa.\n\n¿Me permite compartirle un video o ficha de 2 minutos por aquí para que evalúen si les aportaría valor?`,
+      followUpTemplate1: `Buenas tardes al equipo de {{name}}, Kenneth de The Quant Partners nuevamente. Quería consultarles con total respeto si tuvieron oportunidad de revisar el mensaje anterior sobre la infraestructura en WhatsApp, o si prefieren que lo coordinemos más adelante. ¡Un saludo!`,
+      followUpTemplate2: `Hola al equipo de {{name}}, solo para no insistir y cerrar este contacto con respeto: si en algún momento desean blindar la conversión de sus prospectos en WhatsApp, quedo a su disposición por aquí. Saludos cordiales!`,
+      closingType: 'HUMAN_TAKEOVER',
+      closingPayload: {
+        notificationPhone: '51902105668'
+      },
+      aiSystemPrompt: `Eres el Asistente Ejecutivo de Kenneth en The Quant Partners (Lima, Perú). Hablas con directores, gerentes y propietarios de empresas de servicios en Perú (clínicas, inmobiliarias, estudios, etc.).
+TONO: B2B consultivo, cercano, profesional y conciso (máximo 2 a 3 oraciones por mensaje).
+
+MISIÓN:
+Explicar con claridad nuestra Infraestructura Comercial en WhatsApp (respuesta en 5s, precalificación y derivación de prospectos listos para comprar) y coordinar una breve llamada de 10 minutos por Meet con Kenneth.
+
+CLARIDAD DEL SERVICIO (MUY IMPORTANTE):
+Nosotros NO gestionamos anuncios ni pauta publicitaria. El cliente ya debe tener cubiertos sus anuncios o tráfico. Nuestro valor es la INFRAESTRUCTURA en WhatsApp que atiende y califica ese tráfico para que no se pierdan ventas.
+
+RESPUESTAS CLAVE:
+1. SI PREGUNTAN DE QUÉ SE TRATA / CÓMO FUNCIONA:
+"Implementamos una infraestructura comercial en WhatsApp que responde en 5 segundos 24/7 a las personas que escriben por sus anuncios o redes. Su función es filtrar a los curiosos y pasarle a su equipo de ventas solo a los prospectos calificados con presupuesto.
+¿Actualmente su equipo responde de forma manual a las consultas de WhatsApp o ya tienen algún sistema automatizado?"
+
+2. SI PREGUNTAN SI HACEMOS O MANEJAMOS ANUNCIOS:
+"No gestionamos pauta ni anuncios publicitarios. Nos especializamos 100% en la infraestructura de WhatsApp para que cada sol que ustedes ya invierten en publicidad no se pierda por demoras en la atención. ¿Actualmente tienen flujo constante de consultas por sus campañas?"
+
+3. SI PREGUNTAN PRECIOS:
+"La infraestructura tiene una tarifa única de implementación e integración, más un soporte mensual accesible según el volumen de consultas. Para ver los detalles específicos para {{name}}, ¿le parece si coordinamos una llamada rápida de 10 minutos por Meet con Kenneth esta semana?"
+
+4. SI TIENEN INTERÉS O PIDEN AGENDAR / HABLAR CON ALGUIEN:
+"Excelente, le paso de inmediato con Kenneth (nuestro director de implementación) para que coordinen el día y la hora exacta que mejor le acomode." -> Activar HUMAN_TAKEOVER hacia Kenneth (51902105668).
+
+5. SI DICEN QUE NO LES INTERESA:
+"Entendido y muchas gracias por su tiempo. Que tengan una excelente semana!"
+
+LÍNEAS ROJAS:
+- NUNCA prometer ventas o números irreales ni dar asesoría médica o jurídica directa.
+- NUNCA enviar enlaces web en el primer mensaje.
+- Mantener siempre respuestas cortas de 2 o 3 oraciones.`,
+      isActive: true,
+      type: 'OUTBOUND'
     }
   ];
 

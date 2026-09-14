@@ -731,10 +731,10 @@ export class McpServerManager {
                   const cloudStatus: any = await res.json();
                   if (cloudStatus.isWhatsAppReady) {
                     waStatus = { isReady: true, hasQr: false };
-                    pipeStatus = { isRunning: cloudStatus.autonomousPipelineActive, sentToday: 0, day: '', lastScrapeTime: null };
+                    pipeStatus = { isRunning: cloudStatus.autonomousPipelineActive, sentToday: 0, sentMorning: 0, limaTime: '', currentSlot: 'UNKNOWN', day: '', lastScrapeTime: null };
                   } else {
                     waStatus = { isReady: false, hasQr: !!cloudStatus.qrAvailable };
-                    pipeStatus = { isRunning: cloudStatus.autonomousPipelineActive, sentToday: 0, day: '', lastScrapeTime: null };
+                    pipeStatus = { isRunning: cloudStatus.autonomousPipelineActive, sentToday: 0, sentMorning: 0, limaTime: '', currentSlot: 'UNKNOWN', day: '', lastScrapeTime: null };
                   }
                 }
               } catch {}

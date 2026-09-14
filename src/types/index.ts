@@ -36,6 +36,7 @@ export interface ServiceDefinition {
     paymentDetails?: string;
     assetUrl?: string;
     closingMessage?: string;
+    notificationPhone?: string;
   };
   aiSystemPrompt: string;
   isActive: boolean;
