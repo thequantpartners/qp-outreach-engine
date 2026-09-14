@@ -35,7 +35,58 @@ export class HermesC2 {
     const cleanText = incomingText.trim();
     const lower = cleanText.toLowerCase();
 
-    console.log(`👑 [HermesC2] Mensaje de control recibido de Kenneth (+${senderPhone}): "${cleanText}"`);
+    // 0. Comando: /comandos o /help o /ayuda o /menu
+    if (
+      lower === '/comandos' || 
+      lower === '/help' || 
+      lower === '/ayuda' || 
+      lower === '/menu' || 
+      lower === 'comandos' || 
+      lower === 'help' || 
+      lower === 'ayuda' || 
+      lower === 'menu'
+    ) {
+      const isClient = process.env.MODE === 'client';
+      let menuMsg = '';
+
+      if (isClient) {
+        menuMsg = 
+          `📱 *PANEL DE COMANDOS · ASESOR COMERCIAL*\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `📊 *REPORTES Y VENTAS:*\n` +
+          `• \`/pipeline\` : Ver embudo de prospectos e ingresos.\n` +
+          `• \`/leads\` : Lista prospectos calientes que esperan respuesta.\n` +
+          `• \`/lead <tel>\` : Ver expediente comercial de un prospecto.\n` +
+          `• \`/won <tel> <monto> [USD|PEN]\` : Registrar venta ganada.\n` +
+          `• \`/status\` : Salud del sistema y estado de WhatsApp.\n\n` +
+          `🤖 *COPILOT IA:*\n` +
+          `Puedes hacerme cualquier pregunta en texto libre (ej. "¿cuántas citas cerramos esta semana?").`;
+      } else {
+        menuMsg = 
+          `👑 *HERMES C2 · CATÁLOGO COMPLETO DE COMANDOS*\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `📊 *SUPERVISIÓN Y CONTROL:*\n` +
+          `• \`/status\` : Estado del gateway, campañas y métricas.\n` +
+          `• \`/saldo\` : Saldo y consumo en vivo de Apify y OpenRouter.\n` +
+          `• \`/pipeline\` : Embudo comercial Ghost CRM e ingresos.\n` +
+          `• \`/leads\` : Prospectos calientes pendientes de atención.\n` +
+          `• \`/lead <tel>\` : Ficha técnica e historial de un prospecto.\n` +
+          `• \`/pausa\` : Detener envíos de prospección en frío.\n` +
+          `• \`/reanudar\` : Reactivar envíos de prospección.\n\n` +
+          `✉️ *PROSPECCIÓN Y MENSAJES:*\n` +
+          `• \`/mensaje\` : Previsualizar la plantilla activa y chequeo anti-ban.\n` +
+          `• \`/setmensaje <texto>\` : Editar plantilla de prospección en caliente.\n\n` +
+          `💰 *CONVERSIONES Y CAPI:*\n` +
+          `• \`/won <tel> <monto> [USD|PEN]\` : Registrar venta ganada y sincronizar compra con Meta CAPI.\n\n` +
+          `🏢 *CLIENTES Y PROVISIÓN:*\n` +
+          `• \`/provision "Empresa" <nicho> <tel_admin> "Vendedor:tel"\` : Generar nodo cliente en VPS en 60s.\n` +
+          `• \`/sop\` : Manual paso a paso de onboarding de clientes.\n\n` +
+          `🤖 *COPILOT IA:*\n` +
+          `Escribe cualquier pregunta en lenguaje natural (ej. "¿cuánto hemos facturado?" o "¿cuántos leads respondieron?").`;
+      }
+
+      return { handled: true, replyMessage: menuMsg, actionExecuted: 'HELP_MENU' };
+    }
 
     // 1. Comando: /status o "¿cómo vamos?"
     if (lower.startsWith('/status') || lower === 'status' || lower.includes('cómo vamos') || lower.includes('como vamos') || lower.includes('estado')) {
