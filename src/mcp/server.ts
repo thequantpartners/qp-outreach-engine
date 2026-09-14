@@ -26,7 +26,7 @@ const TOOLS: Tool[] = [
   },
   {
     name: 'check_credits',
-    description: 'Consulta el saldo, consumo y límites en tiempo real de Apify (Scraping Google Maps/B2B) y OpenRouter (IA de Calificación).',
+    description: 'Consulta el saldo, consumo y estado en tiempo real de Outscraper (Scraping Google Maps B2B en USA y Perú) y OpenRouter (IA de Calificación).',
     inputSchema: {
       type: 'object',
       properties: {}

@@ -8,6 +8,8 @@ import { GhostCRM } from '../crm/ghost_crm.js';
 import { BaileysEngine } from '../whatsapp/baileys_engine.js';
 import { SalesRep } from '../types/index.js';
 import { MetaCAPIClient } from '../crm/meta_capi.js';
+import { OutscraperScraper } from '../scraper/outscraper_scraper.js';
+import { NLPRouter } from '../whatsapp/nlp_router.js';
 
 export type HermesUserRole = 'master' | 'client_manager' | 'client_rep' | 'unauthorized';
 
@@ -97,12 +99,23 @@ export class HermesC2 {
    */
   public static async handleAdminMessage(incomingText: string, senderPhone: string): Promise<HermesExecutionResult> {
     const cleanText = incomingText.trim();
-    const lower = cleanText.toLowerCase();
+    let cmdText = cleanText;
+    let lower = cleanText.toLowerCase();
 
     // 0. Autenticación y Resolución de Rol con Aislamiento Estricto
     const user = await HermesC2.getUserIdentity(senderPhone);
     if (user.role === 'unauthorized') {
       return { handled: false };
+    }
+
+    // 0.05. Enrutador de Lenguaje Natural (NLP): Si el mensaje no inicia con '/', resolver intención de comando
+    if (!cleanText.startsWith('/')) {
+      const intent = NLPRouter.resolveIntent(cleanText);
+      if (intent) {
+        cmdText = `/${intent.command}${intent.args.length > 0 ? ' ' + intent.args.join(' ') : ''}`;
+        lower = cmdText.toLowerCase();
+        console.log(`🧠 [HermesC2 NLP] Intención resuelta: "${cleanText}" -> Comando simulado: "${cmdText}"`);
+      }
     }
 
     // 0.1. Menú de Comandos: /comandos o /help o /ayuda o /menu
@@ -168,12 +181,14 @@ export class HermesC2 {
           `━━━━━━━━━━━━━━━━━━━━\n` +
           `📊 *SUPERVISIÓN Y CONTROL:*\n` +
           `• \`/status\` : Estado del gateway, campañas y métricas.\n` +
-          `• \`/saldo\` : Saldo y consumo en vivo de Apify y OpenRouter.\n` +
+          `• \`/saldo\` : Saldo y consumo en vivo de Outscraper y OpenRouter.\n` +
           `• \`/pipeline\` : Embudo comercial Ghost CRM e ingresos.\n` +
           `• \`/leads\` : Prospectos calientes pendientes de atención.\n` +
           `• \`/lead <tel>\` : Ficha técnica e historial de un prospecto.\n` +
           `• \`/pausa\` : Detener envíos de prospección en frío.\n` +
           `• \`/reanudar\` : Reactivar envíos de prospección.\n\n` +
+          `🔍 *SCRAPING Y ADQUISICIÓN:*\n` +
+          `• \`/scrape <query> [max]\` : Extraer prospectos de Google Maps con Outscraper (USA y Perú).\n\n` +
           `✉️ *PROSPECCIÓN Y MENSAJES:*\n` +
           `• \`/mensaje\` : Previsualizar la plantilla activa y chequeo anti-ban.\n` +
           `• \`/setmensaje <texto>\` : Editar plantilla de prospección en caliente.\n\n` +
@@ -250,10 +265,10 @@ export class HermesC2 {
       // Master Kenneth
       const credits = await HermesC2.getCreditsInfo();
       let creditsSection = '';
-      if (credits.apify) {
-        const a = credits.apify;
-        const icon = a.remaining < 1 ? '⚠️' : '🕷️';
-        creditsSection += `\n💳 *Consumo de Infraestructura:*\n• ${icon} Apify: *$${a.remaining.toFixed(2)} USD* restante (${a.percent}% usado de $${a.max})\n`;
+      if (credits.outscraper) {
+        const o = credits.outscraper;
+        const icon = o.balance < 1 ? '⚠️' : '🗺️';
+        creditsSection += `\n💳 *Consumo de Infraestructura:*\n• ${icon} Outscraper (Google Maps): *$${o.balance.toFixed(2)} USD* activo\n`;
       }
       if (credits.openrouter) {
         creditsSection += `• 🤖 OpenRouter: *$${credits.openrouter.remaining.toFixed(2)} USD* restante\n`;
@@ -282,16 +297,16 @@ export class HermesC2 {
       return { handled: true, replyMessage: msg, actionExecuted: 'STATUS_CHECK' };
     }
 
-    // 1.5. Comando: /saldo o /balance o /apify (Consulta de créditos - Solo Master Kenneth)
+    // 1.5. Comando: /saldo o /balance o /outscraper (Consulta de créditos - Solo Master Kenneth)
     if (
       lower.startsWith('/saldo') || 
       lower.startsWith('/balance') || 
-      lower.startsWith('/apify') || 
+      lower.startsWith('/outscraper') || 
       lower.startsWith('/credito') || 
       lower.startsWith('/crédito') || 
       lower === 'saldo' || 
       lower === 'balance' || 
-      lower.includes('saldo apify') || 
+      lower.includes('saldo outscraper') || 
       lower.includes('cuanto saldo') || 
       lower.includes('cuánto saldo')
     ) {
@@ -302,35 +317,86 @@ export class HermesC2 {
       const credits = await HermesC2.getCreditsInfo();
       let msg = `💳 *HERMES C2 · BALANCE DE CRÉDITOS Y CONSUMO*\n━━━━━━━━━━━━━━━━━━━━\n`;
 
-      if (credits.apify) {
-        const a = credits.apify;
-        const alertIcon = a.remaining < 1 ? '🚨' : '🕷️';
+      if (credits.outscraper) {
+        const o = credits.outscraper;
+        const alertIcon = o.balance < 1 ? '🚨' : '🗺️';
         msg += 
-          `${alertIcon} *Apify (Scraping Google Maps / B2B):*\n` +
-          `• Límite Mensual: *$${a.max.toFixed(2)} USD*\n` +
-          `• Consumido: *$${a.used.toFixed(2)} USD* (${a.percent}%)\n` +
-          `• Saldo Restante: *${a.remaining < 1 ? '⚠️ ' : ''}$${a.remaining.toFixed(2)} USD*\n` +
-          `• Próxima Renovación: *${a.reset}*\n\n`;
+          `${alertIcon} *Outscraper (Google Maps Scraping USA & Perú):*\n` +
+          `• Saldo Disponible: *${o.balance < 1 ? '⚠️ ' : ''}$${o.balance.toFixed(2)} USD*\n` +
+          `• Estado de Cuenta: *${o.status.toUpperCase()}*\n` +
+          `• Motor: *Google Maps Search API v2 (Síncrono)*\n\n`;
       } else {
-        msg += `🕷️ *Apify:* Token no configurado o no disponible.\n\n`;
+        msg += `🗺️ *Outscraper:* Token no configurado o no disponible.\n\n`;
       }
 
       if (credits.openrouter) {
-        const o = credits.openrouter;
+        const op = credits.openrouter;
         msg += 
           `🤖 *OpenRouter (IA de Calificación / Setter):*\n` +
-          `• Créditos Totales: *$${o.total.toFixed(2)} USD*\n` +
-          `• Consumido: *$${o.used.toFixed(2)} USD* (${o.percent}%)\n` +
-          `• Saldo Restante: *$${o.remaining.toFixed(2)} USD*\n\n`;
+          `• Créditos Totales: *$${op.total.toFixed(2)} USD*\n` +
+          `• Consumido: *$${op.used.toFixed(2)} USD* (${op.percent}%)\n` +
+          `• Saldo Restante: *$${op.remaining.toFixed(2)} USD*\n\n`;
       }
 
-      if (credits.apify && credits.apify.remaining < 1) {
-        msg += `⚠️ *ALERTA:* Te queda menos de $1.00 USD en Apify. Si vas a lanzar un lote grande de scraping (+50 prospectos), se recomienda recargar fondos para evitar pausas.`;
+      if (credits.outscraper && credits.outscraper.balance < 1) {
+        msg += `⚠️ *ALERTA:* Te queda menos de $1.00 USD en Outscraper. Si vas a procesar lotes de prospección (+50 prospectos), se recomienda recargar fondos para mantener el flujo constante.`;
       } else {
-        msg += `💡 _Escribe /status para ver métricas del embudo o /sop para el manual._`;
+        msg += `💡 _Escribe /status para ver métricas del embudo o /comandos para ver más opciones._`;
       }
 
       return { handled: true, replyMessage: msg, actionExecuted: 'CREDITS_CHECK' };
+    }
+
+    // 1.55. Comando: /scrape o /raspar <query> [max] (Extracción ad-hoc de comercios con Outscraper - Solo Master Kenneth)
+    const scrapeMatch = cmdText.match(/^\/(?:scrape|raspar|extraer)\s+(.+)$/i);
+    if (scrapeMatch) {
+      if (user.role !== 'master') {
+        return { handled: true, replyMessage: '🔒 El scraping de prospección es exclusivo del Master Hub central.' };
+      }
+
+      const activeService = await OutreachRepo.getActiveService();
+      if (!activeService) {
+        return { handled: true, replyMessage: '⚠️ No hay ninguna campaña activa para vincular los prospectos raspados. Revisa tus campañas con /status.' };
+      }
+
+      let rawQuery = scrapeMatch[1].trim();
+      let limitNum = 20;
+
+      // Detectar si el último token es una cantidad numérica (ej. "dentistas surco 30")
+      const tokens = rawQuery.split(' ');
+      const lastToken = tokens[tokens.length - 1];
+      if (/^\d+$/.test(lastToken)) {
+        limitNum = Math.min(50, Math.max(5, parseInt(lastToken, 10)));
+        rawQuery = tokens.slice(0, -1).join(' ');
+      }
+
+      const isUSA = !!rawQuery.toLowerCase().match(/\b(usa|united states|eeuu|fl|florida|miami|doral|orlando|tampa|kissimmee|tx|texas|houston|dallas|austin|ny|new york|ca|california)\b/);
+      const regionCode = isUSA ? 'US' : 'PE';
+
+      try {
+        console.log(`📡 [HermesC2] Iniciando scraping ad-hoc en Outscraper: "${rawQuery}" (Límite: ${limitNum}, Región: ${regionCode})...`);
+        const scraped = await OutscraperScraper.scrapeGoogleMaps({
+          query: rawQuery,
+          limit: limitNum,
+          region: regionCode
+        });
+
+        const { inserted, skipped } = await OutreachRepo.saveLeadsFromScraper(activeService.id, scraped);
+        const reply = 
+          `✅ *OUTSCRAPER SCRAPING FINALIZADO*\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `🔍 Búsqueda: *"${rawQuery}"*\n` +
+          `📥 Encontrados con teléfono válido: *${scraped.length}*\n` +
+          `✨ Nuevos insertados al CRM: *${inserted}*\n` +
+          `♻️ Omitidos o duplicados: *${skipped}*\n` +
+          `📢 Campaña receptora: *${activeService.name}*\n` +
+          `🌎 Región: *${regionCode === 'US' ? 'USA 🇺🇸' : 'Perú 🇵🇪'}*\n\n` +
+          `🚀 Los nuevos prospectos entrarán ordenadamente en el pipeline de prospección autónoma.`;
+
+        return { handled: true, replyMessage: reply, actionExecuted: 'OUTSCRAPER_SCRAPE' };
+      } catch (err: any) {
+        return { handled: true, replyMessage: `❌ *Error al raspar en Outscraper:* ${err.message}` };
+      }
     }
 
     // 1.6. Comando: /mensaje o /preview o /plantilla (Previsualizar mensaje de prospección - Solo Master Kenneth)
@@ -1182,13 +1248,13 @@ DATOS ACTUALES DEL EMBUDO DE VENTAS (GHOST CRM):
 INSTRUCCIONES:
 - Responde de forma clara y directa (máximo 2 párrafos breves).
 - Si te piden acciones, sugiéreles los comandos disponibles: /pipeline, /equipo, /vendedor nuevo, /vendedor baja, /setter, /setpixel, /alertas, /leads, /lead <tel>, /won <tel> <monto>, /status, /manual.
-- NUNCA menciones scraping, Apify, proxies ni infraestructura técnica interna.`;
+- NUNCA menciones scraping, Outscraper, proxies ni costos de infraestructura técnica interna.`;
     } else {
       // Master Kenneth
       const credits = await HermesC2.getCreditsInfo();
       let creditsPrompt = '';
-      if (credits.apify) {
-        creditsPrompt += `\n- Apify (Scraping): Límite $${credits.apify.max} USD, Consumido: $${credits.apify.used.toFixed(2)} USD, Saldo restante: $${credits.apify.remaining.toFixed(2)} USD (${credits.apify.percent}% consumido). Reinicia: ${credits.apify.reset}.`;
+      if (credits.outscraper) {
+        creditsPrompt += `\n- Outscraper (Scraping Google Maps USA & Perú): Saldo disponible $${credits.outscraper.balance.toFixed(2)} USD (Estado: ${credits.outscraper.status}).`;
       }
       if (credits.openrouter) {
         creditsPrompt += `\n- OpenRouter (IA): Créditos totales $${credits.openrouter.total.toFixed(2)} USD, Consumido: $${credits.openrouter.used.toFixed(2)} USD, Saldo restante: $${credits.openrouter.remaining.toFixed(2)} USD.`;
@@ -1213,8 +1279,8 @@ SALDOS Y CONSUMO DE PLATAFORMAS EN TIEMPO REAL:${creditsPrompt}
 
 INSTRUCCIONES:
 - Responde a su pregunta de forma clara y directa (máximo 2 párrafos breves).
-- Si te pregunta por saldos de Apify o OpenRouter, dale los números exactos con tono ejecutivo y alerta si Apify está bajo ($< 1 USD).
-- Si te pide realizar una acción que tiene un comando (/status, /saldo, /pipeline, /mensaje, /pausa, /reanudar, /won <tel> <monto>, /leads, /sop, /provision), indícale el resultado o recomiéndale el comando exacto.`;
+- Si te pregunta por saldos de Outscraper o OpenRouter, dale los números exactos con tono ejecutivo y alerta si Outscraper está bajo ($< 1 USD).
+- Si te pide realizar una acción que tiene un comando (/status, /saldo, /pipeline, /mensaje, /pausa, /reanudar, /scrape, /won <tel> <monto>, /leads, /sop, /provision), indícale el resultado o recomiéndale el comando exacto.`;
     }
 
     try {
@@ -1333,40 +1399,20 @@ INSTRUCCIONES:
   }
 
   /**
-   * Consulta el saldo en tiempo real de Apify y OpenRouter
+   * Consulta el saldo en tiempo real de Outscraper y OpenRouter
    */
   public static async getCreditsInfo(): Promise<{
-    apify?: { max: number; used: number; remaining: number; reset: string; percent: string };
+    outscraper?: { balance: number; status: string; currency: string };
     openrouter?: { total: number; used: number; remaining: number; percent: string };
   }> {
     const settings = await OutreachRepo.getSettings();
-    const apifyToken = settings.apifyToken || process.env.APIFY_TOKEN || '';
     const openRouterKey = settings.aiApiKey || process.env.OPENROUTER_API_KEY || '';
 
-    let apify: { max: number; used: number; remaining: number; reset: string; percent: string } | undefined = undefined;
-    if (apifyToken) {
-      try {
-        const res = await fetch('https://api.apify.com/v2/users/me/limits', {
-          headers: { Authorization: `Bearer ${apifyToken}` }
-        });
-        if (res.ok) {
-          const d: any = await res.json();
-          const max = d?.data?.limits?.maxMonthlyUsageUsd || 5;
-          const used = d?.data?.current?.monthlyUsageUsd || 0;
-          const remaining = Math.max(0, max - used);
-          const endAt = d?.data?.monthlyUsageCycle?.endAt;
-          const reset = endAt ? new Date(endAt).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }) : 'Próximo mes';
-          apify = {
-            max,
-            used,
-            remaining,
-            reset,
-            percent: ((used / max) * 100).toFixed(1)
-          };
-        }
-      } catch (e: any) {
-        console.warn('[HermesC2] Error consultando saldo Apify:', e.message);
-      }
+    let outscraper: { balance: number; status: string; currency: string } | undefined = undefined;
+    try {
+      outscraper = await OutscraperScraper.getCredits();
+    } catch (e: any) {
+      console.warn('[HermesC2] Error consultando saldo Outscraper:', e.message);
     }
 
     let openrouter: { total: number; used: number; remaining: number; percent: string } | undefined = undefined;
@@ -1392,6 +1438,6 @@ INSTRUCCIONES:
       }
     }
 
-    return { apify, openrouter };
+    return { outscraper, openrouter };
   }
 }

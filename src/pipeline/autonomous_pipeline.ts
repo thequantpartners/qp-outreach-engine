@@ -1,6 +1,7 @@
 import { BaileysEngine } from '../whatsapp/baileys_engine.js';
 import { MetaCloudEngine } from '../whatsapp/meta_cloud_engine.js';
-import { ApifyScraper } from '../scraper/apify_scraper.js';
+import { OutscraperScraper } from '../scraper/outscraper_scraper.js';
+import { SpintaxEngine } from '../utils/spintax.js';
 import { OutreachRepo } from '../db/repo.js';
 
 export class AutonomousPipeline {
@@ -13,8 +14,22 @@ export class AutonomousPipeline {
   private static lastScrapeTime: number = 0;
   private static currentQueryIndex: number = 0;
 
+  // Circuit Breaker Anti-Ban (Reglas Meta 2026: mitigación de unanswered message counter)
+  private static consecutiveUnansweredOutreachCount: number = 0;
+  private static circuitBreakerCooldownUntil: number = 0;
+
   private static dailyReportSentDay: string = '';
   private static lastBillingAlertDate: string = '';
+
+  /**
+   * Resetea el contador de no-respuestas cuando un prospecto responde (mitigación Meta 2026)
+   */
+  public static recordLeadReply(leadPhone?: string): void {
+    if (this.consecutiveUnansweredOutreachCount > 0) {
+      console.log(`💬 [AutonomousPipeline] Prospecto ${leadPhone ? `(${leadPhone}) ` : ''}respondió. Contador Circuit Breaker reseteado a 0 (era: ${this.consecutiveUnansweredOutreachCount}).`);
+      this.consecutiveUnansweredOutreachCount = 0;
+    }
+  }
 
   /**
    * Obtiene la hora y minuto actuales en zona horaria oficial Lima (America/Lima / UTC-5)
@@ -149,6 +164,14 @@ export class AutonomousPipeline {
       return;
     }
 
+    // 1.5. Comprobar Circuit Breaker Anti-Ban (Reglas Meta 2026: mitigación de unanswered counter)
+    if (Date.now() < this.circuitBreakerCooldownUntil) {
+      const remainingMin = Math.ceil((this.circuitBreakerCooldownUntil - Date.now()) / (60 * 1000));
+      console.log(`🛡️ [AutonomousPipeline - Circuit Breaker] En pausa preventiva de enfriamiento (${remainingMin} min restantes). IA Inbound permanece activa 24/7.`);
+      this.scheduleNextTick(5 * 60 * 1000);
+      return;
+    }
+
     const provider = settings.whatsappProvider || 'direct_qr';
     if (provider === 'meta_cloud_api') {
       const isConfigured = await MetaCloudEngine.isConfigured();
@@ -270,7 +293,7 @@ export class AutonomousPipeline {
         if (!s.apifyQueries || s.apifyQueries.length === 0) continue;
         const uncontactedCount = await OutreachRepo.countUncontactedLeads(s.id);
         if (uncontactedCount < 15) {
-          console.log(`🔄 [AutonomousPipeline - ${activeRegion}] Buffer bajo para "${s.name}" (${uncontactedCount} prospectos). Auto-alimentando cola desde Apify...`);
+          console.log(`🔄 [AutonomousPipeline - ${activeRegion}] Buffer bajo para "${s.name}" (${uncontactedCount} prospectos). Auto-alimentando cola desde Outscraper...`);
           await this.triggerScrape(s);
           break; // Un scrape por ciclo
         }
@@ -295,7 +318,7 @@ export class AutonomousPipeline {
     }
 
     if (leadsToContact.length === 0) {
-      console.log(`⚠️ [AutonomousPipeline - ${activeRegion}] Cola vacía para el bloque ${slotName}. Disparando recarga automática inmediata desde Apify...`);
+      console.log(`⚠️ [AutonomousPipeline - ${activeRegion}] Cola vacía para el bloque ${slotName}. Disparando recarga automática inmediata desde Outscraper...`);
       for (const s of regionalServices) {
         if (s.apifyQueries && s.apifyQueries.length > 0) {
           await this.triggerScrape(s);
@@ -506,8 +529,8 @@ export class AutonomousPipeline {
       chosenTemplate = variant === 'A' ? tmplA : tmplB;
     }
 
-    // Formatear mensaje con variables dinámicas agnósticas
-    let message = chosenTemplate;
+    // Aplicar motor de Spintax dinámico y humanización (Reglas Anti-Ban Meta 2026)
+    let message = SpintaxEngine.humanize(chosenTemplate, lead);
     const city = this.extractCity(lead.address);
     const sector = lead.category ? lead.category.trim() : 'su sector';
 
@@ -546,6 +569,19 @@ export class AutonomousPipeline {
       if (activeRegion === 'USA') {
         this.sentMorningCount++;
       }
+      this.consecutiveUnansweredOutreachCount++;
+      console.log(`🛡️ [AutonomousPipeline] Contador de mensajes consecutivos sin respuesta: ${this.consecutiveUnansweredOutreachCount}/10`);
+
+      if (this.consecutiveUnansweredOutreachCount >= 10) {
+        // Disparar Circuit Breaker preventivo de 45 minutos (Meta 2026 Anti-Ban)
+        const cooldownMinutes = 45;
+        this.circuitBreakerCooldownUntil = Date.now() + cooldownMinutes * 60 * 1000;
+        console.warn(`🚨 [AutonomousPipeline - Circuit Breaker] 10 mensajes enviados consecutivamente sin respuesta. Activando pausa preventiva de enfriamiento de ${cooldownMinutes} minutos.`);
+
+        const whatsappAdmin = BaileysEngine.getInstance();
+        whatsappAdmin.notifyAdmin(`🛡️ *CIRCUIT BREAKER PREVENTIVO META ACTIVADO*\n\nSe han enviado 10 mensajes consecutivos en frío sin respuesta aún.\n\nPara blindar tu número de WhatsApp ante el algoritmo de Meta (anti-spam 2026), el motor ha entrado en una pausa preventiva de enfriamiento de *45 minutos*.\n\n• *La IA Inbound y atención a clientes siguen activas 24/7*.\n• El outbound se reanudará automáticamente (o antes si un prospecto responde).`).catch(() => {});
+      }
+
       await OutreachRepo.updateLeadStatus(lead.phone, 'OUTREACH_SENT');
       await OutreachRepo.updateLeadCustomFields(lead.phone, { abVariant: variant });
       await OutreachRepo.addChatMessage(lead.phone, 'assistant', message);
@@ -568,36 +604,35 @@ export class AutonomousPipeline {
   }
 
   /**
-   * Ejecuta scraping en Apify rotando queries y ubicaciones
+   * Ejecuta scraping en Outscraper rotando queries y ubicaciones
    */
   public static async triggerScrape(service: any): Promise<{ inserted: number; skipped: number }> {
     this.lastScrapeTime = Date.now();
 
-    const queries = service.apifyQueries.length > 0 ? service.apifyQueries : ['proveedores b2b lima'];
-    const locations = service.targetLocations.length > 0 ? service.targetLocations : ['Lima, Peru'];
+    const queries = service.apifyQueries && service.apifyQueries.length > 0 ? service.apifyQueries : ['proveedores b2b lima'];
+    const locations = service.targetLocations && service.targetLocations.length > 0 ? service.targetLocations : ['Lima, Peru'];
 
     const query = queries[this.currentQueryIndex % queries.length];
     const location = locations[this.currentQueryIndex % locations.length];
     this.currentQueryIndex++;
 
     const isUSA = !!(location + ' ' + query).toLowerCase().match(/\b(usa|united states|eeuu|fl|florida|miami|doral|orlando|tampa|kissimmee|tx|texas|houston|dallas|austin|ny|new york|ca|california)\b/);
-    const countryCode = isUSA ? 'us' : 'pe';
+    const countryCode = isUSA ? 'US' : 'PE';
 
     try {
-      console.log(`[AutonomousPipeline] Ejecutando Apify para "${query}" en "${location}" (País: ${countryCode.toUpperCase()})...`);
-      const scraped = await ApifyScraper.scrapeGoogleMaps({
+      console.log(`📡 [AutonomousPipeline] Ejecutando Outscraper para "${query}" en "${location}" (Región: ${countryCode})...`);
+      const scraped = await OutscraperScraper.scrapeGoogleMaps({
         query,
         location,
-        maxResults: 20,
-        scrapeContacts: true,
-        countryCode
+        limit: 25,
+        region: countryCode
       });
 
       const { inserted, skipped } = await OutreachRepo.saveLeadsFromScraper(service.id, scraped);
-      console.log(`✅ [AutonomousPipeline] Scraping finalizado para "${service.name}": ${inserted} prospectos nuevos insertados, ${skipped} omitidos/duplicados.`);
+      console.log(`✅ [AutonomousPipeline] Scraping finalizado con Outscraper para "${service.name}": ${inserted} prospectos nuevos insertados, ${skipped} omitidos/duplicados.`);
       return { inserted, skipped };
     } catch (err: any) {
-      console.error('❌ [AutonomousPipeline] Fallo al raspar Apify:', err.message);
+      console.error('❌ [AutonomousPipeline] Fallo al raspar Outscraper:', err.message);
       return { inserted: 0, skipped: 0 };
     }
   }

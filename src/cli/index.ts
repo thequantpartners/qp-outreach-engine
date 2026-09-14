@@ -1,5 +1,6 @@
 import { OutreachRepo } from '../db/repo.js';
 import { BaileysEngine } from '../whatsapp/baileys_engine.js';
+import { OutscraperScraper } from '../scraper/outscraper_scraper.js';
 import { ApifyScraper } from '../scraper/apify_scraper.js';
 import { AutonomousPipeline } from '../pipeline/autonomous_pipeline.js';
 import { McpServerManager } from '../mcp/server.js';
@@ -141,12 +142,14 @@ export async function runCli(): Promise<void> {
 
       await OutreachRepo.saveService(service);
 
-      console.log('⏳ Ejecutando scraping en Apify Google Places...');
-      const scraped = await ApifyScraper.scrapeGoogleMaps({
+      console.log('⏳ Ejecutando scraping en Outscraper Google Maps (API v2)...');
+      const isUSA = !!(location + ' ' + query).toLowerCase().match(/\b(usa|united states|eeuu|fl|florida|miami|doral|orlando|tampa|kissimmee|tx|texas|houston|dallas|austin|ny|new york|ca|california)\b/);
+      const regionCode = isUSA ? 'US' : 'PE';
+      const scraped = await OutscraperScraper.scrapeGoogleMaps({
         query,
         location,
-        maxResults: maxLeads,
-        scrapeContacts: true
+        limit: maxLeads,
+        region: regionCode
       });
 
       const { inserted, skipped } = await OutreachRepo.saveLeadsFromScraper(id, scraped);
@@ -537,14 +540,25 @@ export async function runCli(): Promise<void> {
       console.log(`Query: "${query}" | País: "${countryCode}" | Max: ${maxResults} | Campaña: ${serviceId}`);
 
       try {
-        const leads = await ApifyScraper.scrapeMultiSource({
-          source,
-          query,
-          location,
-          countryCode,
-          maxResults,
-          serviceId
-        });
+        let leads: any[] = [];
+        if (source === 'google_maps') {
+          console.log('📡 Usando motor Outscraper API v2 (Google Maps Síncrono)...');
+          leads = await OutscraperScraper.scrapeGoogleMaps({
+            query,
+            location,
+            limit: maxResults,
+            region: countryCode.toUpperCase()
+          });
+        } else {
+          leads = await ApifyScraper.scrapeMultiSource({
+            source,
+            query,
+            location,
+            countryCode,
+            maxResults,
+            serviceId
+          });
+        }
 
         const { inserted, skipped } = await OutreachRepo.saveLeadsFromScraper(serviceId, leads);
         console.log('\n======================================================');

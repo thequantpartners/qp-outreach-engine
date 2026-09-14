@@ -241,6 +241,10 @@ app.post('/api/webhook/whatsapp', async (req: Request, res: Response) => {
 
         // Registrar el mensaje en historial
         await OutreachRepo.addChatMessage(rawPhone, 'user', text);
+        try {
+          const { AutonomousPipeline } = await import('../pipeline/autonomous_pipeline.js');
+          AutonomousPipeline.recordLeadReply(rawPhone);
+        } catch {}
 
         // Cumplimiento estricto de política Meta: Opt-Out / Baja automática
         const cleanUpper = text.trim().toUpperCase();

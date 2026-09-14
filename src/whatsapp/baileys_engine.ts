@@ -449,6 +449,10 @@ export class BaileysEngine {
         if (isOptOut) {
           console.log(`🛑 [BaileysEngine] Lead ${senderPhone} solicitó Opt-Out / Rechazo (${cleanUpper}). Bloqueando envíos automáticos.`);
           await OutreachRepo.addChatMessage(senderPhone, 'user', incomingText);
+          try {
+            const { AutonomousPipeline } = await import('../pipeline/autonomous_pipeline.js');
+            AutonomousPipeline.recordLeadReply(senderPhone);
+          } catch {}
           await OutreachRepo.updateLeadStatus(senderPhone, 'CLOSED_LOST', {
             humanTakeoverAt: new Date().toISOString(),
             handoffNotes: `Rechazo respetuoso detectado: "${incomingText}"`
@@ -477,6 +481,12 @@ export class BaileysEngine {
         await OutreachRepo.updateLeadStatus(senderPhone, 'REPLIED', {
           lastCustomerMessageAt: new Date().toISOString()
         });
+
+        // Notificar al AutonomousPipeline que hubo respuesta (resetea contador del Circuit Breaker anti-ban)
+        try {
+          const { AutonomousPipeline } = await import('../pipeline/autonomous_pipeline.js');
+          AutonomousPipeline.recordLeadReply(senderPhone);
+        } catch {}
 
         // 4.1. Evaluar si el AI Setter debe calificar y responder en 5s
         const isHumanLocked = lead.status === 'HUMAN_TAKEOVER' || lead.status === 'CLOSED_WON' || lead.status === 'CLOSED_LOST';
