@@ -39,9 +39,10 @@ RUN npm ci --omit=dev
 # Copiar compilado desde builder
 COPY --from=builder /app/dist ./dist
 
-# Copiar assets estáticos del Dashboard Web
+# Copiar assets estáticos del Dashboard Web y documentación institucional
 COPY public/ ./public/
 COPY bin/ ./bin/
+COPY README.md ./
 
 # Crear directorios de almacenamiento persistente
 RUN mkdir -p storage/assets storage/whatsapp_auth storage/master storage/clients
