@@ -193,6 +193,20 @@ export class NLPRouter {
       return { command: 'horarios', args: [] };
     }
 
+    // 8.9. Documentación y README maestro
+    if (
+      clean === 'readme' ||
+      clean === 'doc' ||
+      clean === 'docs' ||
+      clean === 'documentacion' ||
+      clean === 'manual institucional' ||
+      clean.includes('ver readme') ||
+      clean.includes('abrir readme') ||
+      clean.includes('leer readme')
+    ) {
+      return { command: 'readme', args: [] };
+    }
+
     // 9. Scraping con Outscraper: "raspar X", "busca X en maps", "scrape X"
     const scrapeMatch = clean.match(/^(?:raspar|raspa|scrapear|scrapea|scrape|buscar|busca|extraer|extrae)\s+(.+)$/i);
     if (scrapeMatch && scrapeMatch[1]) {

@@ -2,6 +2,8 @@
 // THE QUANT PARTNERS · HERMES C2 (WhatsApp Command & Control Copilot)
 // =================================================================
 
+import fs from 'fs';
+import path from 'path';
 import crypto from 'crypto';
 import { OutreachRepo } from '../db/repo.js';
 import { GhostCRM } from '../crm/ghost_crm.js';
@@ -32,6 +34,36 @@ export class HermesC2 {
   private static morningReportSentToday = false;
   private static eveningReportSentToday = false;
   private static schedulerInterval: NodeJS.Timeout | null = null;
+  private static cachedReadme: string | null = null;
+  private static cachedReadmeTime = 0;
+
+  /**
+   * Obtiene la documentación maestra institucional (README.md) en memoria
+   */
+  public static getMasterDocumentation(): string {
+    if (this.cachedReadme && (Date.now() - this.cachedReadmeTime < 10 * 60 * 1000)) {
+      return this.cachedReadme;
+    }
+
+    try {
+      const candidates = [
+        path.resolve(process.cwd(), 'README.md'),
+        path.resolve(process.cwd(), '../README.md'),
+        '/app/README.md'
+      ];
+      for (const p of candidates) {
+        if (fs.existsSync(p)) {
+          this.cachedReadme = fs.readFileSync(p, 'utf-8');
+          this.cachedReadmeTime = Date.now();
+          console.log(`📘 [HermesC2] Documentación maestra README.md cargada en memoria (${this.cachedReadme.length} bytes).`);
+          return this.cachedReadme;
+        }
+      }
+    } catch (e: any) {
+      console.warn('[HermesC2] No se pudo leer README.md:', e.message);
+    }
+    return '';
+  }
 
   /**
    * Resuelve con precisión de 4 niveles el rol y la identidad del remitente
@@ -183,6 +215,7 @@ export class HermesC2 {
           `📊 *SUPERVISIÓN Y CONTROL:*\n` +
           `• \`/status\` : Estado del gateway, campañas y métricas.\n` +
           `• \`/horarios\` : Horarios de prospección por país (USA y Perú) y bloque actual.\n` +
+          `• \`/readme\` : Base de conocimiento institucional (README maestro del sistema).\n` +
           `• \`/saldo\` : Saldo y consumo en vivo de Outscraper y OpenRouter.\n` +
           `• \`/pipeline\` : Embudo comercial Ghost CRM e ingresos.\n` +
           `• \`/leads\` : Prospectos calientes pendientes de atención.\n` +
@@ -342,6 +375,37 @@ export class HermesC2 {
         `━━━━━━━━━━━━━━━━━━━━`;
 
       return { handled: true, replyMessage: msg, actionExecuted: 'SCHEDULE_CHECK' };
+    }
+
+    // 1.48. Comando: /readme o /doc o /docs (Base de conocimiento institucional)
+    if (
+      lower.startsWith('/readme') ||
+      lower.startsWith('/doc') ||
+      lower.startsWith('/docs') ||
+      lower === 'readme' ||
+      lower === 'documentacion' ||
+      lower === 'manual institucional'
+    ) {
+      const doc = HermesC2.getMasterDocumentation();
+      const lineCount = doc ? doc.split('\n').length : 403;
+      const msg = 
+        `🏛️ *HERMES C2 · BASE DE CONOCIMIENTO INSTITUCIONAL*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `Tengo sincronizado el manual institucional maestro de *QP Outreach Engine & Hermes C2* (${lineCount} líneas, 10 bloques):\n\n` +
+        `📚 *BLOQUES QUE PUEDES CONSULTARME POR AQUÍ:*\n` +
+        `1. *Arquitectura Global:* Pipeline, scrapers y gateway Baileys/Meta Cloud.\n` +
+        `2. *Horarios Duales:* Bloques USA (9-1pm) y Perú (2-6:30pm) con anti-ban.\n` +
+        `3. *Comandos de Control:* Todos los comandos C2 y sintaxis operativa.\n` +
+        `4. *Doctrina Comercial:* Precios ($350-$600), 4 pilares y 9 objeciones.\n` +
+        `5. *Etiquetas WhatsApp:* Mapeo 1:1 de los 10 estados con Ghost CRM.\n` +
+        `6. *Scraping:* Outscraper API v2 y Apify Places con deduplicación.\n` +
+        `7. *Multi-Tenant SaaR:* Blueprints de nicho y provisión de clientes.\n` +
+        `8. *Servidor MCP:* 24+ herramientas nativas para IAs externas.\n` +
+        `9. *Despliegue:* Railway, persistencia y variables de entorno.\n` +
+        `10. *Metodología SDD:* Ciclo de 4 fases para desarrollo seguro.\n\n` +
+        `💡 _Escribe cualquier consulta técnica o comercial en texto libre (ej. "¿cómo funciona la pausa de almuerzo?" o "¿cuáles son los 4 pilares de venta?")._`;
+
+      return { handled: true, replyMessage: msg, actionExecuted: 'DOCS_CHECK' };
     }
 
     // 1.5. Comando: /saldo o /balance o /outscraper (Consulta de créditos - Solo Master Kenneth)
@@ -1369,6 +1433,11 @@ INSTRUCCIONES:
         creditsPrompt += `\n- OpenRouter (IA): Créditos totales $${credits.openrouter.total.toFixed(2)} USD, Consumido: $${credits.openrouter.used.toFixed(2)} USD, Saldo restante: $${credits.openrouter.remaining.toFixed(2)} USD.`;
       }
 
+      const masterDoc = HermesC2.getMasterDocumentation();
+      const docPrompt = masterDoc
+        ? `\n\nBASE DE CONOCIMIENTO INSTITUCIONAL MAESTRA (README.md DEL SISTEMA):\n"""\n${masterDoc}\n"""`
+        : '';
+
       systemPrompt = 
         `Eres Hermes, el Agente Copiloto de Operaciones y C2 de Kenneth Herrera en The Quant Partners.
 Hablas directamente con Kenneth por WhatsApp con tono ejecutivo, ultra-analítico, conciso y respetuoso.
@@ -1385,21 +1454,15 @@ DATOS ACTUALES DEL GHOST CRM:
 - Eventos Meta CAPI Disparados: ${summary.metaCapiEventsFired}
 
 SALDOS Y CONSUMO DE PLATAFORMAS EN TIEMPO REAL:${creditsPrompt}
-
-HORARIOS Y ARQUITECTURA DE ADQUISICIÓN (OUTREACH ENGINE):
-- Zona horaria base: Lima, Perú (PET / UTC-5).
-- 🇺🇸 Bloque Mañanas (09:00 AM – 01:00 PM PET): Prospección en frío (Outbound) exclusiva para USA (Realtors Florida/Texas, Abogados de Inmigración, etc.).
-- 🍽️ Pausa de Almuerzo (01:00 PM – 02:00 PM PET): Pausa total anti-bot. Cero envíos en frío para emular descanso humano.
-- 🇵🇪 Bloque Tardes (02:00 PM – 06:30 PM PET): Prospección en frío (Outbound) exclusiva para PERÚ (Clínicas, Constructoras, WhatsApp B2B).
-- 🌙 Fuera de Horario (06:30 PM – 09:00 AM PET): Pausa nocturna de Outbound para proteger el chip contra reportes de spam.
-- ⚡ Atención Inbound (Setter IA): Activa 24/7 sin excepción. Cualquier prospecto que responda a cualquier hora es atendido al instante en segundos.
-- 🛡️ Parámetros Anti-Ban: Delays de 180s a 300s entre mensajes, límite diario de 35 envíos, circuit breaker de 45 min si 10 mensajes seguidos no reciben respuesta.
+${docPrompt}
 
 INSTRUCCIONES:
-- Responde a su pregunta de forma clara y directa (máximo 2 párrafos breves).
+- Tienes acceso total al README.md maestro del sistema arriba. Úsalo para responder cualquier duda técnica, arquitectónica, comercial o de procesos de Kenneth con total precisión y fidelidad al código.
+- Responde a su pregunta de forma clara y directa (máximo 2 a 3 párrafos breves y bien estructurados).
 - Si te pregunta por saldos de Outscraper o OpenRouter, dale los números exactos con tono ejecutivo y alerta si Outscraper está bajo ($< 1 USD).
-- Si te pregunta por horarios o rangos de adquisición de USA y Perú, dale SIEMPRE la división exacta de bloques (Mañanas USA 9am-1pm, Pausa Almuerzo 1pm-2pm, Tardes Perú 2pm-6:30pm, Inbound 24/7). NUNCA digas rangos genéricos como 9 a 5.
-- Si te pide realizar una acción que tiene un comando (/status, /horarios, /saldo, /pipeline, /mensaje, /pausa, /reanudar, /scrape, /won <tel> <monto>, /leads, /sop, /provision), indícale el resultado o recomiéndale el comando exacto.`;
+- Si te pregunta por horarios o rangos de adquisición de USA y Perú, dale la división exacta de bloques (Mañanas USA 9am-1pm, Pausa Almuerzo 1pm-2pm, Tardes Perú 2pm-6:30pm, Inbound 24/7).
+- Si te pide realizar una acción que tiene un comando (/status, /horarios, /readme, /saldo, /pipeline, /mensaje, /pausa, /reanudar, /scrape, /won <tel> <monto>, /leads, /sop, /provision), indícale el resultado o recomiéndale el comando exacto.
+- Recuerda que eres el Copiloto Operativo en WhatsApp. Si Kenneth te pide hacer modificaciones de código, compilar o crear commits en Git, indícale amablemente que esas tareas de ingeniería de software las ejecuta Smith / Antigravity en el entorno de desarrollo, mientras que tú te encargas de la operación en caliente del negocio por WhatsApp.`;
     }
 
     try {
@@ -1418,7 +1481,7 @@ INSTRUCCIONES:
             { role: 'user', content: query }
           ],
           temperature: 0.3,
-          max_tokens: 350
+          max_tokens: 500
         })
       });
 
