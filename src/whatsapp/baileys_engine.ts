@@ -1016,6 +1016,14 @@ export class BaileysEngine {
   }
 
   /**
+   * Envía un mensaje directo a un teléfono o JID
+   */
+  public async sendDirectMessage(target: string, message: string): Promise<void> {
+    const clean = target.replace(/@[^]+$/, '').replace(/[^0-9]/g, '');
+    return this.notifyPhone(clean, message);
+  }
+
+  /**
    * Comprueba si el mensaje entrante está dentro del horario comercial (Perú UTC-5)
    */
   private isWithinWorkingHours(settings: { startHour?: number; endHour?: number }): boolean {

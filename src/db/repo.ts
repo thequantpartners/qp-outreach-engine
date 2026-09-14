@@ -159,6 +159,7 @@ export class OutreachRepo {
       ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS meta_dataset_id VARCHAR(100);
       ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS meta_capi_token TEXT;
       ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS meta_test_event_code VARCHAR(50);
+      ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS manager_lead_alerts_enabled BOOLEAN DEFAULT true;
     `);
 
     // Asegurar que el servicio base para Inbound General exista siempre
@@ -728,7 +729,7 @@ export class OutreachRepo {
     }
   }
 
-  public static async getLeads(filters?: { serviceId?: string; status?: LeadStatus; search?: string; limit?: number }): Promise<Lead[]> {
+  public static async getLeads(filters?: { serviceId?: string; status?: LeadStatus; search?: string; limit?: number; assignedRepPhone?: string }): Promise<Lead[]> {
     const limit = filters?.limit || 100;
 
     if (DbConnection.isPg()) {
@@ -747,6 +748,12 @@ export class OutreachRepo {
       if (filters?.search) {
         query += ` AND (company_name ILIKE $${pIndex} OR phone ILIKE $${pIndex})`;
         params.push(`%${filters.search}%`);
+        pIndex++;
+      }
+      if (filters?.assignedRepPhone) {
+        const cleanRep = filters.assignedRepPhone.replace(/[^0-9]/g, '');
+        query += ` AND (assigned_rep_phone = $${pIndex} OR assigned_rep_phone LIKE '%' || $${pIndex})`;
+        params.push(cleanRep);
         pIndex++;
       }
 
@@ -768,6 +775,13 @@ export class OutreachRepo {
       if (filters?.search) {
         const s = filters.search.toLowerCase();
         list = list.filter(l => l.companyName.toLowerCase().includes(s) || l.phone.includes(s));
+      }
+      if (filters?.assignedRepPhone) {
+        const cleanRep = filters.assignedRepPhone.replace(/[^0-9]/g, '');
+        list = list.filter(l => {
+          const repClean = (l.assignedRepPhone || '').replace(/[^0-9]/g, '');
+          return repClean && (cleanRep.endsWith(repClean) || repClean.endsWith(cleanRep));
+        });
       }
 
       return list.slice(0, limit);
@@ -1370,7 +1384,10 @@ export class OutreachRepo {
         metaDatasetId: r.meta_dataset_id || '',
         metaCapiToken: r.meta_capi_token || '',
         metaTestEventCode: r.meta_test_event_code || '',
-        onboardingCompleted: r.onboarding_completed != null ? Boolean(r.onboarding_completed) : (process.env.MODE !== 'client')
+        onboardingCompleted: r.onboarding_completed != null ? Boolean(r.onboarding_completed) : (process.env.MODE !== 'client'),
+        managerLeadAlertsEnabled: r.manager_lead_alerts_enabled !== false,
+        companyName: process.env.COMPANY_NAME || '',
+        publicUrl: process.env.PUBLIC_URL || ''
       };
     } else {
       const data = DbConnection.getFallbackData();
@@ -1398,7 +1415,10 @@ export class OutreachRepo {
         metaDatasetId: '',
         metaCapiToken: '',
         metaTestEventCode: '',
-        onboardingCompleted: process.env.MODE !== 'client'
+        onboardingCompleted: process.env.MODE !== 'client',
+        managerLeadAlertsEnabled: true,
+        companyName: process.env.COMPANY_NAME || '',
+        publicUrl: process.env.PUBLIC_URL || ''
       };
     }
   }
@@ -1435,6 +1455,7 @@ export class OutreachRepo {
            meta_capi_token = $24,
            meta_test_event_code = $25,
            onboarding_completed = $26,
+           manager_lead_alerts_enabled = $27,
            updated_at = NOW()
          WHERE id = 'main_config'`,
         [
@@ -1463,7 +1484,8 @@ export class OutreachRepo {
           updated.metaDatasetId || '',
           updated.metaCapiToken || '',
           updated.metaTestEventCode || '',
-          Boolean(updated.onboardingCompleted)
+          Boolean(updated.onboardingCompleted),
+          updated.managerLeadAlertsEnabled !== false
         ]
       );
     } else {
@@ -1524,6 +1546,155 @@ export class OutreachRepo {
     });
 
     return chosen;
+  }
+
+  /**
+   * Atribuye una venta cerrada al récord personal del vendedor
+   */
+  public static async recordRepSale(
+    repPhone: string,
+    amount: number,
+    currency: 'USD' | 'PEN' = 'USD'
+  ): Promise<void> {
+    const cleanRep = repPhone.replace(/[^0-9]/g, '');
+    const settings = await OutreachRepo.getSettings();
+    const reps = settings.salesReps || [];
+
+    const updatedReps = reps.map(r => {
+      const currentClean = (r.phone || '').replace(/[^0-9]/g, '');
+      if (currentClean && (cleanRep.endsWith(currentClean) || currentClean.endsWith(cleanRep))) {
+        return {
+          ...r,
+          salesClosedCount: (r.salesClosedCount || 0) + 1,
+          totalRevenueClosed: (r.totalRevenueClosed || 0) + amount
+        };
+      }
+      return r;
+    });
+
+    await OutreachRepo.updateSettings({ salesReps: updatedReps });
+  }
+
+  /**
+   * Reasigna atómicamente todos los prospectos activos de un vendedor dado de baja
+   */
+  public static async reassignLeads(
+    fromRepPhone: string,
+    toRepPhone: string,
+    toRepName: string
+  ): Promise<number> {
+    const cleanFrom = fromRepPhone.replace(/[^0-9]/g, '');
+    const cleanTo = toRepPhone.replace(/[^0-9]/g, '');
+
+    if (DbConnection.isPg()) {
+      const res = await DbConnection.getPool().query(
+        `UPDATE leads 
+         SET assigned_rep_name = $1, 
+             assigned_rep_phone = $2, 
+             updated_at = NOW() 
+         WHERE (assigned_rep_phone = $3 OR assigned_rep_phone LIKE '%' || $3) 
+           AND status IN ('DISCOVERED', 'OUTREACH_SENT', 'REPLIED', 'QUALIFIED', 'MEETING_SCHEDULED')`,
+        [toRepName, cleanTo, cleanFrom]
+      );
+      return res.rowCount ?? 0;
+    } else {
+      const data = DbConnection.getFallbackData();
+      let count = 0;
+      for (const lead of data.leads || []) {
+        const leadRep = (lead.assignedRepPhone || '').replace(/[^0-9]/g, '');
+        if (
+          (leadRep === cleanFrom || leadRep.endsWith(cleanFrom)) &&
+          ['DISCOVERED', 'OUTREACH_SENT', 'REPLIED', 'QUALIFIED', 'MEETING_SCHEDULED'].includes(lead.status)
+        ) {
+          lead.assignedRepName = toRepName;
+          lead.assignedRepPhone = cleanTo;
+          count++;
+        }
+      }
+      DbConnection.saveFallbackData(data);
+      return count;
+    }
+  }
+
+  /**
+   * Audita el desempeño histórico completo de un vendedor para el reporte de liquidación
+   */
+  public static async getSalesRepAudit(repPhone: string): Promise<{
+    totalAssigned: number;
+    closedWon: number;
+    revenueUSD: number;
+    revenuePEN: number;
+    activeNegotiations: number;
+    conversionRate: number;
+  }> {
+    const clean = repPhone.replace(/[^0-9]/g, '');
+
+    if (DbConnection.isPg()) {
+      const res = await DbConnection.getPool().query(
+        `SELECT 
+           COUNT(*) as total_assigned,
+           COUNT(*) FILTER (WHERE status = 'CLOSED_WON') as closed_won,
+           COALESCE(SUM(sale_amount) FILTER (WHERE status = 'CLOSED_WON' AND (sale_currency = 'USD' OR sale_currency IS NULL)), 0) as revenue_usd,
+           COALESCE(SUM(sale_amount) FILTER (WHERE status = 'CLOSED_WON' AND sale_currency = 'PEN'), 0) as revenue_pen,
+           COUNT(*) FILTER (WHERE status IN ('REPLIED', 'QUALIFIED', 'MEETING_SCHEDULED')) as active_negotiations
+         FROM leads
+         WHERE assigned_rep_phone = $1 OR assigned_rep_phone LIKE '%' || $1`,
+        [clean]
+      );
+
+      const r = res.rows[0] || {};
+      const totalAssigned = parseInt(r.total_assigned, 10) || 0;
+      const closedWon = parseInt(r.closed_won, 10) || 0;
+      const revenueUSD = parseFloat(r.revenue_usd) || 0;
+      const revenuePEN = parseFloat(r.revenue_pen) || 0;
+      const activeNegotiations = parseInt(r.active_negotiations, 10) || 0;
+      const conversionRate = totalAssigned > 0 ? parseFloat(((closedWon / totalAssigned) * 100).toFixed(1)) : 0;
+
+      return {
+        totalAssigned,
+        closedWon,
+        revenueUSD,
+        revenuePEN,
+        activeNegotiations,
+        conversionRate
+      };
+    } else {
+      const data = DbConnection.getFallbackData();
+      let totalAssigned = 0;
+      let closedWon = 0;
+      let revenueUSD = 0;
+      let revenuePEN = 0;
+      let activeNegotiations = 0;
+
+      for (const lead of data.leads || []) {
+        const leadRep = (lead.assignedRepPhone || '').replace(/[^0-9]/g, '');
+        if (leadRep === clean || leadRep.endsWith(clean)) {
+          totalAssigned++;
+          if (lead.status === 'CLOSED_WON') {
+            closedWon++;
+            if (lead.saleCurrency === 'PEN') {
+              revenuePEN += lead.saleAmount || 0;
+            } else {
+              revenueUSD += lead.saleAmount || 0;
+            }
+          }
+          if (['REPLIED', 'QUALIFIED', 'MEETING_SCHEDULED'].includes(lead.status)) {
+            activeNegotiations++;
+          }
+        }
+      }
+
+      const conversionRate = totalAssigned > 0 ? parseFloat(((closedWon / totalAssigned) * 100).toFixed(1)) : 0;
+
+      return {
+        totalAssigned,
+        closedWon,
+        revenueUSD,
+        revenuePEN,
+        activeNegotiations,
+        conversionRate
+      };
+    }
   }
 
   // --- STATS ---

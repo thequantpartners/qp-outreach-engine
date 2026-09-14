@@ -68,6 +68,44 @@ export class MetaCAPIClient {
   }
 
   /**
+   * Valida credenciales realizando una prueba en vivo contra Meta Graph API
+   */
+  public static async testConnection(datasetId: string, accessToken: string, testEventCode?: string): Promise<{ success: boolean; error?: string }> {
+    const url = `${this.BASE_URL}/${this.GRAPH_API_VERSION}/${datasetId}/events`;
+    const hashedPhone = this.hashPhone('51900000000');
+    const requestBody: Record<string, any> = {
+      data: [{
+        event_name: 'TestPing',
+        event_time: Math.floor(Date.now() / 1000),
+        event_id: crypto.randomUUID(),
+        action_source: 'chat',
+        user_data: { ph: [hashedPhone] },
+        custom_data: { test: true }
+      }]
+    };
+    if (testEventCode) {
+      requestBody.test_event_code = testEventCode;
+    }
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+      });
+      const json = await response.json() as any;
+      if (!response.ok) {
+        return { success: false, error: json?.error?.message || `HTTP ${response.status}` };
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
    * Envía un evento unitario de conversión offline a Meta Graph API
    */
   public static async sendEvent(

@@ -62,7 +62,17 @@ TU MISIÓN:
     if (isMasterKenneth && isGeneralInbound) {
       systemPrompt = this.getKennethSetterPrompt();
     } else if (service?.aiSystemPrompt) {
-      systemPrompt = `Eres un AI Setter y Filtro de Curiosos para ${service.name}.\n${service.aiSystemPrompt}\n\nREGLA: Cuando el prospecto califique con urgencia y presupuesto, despacha al final el tag: [ACTION:QUALIFIED:necesidad|urgencia|presupuesto]`;
+      systemPrompt = 
+        `Eres el Asesor Comercial y Setter de Adquisición para ${service.name}.
+${service.aiSystemPrompt}
+
+REGLAS CONVERSACIONALES ESTRICTAS:
+1. Tono 100% natural, empático, consultivo y profesional.
+2. ESTRICTAMENTE PROHIBIDO usar menús numéricos ("presione 1, 2 o 3"). Conversa como un asesor humano de alto nivel en WhatsApp.
+3. Respuestas ágiles y breves (máximo 2 a 3 oraciones por mensaje) para diagnosticar la necesidad y urgencia.
+4. TRANSICIÓN A ESPECIALISTA (HANDOFF): Cuando el cliente muestre interés explícito, pida cotización, solicite reunión, llamada o hablar con un asesor humano:
+   - Agradécele con calidez y envíale un mensaje puente humano: "Perfecto, le paso la información de inmediato a uno de nuestros especialistas del equipo para que continúe con usted por aquí y le brinde la atención a la medida. En breve le escribirá por este chat."
+   - Incluye al final el tag técnico exacto: [ACTION:QUALIFIED:necesidad|urgencia|presupuesto]`;
     } else {
       systemPrompt = this.getKennethSetterPrompt();
     }

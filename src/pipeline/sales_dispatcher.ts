@@ -85,6 +85,26 @@ export class SalesDispatcher {
         await baileys.notifyAdmin(alertMessage);
       }
       console.log(`🚀 [SalesDispatcher] Lead +${cleanPhone} transferido a ${repName} (+${cleanRepPhone}) exitosamente.`);
+
+      // 5. Copia informativa al Gerente (si el vendedor asignado no es el Gerente y las alertas están activas)
+      const settings = await OutreachRepo.getSettings();
+      const adminPhone = (settings.adminWhatsAppPhone || process.env.ADMIN_WHATSAPP_PHONE || '').replace(/[^0-9]/g, '');
+      const alertsEnabled = settings.managerLeadAlertsEnabled !== false;
+
+      if (alertsEnabled && adminPhone && adminPhone !== cleanRepPhone) {
+        const managerNotification = 
+          `📌 *NUEVO LEAD ASIGNADO*\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `🏢 *Cliente:* ${compName} (+${cleanPhone})\n` +
+          `👤 *Asesor:* ${repName} (+${cleanRepPhone})\n` +
+          `🎯 *Necesidad:* ${needLabel}\n` +
+          `⚡ *Urgencia:* ${urgencyLabel}\n` +
+          `👉 _Escribe /lead ${cleanPhone} para ver la ficha o /alertas off para silenciar estas copias._`;
+
+        await baileys.notifyPhone(adminPhone, managerNotification).catch((err: any) => {
+          console.warn('[SalesDispatcher] No se pudo enviar copia al gerente:', err.message);
+        });
+      }
     } catch (err: any) {
       console.error(`❌ [SalesDispatcher] Error despachando alerta de WhatsApp a ${repName}:`, err.message);
     }

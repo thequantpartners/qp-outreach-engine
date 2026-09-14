@@ -93,6 +93,8 @@ export interface SalesRep {
   isOwner?: boolean;
   isActive: boolean;
   leadsAssignedCount: number;
+  salesClosedCount?: number;
+  totalRevenueClosed?: number;
   createdAt?: string;
 }
 
@@ -125,6 +127,9 @@ export interface CampaignSettings {
   useCustomApify?: boolean;
   apifyToken?: string;
   onboardingCompleted?: boolean;
+  managerLeadAlertsEnabled?: boolean;
+  companyName?: string;
+  publicUrl?: string;
 }
 
 export const SendMessageSchema = z.object({

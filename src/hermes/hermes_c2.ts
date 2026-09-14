@@ -2,9 +2,22 @@
 // THE QUANT PARTNERS · HERMES C2 (WhatsApp Command & Control Copilot)
 // =================================================================
 
+import crypto from 'crypto';
 import { OutreachRepo } from '../db/repo.js';
 import { GhostCRM } from '../crm/ghost_crm.js';
 import { BaileysEngine } from '../whatsapp/baileys_engine.js';
+import { SalesRep } from '../types/index.js';
+import { MetaCAPIClient } from '../crm/meta_capi.js';
+
+export type HermesUserRole = 'master' | 'client_manager' | 'client_rep' | 'unauthorized';
+
+export interface HermesUserIdentity {
+  role: HermesUserRole;
+  phone: string;
+  name: string;
+  repId?: string;
+  companyName: string;
+}
 
 export interface HermesExecutionResult {
   handled: boolean;
@@ -18,22 +31,65 @@ export class HermesC2 {
   private static schedulerInterval: NodeJS.Timeout | null = null;
 
   /**
+   * Resuelve con precisión de 4 niveles el rol y la identidad del remitente
+   */
+  public static async getUserIdentity(phone: string): Promise<HermesUserIdentity> {
+    const clean = phone.replace(/[^0-9]/g, '');
+    const settings = await OutreachRepo.getSettings();
+    const companyName = process.env.COMPANY_NAME || settings.companyName || 'The Quant Partners';
+    const isClientMode = process.env.MODE === 'client';
+
+    // 1. Master Kenneth (Siempre Master, incluso si prueba en un nodo satélite)
+    if (clean === '269363907195002' || clean.endsWith('51902105668') || '51902105668'.endsWith(clean)) {
+      return {
+        role: 'master',
+        phone: '51902105668',
+        name: 'Kenneth (Director QP)',
+        companyName: 'The Quant Partners'
+      };
+    }
+
+    if (clean.length < 8) {
+      return { role: 'unauthorized', phone: clean, name: 'Desconocido', companyName };
+    }
+
+    // 2. Gerente / Director del Cliente
+    const adminPhone = (settings.adminWhatsAppPhone || process.env.ADMIN_WHATSAPP_PHONE || '').replace(/[^0-9]/g, '');
+    if (adminPhone && (clean.endsWith(adminPhone) || adminPhone.endsWith(clean))) {
+      return {
+        role: isClientMode ? 'client_manager' : 'master',
+        phone: clean,
+        name: 'Gerente General',
+        companyName
+      };
+    }
+
+    // 3. Vendedor / Asesor Comercial Activo
+    const reps = (settings.salesReps || []).filter(r => r.isActive);
+    const foundRep = reps.find(r => {
+      const repClean = (r.phone || '').replace(/[^0-9]/g, '');
+      return repClean.length >= 8 && (clean.endsWith(repClean) || repClean.endsWith(clean));
+    });
+
+    if (foundRep) {
+      return {
+        role: 'client_rep',
+        phone: clean,
+        name: foundRep.name,
+        repId: foundRep.id,
+        companyName
+      };
+    }
+
+    return { role: 'unauthorized', phone: clean, name: 'Desconocido', companyName };
+  }
+
+  /**
    * Determina si un número de WhatsApp corresponde al Administrador autorizado o a un Asesor de Ventas
    */
   public static async isAdminPhone(phone: string): Promise<boolean> {
-    const clean = phone.replace(/[^0-9]/g, '');
-    if (clean === '269363907195002') return true;
-    const settings = await OutreachRepo.getSettings();
-    const adminPhone = (settings.adminWhatsAppPhone || process.env.ADMIN_WHATSAPP_PHONE || '51902105668').replace(/[^0-9]/g, '');
-    if (clean.endsWith(adminPhone) || adminPhone.endsWith(clean)) return true;
-
-    // Autorizar a los vendedores y asesores comerciales del cliente
-    const reps = settings.salesReps || [];
-    const isRep = reps.some(r => {
-      const repClean = (r.phone || '').replace(/[^0-9]/g, '');
-      return repClean && (clean.endsWith(repClean) || repClean.endsWith(clean));
-    });
-    return isRep;
+    const identity = await HermesC2.getUserIdentity(phone);
+    return identity.role !== 'unauthorized';
   }
 
   /**
@@ -43,7 +99,13 @@ export class HermesC2 {
     const cleanText = incomingText.trim();
     const lower = cleanText.toLowerCase();
 
-    // 0. Comando: /comandos o /help o /ayuda o /menu
+    // 0. Autenticación y Resolución de Rol con Aislamiento Estricto
+    const user = await HermesC2.getUserIdentity(senderPhone);
+    if (user.role === 'unauthorized') {
+      return { handled: false };
+    }
+
+    // 0.1. Menú de Comandos: /comandos o /help o /ayuda o /menu
     if (
       lower === '/comandos' || 
       lower === '/help' || 
@@ -54,29 +116,55 @@ export class HermesC2 {
       lower === 'ayuda' || 
       lower === 'menu'
     ) {
-      const isClient = process.env.MODE === 'client';
-      const company = process.env.COMPANY_NAME || 'Equipo Comercial';
       let menuMsg = '';
 
-      if (isClient) {
+      if (user.role === 'client_rep') {
         menuMsg = 
-          `📱 *PANEL DE COMANDOS · ${company.toUpperCase()}*\n` +
+          `📱 *PANEL DE VENTAS · ${user.companyName.toUpperCase()}*\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
-          `Bienvenido a tu Asistente Comercial de WhatsApp. Aquí tienes tus herramientas disponibles:\n\n` +
-          `📊 *REPORTES Y PIPELINE:*\n` +
-          `• \`/pipeline\` : Visualiza el embudo de prospectos, tasas de conversión y facturación.\n` +
-          `• \`/leads\` : Lista los prospectos calificados que esperan atención.\n` +
-          `• \`/lead <tel>\` : Consulta el expediente, notas de IA y último chat del prospecto.\n` +
-          `• \`/status\` : Salud del canal de WhatsApp y estado comercial general.\n\n` +
+          `¡Hola ${user.name}! Aquí tienes tus herramientas comerciales de WhatsApp:\n\n` +
+          `📋 *TUS PROSPECTOS ASIGNADOS:*\n` +
+          `• \`/leads\` : Tus prospectos calificados pendientes de atención.\n` +
+          `• \`/lead <tel>\` : Ficha técnica, necesidad detectada y chat del prospecto.\n\n` +
           `💰 *CIERRE DE VENTAS:*\n` +
-          `• \`/won <tel> <monto> [USD|PEN]\` : Registra una venta ganada y optimiza tus campañas de Meta Ads.\n\n` +
+          `• \`/won <tel> <monto> [USD|PEN]\` : Registra tu venta ganada. Notifica a gerencia y optimiza Meta Ads.\n\n` +
+          `📊 *TU RENDIMIENTO:*\n` +
+          `• \`/status\` : Tu balance personal de ventas, cierres y efectividad.\n\n` +
           `📘 *GUÍA OPERATIVA:*\n` +
-          `• \`/manual\` (o \`/sop\`) : Manual rápido de atención y mejores prácticas comerciales.\n\n` +
+          `• \`/manual\` (o \`/sop\`) : Mejores prácticas de atención y cierre consultivo.\n\n` +
           `🤖 *COPILOT IA:*\n` +
-          `Escribe cualquier duda en texto libre (ej. "¿cuántas citas se agendaron?" o "¿cuál es el estado del último prospecto?").`;
-      } else {
+          `Pregúntame cualquier duda sobre tus prospectos asignados o consejos de cierre.`;
+      } else if (user.role === 'client_manager') {
         menuMsg = 
-          `👑 *HERMES C2 · CATÁLOGO COMPLETO DE COMANDOS*\n` +
+          `🏢 *PANEL DE CONTROL GERENCIAL · ${user.companyName.toUpperCase()}*\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `Centro de Mando Comercial en WhatsApp. Herramientas disponibles:\n\n` +
+          `📊 *PIPELINE Y EMBUDO:*\n` +
+          `• \`/pipeline\` : Embudo completo de ventas, conversión y facturación global.\n` +
+          `• \`/leads\` : Lista todos los prospectos calificados y su asesor asignado.\n` +
+          `• \`/lead <tel>\` : Ficha técnica completa, notas de IA y último chat.\n` +
+          `• \`/status\` : Estado de WhatsApp y métricas generales del equipo.\n\n` +
+          `👥 *GESTIÓN DE EQUIPO COMERCIAL:*\n` +
+          `• \`/equipo\` : Rendimiento de vendedores, ventas cerradas y conversión.\n` +
+          `• \`/vendedor nuevo <Nombre> <Tel>\` : Registra un nuevo asesor y le da la bienvenida por WhatsApp.\n` +
+          `• \`/vendedor baja <Tel> [Reasignar_A]\` : Liquida al asesor con dossier completo y reasigna sus leads.\n\n` +
+          `🤖 *SETTER VIRTUAL Y CALIFICACIÓN:*\n` +
+          `• \`/setter\` (o \`/prompt\`) : Directivas e instrucciones activas del Setter IA.\n` +
+          `• \`/setsetter <instrucciones>\` : Modifica en caliente cómo califica el Setter a los clientes.\n\n` +
+          `📡 *META ADS Y ALERTAS:*\n` +
+          `• \`/setpixel <Pixel_ID> <Token> [TestCode]\` : Configura tu Pixel de Meta Ads con verificación en vivo.\n` +
+          `• \`/pixel\` : Diagnóstico de salud y eventos enviados al Pixel/Dataset.\n` +
+          `• \`/alertas on\` | \`/alertas off\` : Activa o silencia las copias de asignación de leads al gerente.\n\n` +
+          `💰 *CIERRE DE VENTAS:*\n` +
+          `• \`/won <tel> <monto> [USD|PEN]\` : Registra una venta ganada y optimiza Meta Ads.\n\n` +
+          `📘 *GUÍA OPERATIVA:*\n` +
+          `• \`/manual\` (o \`/sop\`) : Guía de atención y mejores prácticas comerciales.\n\n` +
+          `🤖 *COPILOT IA:*\n` +
+          `Escribe cualquier duda comercial en texto libre (ej. "¿cuántas ventas llevamos este mes?").`;
+      } else {
+        // Master Kenneth
+        menuMsg = 
+          `👑 *HERMES C2 · CATÁLOGO COMPLETO DE COMANDOS (MASTER)*\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
           `📊 *SUPERVISIÓN Y CONTROL:*\n` +
           `• \`/status\` : Estado del gateway, campañas y métricas.\n` +
@@ -89,13 +177,24 @@ export class HermesC2 {
           `✉️ *PROSPECCIÓN Y MENSAJES:*\n` +
           `• \`/mensaje\` : Previsualizar la plantilla activa y chequeo anti-ban.\n` +
           `• \`/setmensaje <texto>\` : Editar plantilla de prospección en caliente.\n\n` +
+          `🤖 *SETTER VIRTUAL:*\n` +
+          `• \`/setter\` : Ver prompt e instrucciones del Setter IA.\n` +
+          `• \`/setsetter <texto>\` : Modificar instrucciones del Setter en caliente.\n\n` +
+          `👥 *EQUIPO Y VENDEDORES:*\n` +
+          `• \`/equipo\` : Desempeño consolidado del equipo de ventas.\n` +
+          `• \`/vendedor nuevo <Nombre> <Tel>\` : Dar de alta vendedor con bienvenida por WhatsApp.\n` +
+          `• \`/vendedor baja <Tel> [Reasignar_A]\` : Dossier de liquidación y reasignación anti-pérdida.\n\n` +
+          `📡 *META CAPI Y ALERTAS:*\n` +
+          `• \`/setpixel <Pixel_ID> <Token> [TestCode]\` : Configurar Pixel de Meta con ping en vivo.\n` +
+          `• \`/pixel\` : Diagnóstico de eventos CAPI enviados.\n` +
+          `• \`/alertas on|off\` : Muteo selectivo de copias de asignación al gerente.\n\n` +
           `💰 *CONVERSIONES Y CAPI:*\n` +
-          `• \`/won <tel> <monto> [USD|PEN]\` : Registrar venta ganada y sincronizar compra con Meta CAPI.\n\n` +
+          `• \`/won <tel> <monto> [USD|PEN]\` : Registrar venta ganada y sincronizar con Meta CAPI.\n\n` +
           `🏢 *CLIENTES Y PROVISIÓN:*\n` +
           `• \`/provision "Empresa" <nicho> <tel_admin> "Vendedor:tel"\` : Generar nodo cliente en VPS en 60s.\n` +
           `• \`/sop\` : Manual paso a paso de onboarding de clientes.\n\n` +
           `🤖 *COPILOT IA:*\n` +
-          `Escribe cualquier pregunta en lenguaje natural (ej. "¿cuánto hemos facturado?" o "¿cuántos leads respondieron?").`;
+          `Escribe cualquier consulta técnica u operativa en lenguaje natural.`;
       }
 
       return { handled: true, replyMessage: menuMsg, actionExecuted: 'HELP_MENU' };
@@ -103,15 +202,32 @@ export class HermesC2 {
 
     // 1. Comando: /status o "¿cómo vamos?"
     if (lower.startsWith('/status') || lower === 'status' || lower.includes('cómo vamos') || lower.includes('como vamos') || lower.includes('estado')) {
+      if (user.role === 'client_rep') {
+        const audit = await OutreachRepo.getSalesRepAudit(user.phone);
+        const repMsg = 
+          `👤 *MI PANEL COMERCIAL · ${user.name.toUpperCase()}*\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `🏢 Empresa: *${user.companyName}*\n\n` +
+          `📊 *Mi Rendimiento Comercial:*\n` +
+          `• Prospectos Asignados: *${audit.totalAssigned}*\n` +
+          `• En Negociación Activa: *${audit.activeNegotiations}*\n` +
+          `• Ventas Cerradas Ganadas: *${audit.closedWon}*\n` +
+          `• Efectividad de Cierre: *${audit.conversionRate}%*\n\n` +
+          `💰 *Mi Facturación Lograda:*\n` +
+          `• USD: *$${audit.revenueUSD.toLocaleString()}*\n` +
+          `• PEN: *S/. ${audit.revenuePEN.toLocaleString()}*\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `👉 _Escribe /leads para ver tus prospectos calientes pendientes de atención._`;
+        return { handled: true, replyMessage: repMsg, actionExecuted: 'STATUS_CHECK' };
+      }
+
       const summary = await GhostCRM.getFunnelSummary();
       const services = await OutreachRepo.getServices();
       const activeOutbound = services.filter(s => s.isActive && s.type === 'OUTBOUND');
-      const isClientNode = process.env.MODE === 'client';
 
-      if (isClientNode) {
-        const company = process.env.COMPANY_NAME || 'Empresa';
+      if (user.role === 'client_manager') {
         const msg = 
-          `🏢 *SISTEMA COMERCIAL · ${company.toUpperCase()}*\n` +
+          `🏢 *SISTEMA COMERCIAL · ${user.companyName.toUpperCase()}*\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
           `🟢 *Canal WhatsApp:* Conectado y Operativo\n\n` +
           `📊 *Métricas del Embudo de Ventas:*\n` +
@@ -131,6 +247,7 @@ export class HermesC2 {
         return { handled: true, replyMessage: msg, actionExecuted: 'STATUS_CHECK' };
       }
 
+      // Master Kenneth
       const credits = await HermesC2.getCreditsInfo();
       let creditsSection = '';
       if (credits.apify) {
@@ -178,9 +295,8 @@ export class HermesC2 {
       lower.includes('cuanto saldo') || 
       lower.includes('cuánto saldo')
     ) {
-      const isClientNode = process.env.MODE === 'client';
-      if (isClientNode) {
-        return { handled: true, replyMessage: '🔒 Comando no disponible. Escribe /comandos para ver tus opciones comerciales.' };
+      if (user.role !== 'master') {
+        return { handled: true, replyMessage: '🔒 Comando exclusivo de infraestructura central. Escribe /comandos para ver tus opciones comerciales.' };
       }
 
       const credits = await HermesC2.getCreditsInfo();
@@ -219,8 +335,7 @@ export class HermesC2 {
 
     // 1.6. Comando: /mensaje o /preview o /plantilla (Previsualizar mensaje de prospección - Solo Master Kenneth)
     if (lower.startsWith('/mensaje') || lower.startsWith('/preview') || lower.startsWith('/plantilla') || lower === 'mensaje' || lower === 'plantilla') {
-      const isClientNode = process.env.MODE === 'client';
-      if (isClientNode) {
+      if (user.role !== 'master') {
         return { handled: true, replyMessage: '🔒 *HERMES:* La configuración de plantillas outbound es gestionada centralmente desde la Matriz Maestra de The Quant Partners.' };
       }
 
@@ -257,8 +372,7 @@ export class HermesC2 {
     // 1.7. Comando: /setmensaje <nuevo texto> (Editar plantilla en caliente desde WhatsApp - Solo Master Kenneth)
     const setMsgMatch = cleanText.match(/^\/setmensaje\s+([\s\S]+)$/i);
     if (setMsgMatch) {
-      const isClientNode = process.env.MODE === 'client';
-      if (isClientNode) {
+      if (user.role !== 'master') {
         return { handled: true, replyMessage: '🔒 *HERMES:* La edición de plantillas de prospección es exclusiva del Master Hub de Kenneth.' };
       }
 
@@ -281,7 +395,6 @@ export class HermesC2 {
         return { handled: true, replyMessage: '⚠️ No hay servicio activo para actualizar.' };
       }
 
-      // Actualizar en base de datos
       activeService.outreachTemplate = newTemplate;
       await OutreachRepo.saveService(activeService);
 
@@ -302,9 +415,15 @@ export class HermesC2 {
 
     // 1.8. Comando: /pipeline o /etapas (Visualización visual del embudo de Ghost CRM)
     if (lower.startsWith('/pipeline') || lower.startsWith('/etapas') || lower === 'pipeline' || lower === 'etapas') {
+      if (user.role === 'client_rep') {
+        return {
+          handled: true,
+          replyMessage: '🔒 El embudo consolidado de la empresa es exclusivo de gerencia. Escribe /status para ver tu rendimiento personal o /leads para tus prospectos asignados.'
+        };
+      }
+
       const summary = await GhostCRM.getFunnelSummary();
       const total = summary.totalLeads || 1;
-
       const pct = (val: number) => Math.round((val / total) * 100);
 
       const msg = 
@@ -325,7 +444,7 @@ export class HermesC2 {
       return { handled: true, replyMessage: msg, actionExecuted: 'VIEW_PIPELINE' };
     }
 
-    // 1.9. Comando: /lead <teléfono> (Consultar ficha técnica de un prospecto específico)
+    // 1.9. Comando: /lead <teléfono> (Consultar ficha técnica con aislamiento de vendedor)
     const leadDetailMatch = cleanText.match(/^\/lead\s+(\+?[0-9]{8,15})$/i);
     if (leadDetailMatch) {
       const queryPhone = leadDetailMatch[1].replace(/[^0-9]/g, '');
@@ -333,6 +452,18 @@ export class HermesC2 {
 
       if (!lead) {
         return { handled: true, replyMessage: `🔍 *HERMES C2:* No se encontró ningún prospecto con el número +${queryPhone}.` };
+      }
+
+      // Si es un vendedor, validar que el lead esté asignado a su cartera
+      if (user.role === 'client_rep') {
+        const repClean = (lead.assignedRepPhone || '').replace(/[^0-9]/g, '');
+        const isAssigned = repClean.length >= 8 && (repClean.endsWith(user.phone) || user.phone.endsWith(repClean));
+        if (!isAssigned) {
+          return {
+            handled: true,
+            replyMessage: '🔒 Este prospecto no está asignado a tu cartera. Solo puedes consultar los expedientes transferidos a ti.'
+          };
+        }
       }
 
       const history = await OutreachRepo.getChatHistory(queryPhone, 2);
@@ -350,7 +481,7 @@ export class HermesC2 {
       };
 
       const msg = 
-        `👤 *HERMES C2 · FICHA DE PROSPECTO*\n` +
+        `👤 *FICHA DE PROSPECTO*\n` +
         `━━━━━━━━━━━━━━━━━━━━\n` +
         `🏢 *Empresa:* ${lead.companyName || 'Sin nombre'}\n` +
         `📱 *WhatsApp:* wa.me/${lead.phone}\n` +
@@ -361,15 +492,14 @@ export class HermesC2 {
         (lead.handoffNotes ? `📝 *Notas de Calificación:* "${lead.handoffNotes}"\n` : '') +
         (lastMsg ? `\n💬 *Último Mensaje:* _"${lastMsg.content.slice(0, 150)}"_\n` : '') +
         `━━━━━━━━━━━━━━━━━━━━\n` +
-        `👉 _Para marcar como venta: /won ${lead.phone} <monto>_`;
+        `👉 _Para registrar cierre: /won ${lead.phone} <monto>_`;
 
       return { handled: true, replyMessage: msg, actionExecuted: 'LEAD_DETAILS' };
     }
 
     // 2. Comando: /pause o /pausa
     if (lower.startsWith('/pause') || lower.startsWith('/pausa') || lower === 'pausar') {
-      const isClientNode = process.env.MODE === 'client';
-      if (isClientNode) {
+      if (user.role !== 'master') {
         return { handled: true, replyMessage: '🔒 La cadencia de prospección es administrada centralmente. Escribe /comandos para consultar tus prospectos.' };
       }
 
@@ -387,8 +517,7 @@ export class HermesC2 {
 
     // 3. Comando: /resume o /reanudar
     if (lower.startsWith('/resume') || lower.startsWith('/reanudar') || lower === 'reanudar') {
-      const isClientNode = process.env.MODE === 'client';
-      if (isClientNode) {
+      if (user.role !== 'master') {
         return { handled: true, replyMessage: '🔒 La cadencia de prospección es administrada centralmente. Escribe /comandos para consultar tus prospectos.' };
       }
 
@@ -404,8 +533,28 @@ export class HermesC2 {
       return { handled: true, replyMessage: msg, actionExecuted: 'RESUME_CAMPAIGNS' };
     }
 
-    // 4. Comando: /leads (Ver prospectos recientes en seguimiento)
+    // 4. Comando: /leads (Ver prospectos con aislamiento estricto de vendedor)
     if (lower.startsWith('/leads') || lower.includes('quienes respondieron') || lower.includes('quiénes respondieron')) {
+      if (user.role === 'client_rep') {
+        const myQualified = await OutreachRepo.getLeads({ assignedRepPhone: user.phone, status: 'QUALIFIED', limit: 5 });
+        const myReplied = await OutreachRepo.getLeads({ assignedRepPhone: user.phone, status: 'REPLIED', limit: 5 });
+
+        if (myQualified.length === 0 && myReplied.length === 0) {
+          return { handled: true, replyMessage: '🔍 No tienes prospectos calientes pendientes de atención en este momento.' };
+        }
+
+        let listMsg = `📋 *TUS PROSPECTOS ASIGNADOS (${user.name.toUpperCase()}):*\n━━━━━━━━━━━━━━━━━━━━\n`;
+        for (const l of myQualified) {
+          listMsg += `⭐ *[CALIFICADO]* ${l.companyName}\n📱 wa.me/${l.phone}\n📝 ${l.handoffNotes ? l.handoffNotes.slice(0, 80) : 'Interesado'}\n\n`;
+        }
+        for (const l of myReplied) {
+          listMsg += `💬 *[RESPONDIÓ]* ${l.companyName}\n📱 wa.me/${l.phone}\n\n`;
+        }
+        listMsg += `👉 _Escribe /won <telefono> <monto> al concretar una venta._`;
+        return { handled: true, replyMessage: listMsg, actionExecuted: 'LIST_LEADS' };
+      }
+
+      // Client Manager or Master
       const repliedLeads = await OutreachRepo.getLeads({ status: 'REPLIED', limit: 5 });
       const qualifiedLeads = await OutreachRepo.getLeads({ status: 'QUALIFIED', limit: 5 });
 
@@ -415,7 +564,7 @@ export class HermesC2 {
 
       let listMsg = `📋 *ÚLTIMOS PROSPECTOS CALIENTES:*\n━━━━━━━━━━━━━━━━━━━━\n`;
       for (const l of qualifiedLeads) {
-        listMsg += `⭐ *[CALIFICADO]* ${l.companyName}\n📱 wa.me/${l.phone}\n👤 Asesor: ${l.assignedRepName || 'Kenneth'}\n\n`;
+        listMsg += `⭐ *[CALIFICADO]* ${l.companyName}\n📱 wa.me/${l.phone}\n👤 Asesor: ${l.assignedRepName || 'Gerencia'}\n\n`;
       }
       for (const l of repliedLeads) {
         listMsg += `💬 *[RESPONDIÓ]* ${l.companyName}\n📱 wa.me/${l.phone}\n\n`;
@@ -425,17 +574,24 @@ export class HermesC2 {
       return { handled: true, replyMessage: listMsg, actionExecuted: 'LIST_LEADS' };
     }
 
-    // 5. Comando: /won <teléfono> <monto> [moneda] (Cierre de venta + Meta CAPI)
+    // 5. Comando: /won <teléfono> <monto> [moneda] (Cierre de venta + Meta CAPI + Dual Alert a Gerencia)
     const wonMatch = cleanText.match(/^\/won\s+(\+?[0-9]{8,15})\s+([0-9]+(?:\.[0-9]+)?)(?:\s+(USD|PEN))?/i);
     if (wonMatch) {
       const targetPhone = wonMatch[1].replace(/[^0-9]/g, '');
       const amount = parseFloat(wonMatch[2]);
       const currency = (wonMatch[3]?.toUpperCase() as 'USD' | 'PEN') || 'USD';
+      const closerName = user.name || (user.role === 'master' ? 'Director Kenneth' : 'Gerencia');
 
-      const result = await GhostCRM.recordWonSale(targetPhone, amount, currency, 'Director Kenneth');
+      const result = await GhostCRM.recordWonSale(targetPhone, amount, currency, closerName);
 
       if (!result.success) {
         return { handled: true, replyMessage: `⚠️ ${result.message}` };
+      }
+
+      // Atribuir venta al récord personal del vendedor en settings.salesReps
+      const repPhoneForAttr = user.role === 'client_rep' ? user.phone : (result.lead?.assignedRepPhone || '');
+      if (repPhoneForAttr) {
+        await OutreachRepo.recordRepSale(repPhoneForAttr, amount, currency);
       }
 
       const capiStatus = result.capiSynced ? '✅ Sincronizado con Meta CAPI (Purchase)' : '⚠️ CAPI pendiente de configuración';
@@ -445,11 +601,399 @@ export class HermesC2 {
         `👤 *Cliente:* ${result.lead?.companyName || targetPhone}\n` +
         `📱 *Teléfono:* +${targetPhone}\n` +
         `💰 *Monto:* $${amount.toLocaleString()} ${currency}\n` +
+        `👤 *Cerrador:* ${closerName}\n` +
         `📡 *Meta Ads:* ${capiStatus}\n` +
         `━━━━━━━━━━━━━━━━━━━━\n` +
         `🚀 _El algoritmo de Meta Ads ha sido retroalimentado para buscar más compradores con este perfil._`;
 
+      // Si fue vendido por un vendedor (client_rep), notificar inmediatamente al Gerente
+      if (user.role === 'client_rep') {
+        const settings = await OutreachRepo.getSettings();
+        const managerPhone = (settings.adminWhatsAppPhone || process.env.ADMIN_WHATSAPP_PHONE || '').replace(/[^0-9]/g, '');
+        if (managerPhone && managerPhone !== user.phone) {
+          const alertManager = 
+            `🎉 *¡NUEVA VENTA CERRADA POR ${user.name.toUpperCase()}!*\n` +
+            `━━━━━━━━━━━━━━━━━━━━\n` +
+            `👤 *Cliente:* ${result.lead?.companyName || targetPhone}\n` +
+            `📱 *WhatsApp:* wa.me/${targetPhone}\n` +
+            `💰 *Monto:* $${amount.toLocaleString()} ${currency}\n` +
+            `📡 *Meta Ads:* ${capiStatus}\n` +
+            `━━━━━━━━━━━━━━━━━━━━\n` +
+            `👏 Gran trabajo del equipo comercial.`;
+          try {
+            await BaileysEngine.getInstance().sendDirectMessage(`${managerPhone}@s.whatsapp.net`, alertManager);
+          } catch (mErr: any) {
+            console.warn('[HermesC2] No se pudo alertar al gerente sobre la venta:', mErr.message);
+          }
+        }
+      }
+
       return { handled: true, replyMessage: msg, actionExecuted: 'RECORD_SALE' };
+    }
+
+    // 5.1. Comando: /equipo (Rendimiento consolidado del equipo comercial - Gerente / Master)
+    if (lower === '/equipo' || lower === 'equipo' || lower.includes('ver equipo') || lower.includes('lista de vendedores')) {
+      if (user.role === 'client_rep') {
+        return { handled: true, replyMessage: '🔒 La visualización del equipo completo es exclusiva de gerencia.' };
+      }
+
+      const settings = await OutreachRepo.getSettings();
+      const reps = settings.salesReps || [];
+
+      if (reps.length === 0) {
+        return {
+          handled: true,
+          replyMessage: '👥 No hay vendedores registrados en el equipo. Usa `/vendedor nuevo <Nombre> <Tel>` para agregar uno.'
+        };
+      }
+
+      let msg = `👥 *EQUIPO COMERCIAL · ${user.companyName.toUpperCase()}*\n━━━━━━━━━━━━━━━━━━━━\n`;
+      for (const rep of reps) {
+        const statusIcon = rep.isActive ? '🟢' : '🔴';
+        const audit = await OutreachRepo.getSalesRepAudit(rep.phone);
+        msg += 
+          `${statusIcon} *${rep.name}* (+${rep.phone})\n` +
+          `• Estado: ${rep.isActive ? 'Activo (En Round-Robin)' : 'Inactivo / Baja'}\n` +
+          `• Leads Asignados: *${audit.totalAssigned}* (Activos: ${audit.activeNegotiations})\n` +
+          `• Ventas Cerradas: *${audit.closedWon}* (${audit.conversionRate}% conv.)\n` +
+          `• Facturación: *$${audit.revenueUSD.toLocaleString()} USD* | *S/. ${audit.revenuePEN.toLocaleString()} PEN*\n\n`;
+      }
+      msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+      msg += `➕ _Para agregar: /vendedor nuevo <Nombre> <Tel>_\n`;
+      msg += `➖ _Para dar de baja: /vendedor baja <Tel> [Reasignar_A]_`;
+
+      return { handled: true, replyMessage: msg, actionExecuted: 'VIEW_TEAM' };
+    }
+
+    // 5.2. Comando: /vendedor nuevo <Nombre> <Teléfono> (Alta de asesor comercial + Bienvenida WhatsApp)
+    const newRepMatch = cleanText.match(/^\/vendedor\s+nuevo\s+(.+?)\s+(\+?[0-9]{8,15})$/i);
+    if (newRepMatch) {
+      if (user.role === 'client_rep') {
+        return { handled: true, replyMessage: '🔒 La gestión de vendedores es exclusiva de gerencia.' };
+      }
+
+      const repName = newRepMatch[1].trim();
+      const rawPhone = newRepMatch[2].replace(/[^0-9]/g, '');
+
+      if (!repName || repName.length < 2) {
+        return { handled: true, replyMessage: '⚠️ Por favor indica un nombre válido para el asesor.' };
+      }
+
+      if (rawPhone.length < 8) {
+        return { handled: true, replyMessage: '⚠️ El número telefónico debe tener al menos 8 dígitos con código de país (ej. 51987654321).' };
+      }
+
+      const settings = await OutreachRepo.getSettings();
+      const currentReps = settings.salesReps || [];
+
+      // Verificar si ya existe
+      const existing = currentReps.find(r => {
+        const cleanExisting = (r.phone || '').replace(/[^0-9]/g, '');
+        return cleanExisting && (rawPhone.endsWith(cleanExisting) || cleanExisting.endsWith(rawPhone));
+      });
+
+      if (existing) {
+        if (existing.isActive) {
+          return { handled: true, replyMessage: `⚠️ El asesor ${existing.name} (+${existing.phone}) ya está registrado y activo en el Round-Robin.` };
+        } else {
+          // Reactivar asesor inactivo
+          existing.isActive = true;
+          existing.name = repName;
+          await OutreachRepo.updateSettings({ salesReps: currentReps });
+          return { handled: true, replyMessage: `🟢 El asesor ${repName} (+${rawPhone}) ha sido reactivado en el Round-Robin.` };
+        }
+      }
+
+      const newRep: SalesRep = {
+        id: `rep_${Date.now()}`,
+        name: repName,
+        phone: rawPhone,
+        isActive: true,
+        leadsAssignedCount: 0,
+        salesClosedCount: 0,
+        totalRevenueClosed: 0,
+        createdAt: new Date().toISOString()
+      };
+
+      currentReps.push(newRep);
+      await OutreachRepo.updateSettings({ salesReps: currentReps });
+
+      // Enviar mensaje de bienvenida automático al WhatsApp del nuevo asesor
+      const welcomeMsg = 
+        `👋 *¡HOLA ${repName.toUpperCase()}! BIENVENIDO/A AL EQUIPO*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `Has sido registrado/a como Asesor Comercial en el sistema inteligente de *${user.companyName}*.\n\n` +
+        `🎯 *¿Cómo funciona tu canal de ventas?*\n` +
+        `1. El Setter IA recibe a los prospectos, califica su interés y te transfiere los clientes más calientes a este chat.\n` +
+        `2. Recibirás su ficha técnica y el enlace directo wa.me/ para contactarlo de inmediato y cerrar.\n` +
+        `3. Al cerrar la venta, escribe aquí:\n` +
+        `   \`/won <teléfono> <monto> USD\` (o PEN)\n\n` +
+        `💡 _Escribe /comandos en cualquier momento para ver tu panel de ventas._`;
+
+      try {
+        await BaileysEngine.getInstance().sendDirectMessage(`${rawPhone}@s.whatsapp.net`, welcomeMsg);
+      } catch (wErr: any) {
+        console.warn('[HermesC2] No se pudo enviar bienvenida al vendedor:', wErr.message);
+      }
+
+      const confirmMsg = 
+        `✅ *ASESOR REGISTRADO CON ÉXITO*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `👤 *Nombre:* ${repName}\n` +
+        `📱 *WhatsApp:* +${rawPhone}\n` +
+        `🟢 *Estado:* Activo en Round-Robin\n\n` +
+        `📩 Se le ha enviado un mensaje de bienvenida con sus instrucciones comerciales.`;
+
+      return { handled: true, replyMessage: confirmMsg, actionExecuted: 'ADD_SALES_REP' };
+    }
+
+    // 5.3. Comando: /vendedor baja <Teléfono> [tel_reasignar] (Offboarding + Dossier + Reasignación Anti-Pérdida)
+    const bajaMatch = cleanText.match(/^\/vendedor\s+(?:baja|quitar)\s+(\+?[0-9]{8,15})(?:\s+(\+?[0-9]{8,15}))?$/i);
+    if (bajaMatch) {
+      if (user.role === 'client_rep') {
+        return { handled: true, replyMessage: '🔒 La gestión de personal es exclusiva de gerencia.' };
+      }
+
+      const targetPhone = bajaMatch[1].replace(/[^0-9]/g, '');
+      const reassignPhone = bajaMatch[2] ? bajaMatch[2].replace(/[^0-9]/g, '') : '';
+
+      const settings = await OutreachRepo.getSettings();
+      const currentReps = settings.salesReps || [];
+
+      const repIndex = currentReps.findIndex(r => {
+        const clean = (r.phone || '').replace(/[^0-9]/g, '');
+        return clean && (targetPhone.endsWith(clean) || clean.endsWith(targetPhone));
+      });
+
+      if (repIndex === -1) {
+        return { handled: true, replyMessage: `⚠️ No se encontró ningún asesor registrado con el teléfono +${targetPhone}.` };
+      }
+
+      const rep = currentReps[repIndex];
+
+      // 1. Reporte de liquidación comercial auditando PostgreSQL
+      const audit = await OutreachRepo.getSalesRepAudit(targetPhone);
+
+      // 2. Determinar destino de reasignación
+      let targetReassignPhone = '';
+      let targetReassignName = '';
+
+      if (reassignPhone) {
+        const destRep = currentReps.find(r => {
+          const clean = (r.phone || '').replace(/[^0-9]/g, '');
+          return clean && (reassignPhone.endsWith(clean) || clean.endsWith(reassignPhone));
+        });
+        if (destRep) {
+          targetReassignPhone = destRep.phone;
+          targetReassignName = destRep.name;
+        }
+      }
+
+      if (!targetReassignPhone) {
+        // Fallback al Gerente
+        targetReassignPhone = user.phone;
+        targetReassignName = user.name || 'Gerencia General';
+      }
+
+      // 3. Reasignar prospectos en negociación activa
+      const reassignedCount = await OutreachRepo.reassignLeads(targetPhone, targetReassignPhone, targetReassignName);
+
+      // 4. Desactivar asesor en configuración
+      currentReps[repIndex].isActive = false;
+      await OutreachRepo.updateSettings({ salesReps: currentReps });
+
+      // 5. Notificar al vendedor dado de baja de forma respetuosa
+      const exitMsg = 
+        `👋 Hola ${rep.name}. Te informamos que tu acceso al sistema comercial de ${user.companyName} ha sido desactivado. Agradecemos tu participación en el equipo.`;
+      try {
+        await BaileysEngine.getInstance().sendDirectMessage(`${targetPhone}@s.whatsapp.net`, exitMsg);
+      } catch {}
+
+      // 6. Enviar Dossier de Liquidación a Gerencia
+      const dossierMsg = 
+        `📋 *DOSSIER DE LIQUIDACIÓN COMERCIAL*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `👤 *Asesor:* ${rep.name} (+${targetPhone})\n` +
+        `🔴 *Estado:* Desactivado del Round-Robin\n\n` +
+        `📊 *Balance Histórico:*\n` +
+        `• Total Leads Asignados: *${audit.totalAssigned}*\n` +
+        `• Ventas Ganadas Cerradas: *${audit.closedWon}*\n` +
+        `• Tasa de Conversión: *${audit.conversionRate}%*\n` +
+        `• Facturación Lograda USD: *$${audit.revenueUSD.toLocaleString()}*\n` +
+        `• Facturación Lograda PEN: *S/. ${audit.revenuePEN.toLocaleString()}*\n\n` +
+        `🛡️ *Protocolo Anti-Pérdida de Leads:*\n` +
+        `• Prospectos en Negociación Reasignados: *${reassignedCount}*\n` +
+        `• Reasignados a: *${targetReassignName}* (+${targetReassignPhone})\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `✅ Operación completada con éxito. Ningún prospecto se quedó sin seguimiento.`;
+
+      return { handled: true, replyMessage: dossierMsg, actionExecuted: 'REMOVE_SALES_REP' };
+    }
+
+    // 5.4. Comando: /setter o /prompt (Consultar directivas del Setter IA)
+    if (lower === '/setter' || lower === '/prompt' || lower === 'setter' || lower === 'prompt') {
+      if (user.role === 'client_rep') {
+        return { handled: true, replyMessage: '🔒 Las directivas del Setter IA son exclusivas de gerencia.' };
+      }
+
+      const activeService = (await OutreachRepo.getActiveService()) || ((await OutreachRepo.getServices())[0]);
+      if (!activeService) {
+        return { handled: true, replyMessage: '⚠️ No hay campaña configurada para revisar el Setter.' };
+      }
+
+      const promptText = activeService.aiSystemPrompt || 'Directivas por defecto: Setter consultivo anti-IVR, califica necesidad y transfiere al especialista humano.';
+
+      const msg = 
+        `🤖 *DIRECTIVAS ACTIVAS DEL SETTER IA*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `📢 *Campaña:* *${activeService.name}*\n` +
+        `🎭 *Modo:* Conversacional Consultivo Anti-IVR\n` +
+        `🎯 *Cierre:* ${activeService.closingType || 'HUMAN_TAKEOVER'}\n\n` +
+        `📋 *INSTRUCCIONES / PROMPT:*\n` +
+        `\`\`\`\n${promptText}\n\`\`\`\n\n` +
+        `✏️ *Para modificar estas instrucciones en caliente:*\n` +
+        `Escribe:\n` +
+        `\`/setsetter <nuevas instrucciones para el bot>\``;
+
+      return { handled: true, replyMessage: msg, actionExecuted: 'VIEW_SETTER_PROMPT' };
+    }
+
+    // 5.5. Comando: /setsetter <nuevas instrucciones>
+    const setSetterMatch = cleanText.match(/^\/setsetter\s+([\s\S]+)$/i);
+    if (setSetterMatch) {
+      if (user.role === 'client_rep') {
+        return { handled: true, replyMessage: '🔒 La modificación del Setter es exclusiva de gerencia.' };
+      }
+
+      const newPrompt = setSetterMatch[1].trim();
+      if (newPrompt.length < 20) {
+        return { handled: true, replyMessage: '⚠️ Las instrucciones deben tener al menos 20 caracteres para ser efectivas.' };
+      }
+
+      const activeService = (await OutreachRepo.getActiveService()) || ((await OutreachRepo.getServices())[0]);
+      if (!activeService) {
+        return { handled: true, replyMessage: '⚠️ No hay campaña activa para configurar.' };
+      }
+
+      activeService.aiSystemPrompt = newPrompt;
+      await OutreachRepo.saveService(activeService);
+
+      const msg = 
+        `✅ *INSTRUCCIONES DEL SETTER IA ACTUALIZADAS*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `📢 Campaña: *${activeService.name}*\n\n` +
+        `👀 *Nuevas Directivas en Caliente:*\n` +
+        `\`\`\`\n${newPrompt.slice(0, 300)}${newPrompt.length > 300 ? '...' : ''}\n\`\`\`\n\n` +
+        `🚀 El Setter aplicará estas directivas de inmediato a las nuevas interacciones.`;
+
+      return { handled: true, replyMessage: msg, actionExecuted: 'SET_SETTER_PROMPT' };
+    }
+
+    // 5.6. Comando: /alertas on y /alertas off (Muteo de copias al Gerente)
+    if (
+      lower === '/alertas on' || 
+      lower === '/alertas off' || 
+      lower === '/mutear' || 
+      lower === '/desmutear' || 
+      lower.startsWith('/alertas')
+    ) {
+      if (user.role === 'client_rep') {
+        return { handled: true, replyMessage: '🔒 El control de alertas es exclusivo de gerencia.' };
+      }
+
+      const enable = lower.includes('on') || lower.includes('desmutear') || lower.includes('activar');
+      await OutreachRepo.updateSettings({ managerLeadAlertsEnabled: enable });
+
+      if (enable) {
+        const msg = 
+          `🔔 *ALERTAS DE ASIGNACIÓN ACTIVADAS*\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `Recibirás una notificación por WhatsApp cada vez que la IA califique un prospecto y se lo asigne a un asesor de tu equipo.`;
+        return { handled: true, replyMessage: msg, actionExecuted: 'TOGGLE_ALERTS' };
+      } else {
+        const msg = 
+          `🔕 *ALERTAS DE ASIGNACIÓN SILENCIADAS*\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `Se han pausado las notificaciones de copia al asignar prospectos a los vendedores (ideal para horas pico).\n\n` +
+          `⚠️ *Nota importante:* Las notificaciones de *Ventas Ganadas (/won)* permanecerán SIEMPRE activas para asegurar el control de ingresos.`;
+        return { handled: true, replyMessage: msg, actionExecuted: 'TOGGLE_ALERTS' };
+      }
+    }
+
+    // 5.7. Comando: /setpixel <Pixel_ID> <Token> [TestCode] (Configurar Meta Pixel con ping en vivo)
+    const setPixelMatch = cleanText.match(/^\/setpixel\s+([0-9]{10,25})\s+(\S+)(?:\s+(\S+))?$/i);
+    if (setPixelMatch) {
+      if (user.role === 'client_rep') {
+        return { handled: true, replyMessage: '🔒 La configuración de Meta Ads es exclusiva de gerencia.' };
+      }
+
+      const pixelId = setPixelMatch[1].trim();
+      const token = setPixelMatch[2].trim();
+      const testCode = setPixelMatch[3]?.trim();
+
+      // Probar conexión en vivo con Meta Graph API
+      const testResult = await MetaCAPIClient.testConnection(pixelId, token, testCode);
+
+      // Persistir credenciales en CampaignSettings
+      await OutreachRepo.updateSettings({
+        metaDatasetId: pixelId,
+        metaCapiToken: token,
+        metaTestEventCode: testCode || ''
+      });
+
+      let statusMsg = '';
+      if (testResult.success) {
+        statusMsg = `🟢 *Conexión Verificada:* Ping exitoso contra Meta Graph API (v21.0). Eventos listos para sincronización en tiempo real.`;
+      } else {
+        statusMsg = `⚠️ *Credenciales Guardadas, pero Meta reportó:* "${testResult.error}". Verifica que el token tenga el permiso \`ads_management\` o que el Dataset ID pertenezca a tu cuenta comercial.`;
+      }
+
+      const msg = 
+        `📡 *CONFIGURACIÓN META CAPI / PIXEL*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `🆔 *Dataset / Pixel ID:* \`${pixelId}\`\n` +
+        `🔑 *Access Token:* \`${token.slice(0, 10)}...${token.slice(-5)}\`\n` +
+        (testCode ? `🧪 *Código de Testeo:* \`${testCode}\`\n` : '') +
+        `\n${statusMsg}\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `🚀 Ahora cada vez que registres una venta con \`/won\`, Meta Ads aprenderá a buscar más compradores con ese perfil exacto.`;
+
+      return { handled: true, replyMessage: msg, actionExecuted: 'SET_PIXEL' };
+    }
+
+    // 5.8. Comando: /pixel (Consultar diagnóstico del Pixel de Meta Ads)
+    if (lower === '/pixel' || lower === 'pixel') {
+      if (user.role === 'client_rep') {
+        return { handled: true, replyMessage: '🔒 La información de Meta Ads es exclusiva de gerencia.' };
+      }
+
+      const settings = await OutreachRepo.getSettings();
+      const summary = await GhostCRM.getFunnelSummary();
+      const pixelId = settings.metaDatasetId || process.env.META_DATASET_ID || process.env.META_PIXEL_ID;
+      const hasToken = !!(settings.metaCapiToken || process.env.META_CAPI_ACCESS_TOKEN);
+
+      if (!pixelId) {
+        return {
+          handled: true,
+          replyMessage: 
+            `📡 *META CAPI · NO CONFIGURADO*\n` +
+            `━━━━━━━━━━━━━━━━━━━━\n` +
+            `Aún no has vinculado tu Pixel de Meta Ads.\n\n` +
+            `👉 *Para activarlo por WhatsApp, escribe:*\n` +
+            `\`/setpixel <Pixel_ID> <Access_Token> [TestCode]\``
+        };
+      }
+
+      const msg = 
+        `📡 *DIAGNÓSTICO META CAPI / PIXEL*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `🆔 *Dataset / Pixel ID:* \`${pixelId}\`\n` +
+        `🔑 *Token:* ${hasToken ? '✅ Configurado' : '❌ Falta Token'}\n` +
+        (settings.metaTestEventCode ? `🧪 *Código Test:* \`${settings.metaTestEventCode}\`\n` : '') +
+        `📊 *Eventos Offline Sincronizados:* *${summary.metaCapiEventsFired}*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `💡 _Para actualizar credenciales: /setpixel <ID> <Token>_`;
+
+      return { handled: true, replyMessage: msg, actionExecuted: 'VIEW_PIXEL' };
     }
 
     // 6. Comando: /sop o /manual o /guia
@@ -464,23 +1008,41 @@ export class HermesC2 {
       lower.includes('manual') || 
       lower.includes('cómo instalo')
     ) {
-      const isClientNode = process.env.MODE === 'client';
-      if (isClientNode) {
-        const portalUrl = process.env.PUBLIC_URL || '';
+      if (user.role === 'client_rep') {
         const sopMsg = 
-          `📘 *GUÍA OPERATIVA · EQUIPO DE VENTAS*\n` +
+          `📘 *GUÍA OPERATIVA · ASESOR DE VENTAS*\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
           `*1. Alerta de Lead Calificado:*\n` +
-          `Cuando la IA detecta interés, recibirás una notificación privada con las necesidades del cliente y su link directo a WhatsApp (wa.me/).\n\n` +
-          `*2. Atención Humana Inmediata:*\n` +
-          `Abre el chat y continúa la conversación de forma consultiva. La IA se silencia de inmediato para darte el control total.\n\n` +
-          `*3. Consulta de Expedientes:*\n` +
-          `Escribe \`/lead <teléfono>\` para revisar el resumen previo y preguntas respondidas por el prospecto.\n\n` +
+          `Cuando la IA detecta que un prospecto quiere cotizar o agendar, recibirás un mensaje privado con su necesidad y su enlace directo wa.me/.\n\n` +
+          `*2. Contacto Inmediato:*\n` +
+          `Abre el enlace de inmediato y salúdalo de forma consultiva. Los primeros 5 minutos definen el 80% de la conversión.\n\n` +
+          `*3. Consulta de Expediente:*\n` +
+          `Escribe \`/lead <teléfono>\` para ver qué respondió previamente a la IA.\n\n` +
           `*4. Registro de Venta Ganada:*\n` +
-          `Apenas cierres la venta, escribe en este chat:\n` +
+          `Apenas cierre la compra, escribe en este chat:\n` +
           `\`/won <teléfono> <monto> USD\` (o PEN)\n` +
-          `Esto registrará tu facturación y notificará a Meta Ads para conseguir más prospectos con perfil similar.\n\n` +
-          (portalUrl ? `*5. Dashboard Web:*\nVisualiza tu pipeline en: https://${portalUrl}/portal\n\n` : '') +
+          `Esto registrará tu comisión y notificará a gerencia.\n\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `💡 _Escribe /status para ver tus ventas cerradas acumuladas._`;
+        return { handled: true, replyMessage: sopMsg, actionExecuted: 'REP_SOP' };
+      }
+
+      if (user.role === 'client_manager') {
+        const portalUrl = process.env.PUBLIC_URL || '';
+        const sopMsg = 
+          `📘 *GUÍA OPERATIVA GERENCIAL · ${user.companyName.toUpperCase()}*\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `*1. Supervisión en Tiempo Real:*\n` +
+          `Consulta el embudo global con \`/pipeline\` y los últimos leads con \`/leads\`.\n\n` +
+          `*2. Gestión del Equipo:*\n` +
+          `Usa \`/equipo\` para ver métricas por vendedor, \`/vendedor nuevo\` para dar de alta y \`/vendedor baja\` para liquidar y reasignar prospectos.\n\n` +
+          `*3. Calibración del Setter IA:*\n` +
+          `Revisa las instrucciones del bot con \`/setter\` y ajústalas en caliente con \`/setsetter <texto>\`.\n\n` +
+          `*4. Meta Ads CAPI:*\n` +
+          `Conecta tu Pixel con \`/setpixel\` para que las ventas ganadas con \`/won\` optimicen tus anuncios de Meta automáticamente.\n\n` +
+          `*5. Notificaciones:*\n` +
+          `Usa \`/alertas off\` para pausar copias de prospectos en horas punta.\n\n` +
+          (portalUrl ? `*6. Dashboard Web:*\nVisualiza tu pipeline en: https://${portalUrl}/portal\n\n` : '') +
           `━━━━━━━━━━━━━━━━━━━━\n` +
           `💡 _Escribe /comandos para ver todas tus herramientas._`;
         return { handled: true, replyMessage: sopMsg, actionExecuted: 'CLIENT_SOP' };
@@ -505,8 +1067,7 @@ export class HermesC2 {
 
     // 7. Comando: /provision <nombre> <nicho> <adminPhone> <vendedores>
     if (lower.startsWith('/provision')) {
-      const isClientNode = process.env.MODE === 'client';
-      if (isClientNode) {
+      if (user.role !== 'master') {
         return { handled: true, replyMessage: '🔒 Comando no disponible. Escribe /comandos para ver tus opciones comerciales.' };
       }
       try {
@@ -570,25 +1131,42 @@ export class HermesC2 {
       }
     }
 
-    // 8. Lenguaje Natural Copilot vía OpenRouter (Gemini Flash)
-    return await this.handleNaturalLanguageQuery(cleanText);
+    // 8. Lenguaje Natural Copilot vía OpenRouter (Gemini Flash) contextualizado por Rol
+    return await this.handleNaturalLanguageQuery(cleanText, user);
   }
 
   /**
-   * Procesa consultas en lenguaje natural del Administrador usando OpenRouter
+   * Procesa consultas en lenguaje natural según el rol e identidad del usuario
    */
-  private static async handleNaturalLanguageQuery(query: string): Promise<HermesExecutionResult> {
+  private static async handleNaturalLanguageQuery(query: string, user: HermesUserIdentity): Promise<HermesExecutionResult> {
     const summary = await GhostCRM.getFunnelSummary();
     const settings = await OutreachRepo.getSettings();
     const apiKey = settings.aiApiKey || process.env.OPENROUTER_API_KEY || '';
-    const isClientNode = process.env.MODE === 'client';
-    const company = process.env.COMPANY_NAME || 'Empresa';
 
     let systemPrompt = '';
-    if (isClientNode) {
+
+    if (user.role === 'client_rep') {
+      const audit = await OutreachRepo.getSalesRepAudit(user.phone);
       systemPrompt = 
-        `Eres el Asistente Comercial Inteligente de ${company}.
-Hablas con el director o asesor comercial por WhatsApp con tono consultivo, respetuoso, conciso y profesional.
+        `Eres el Asistente Comercial de WhatsApp para el asesor comercial ${user.name} en la empresa ${user.companyName}.
+Hablas con tono motivador, consultivo, ágil y profesional.
+Tu misión es ayudarle a responder dudas sobre técnicas de ventas, cómo dar seguimiento a sus prospectos o cómo usar sus herramientas de WhatsApp.
+
+DATOS PERSONALES DEL ASESOR:
+- Asesor: ${user.name}
+- Leads asignados: ${audit.totalAssigned}
+- Negociaciones activas: ${audit.activeNegotiations}
+- Ventas cerradas: ${audit.closedWon}
+- Facturación cerrada: $${audit.revenueUSD} USD / S/. ${audit.revenuePEN} PEN
+
+INSTRUCCIONES:
+- Responde de forma clara y directa (máximo 2 párrafos breves).
+- Si te pide ver sus leads, sugiérele /leads. Si te pide ver un lead, /lead <tel>. Si cerró una venta, /won <tel> <monto>.
+- NUNCA menciones facturación global de la empresa, scraping, Apify ni infraestructura técnica interna.`;
+    } else if (user.role === 'client_manager') {
+      systemPrompt = 
+        `Eres el Asistente Comercial Inteligente para la Dirección de ${user.companyName}.
+Hablas con el gerente comercial por WhatsApp con tono consultivo, respetuoso, conciso y profesional.
 
 DATOS ACTUALES DEL EMBUDO DE VENTAS (GHOST CRM):
 - Total Prospectos: ${summary.totalLeads}
@@ -603,9 +1181,10 @@ DATOS ACTUALES DEL EMBUDO DE VENTAS (GHOST CRM):
 
 INSTRUCCIONES:
 - Responde de forma clara y directa (máximo 2 párrafos breves).
-- Si te piden acciones, sugiéreles los comandos disponibles: /pipeline, /leads, /lead <tel>, /won <tel> <monto>, /status, /manual.
+- Si te piden acciones, sugiéreles los comandos disponibles: /pipeline, /equipo, /vendedor nuevo, /vendedor baja, /setter, /setpixel, /alertas, /leads, /lead <tel>, /won <tel> <monto>, /status, /manual.
 - NUNCA menciones scraping, Apify, proxies ni infraestructura técnica interna.`;
     } else {
+      // Master Kenneth
       const credits = await HermesC2.getCreditsInfo();
       let creditsPrompt = '';
       if (credits.apify) {
@@ -645,7 +1224,7 @@ INSTRUCCIONES:
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
           'HTTP-Referer': 'https://thequantpartners.com',
-          'X-Title': isClientNode ? `QP Outreach Engine - ${company}` : 'QP Outreach Engine - Hermes C2'
+          'X-Title': user.role !== 'master' ? `QP Outreach Engine - ${user.companyName}` : 'QP Outreach Engine - Hermes C2'
         },
         body: JSON.stringify({
           model: settings.aiModel || 'google/gemini-2.5-flash',
@@ -661,15 +1240,15 @@ INSTRUCCIONES:
       if (resp.ok) {
         const json = await resp.json() as any;
         const answer = json?.choices?.[0]?.message?.content || 'Mensaje procesado.';
-        const badge = isClientNode ? `📱 *ASISTENTE COMERCIAL:*` : `🏛️ *HERMES C2:*`;
+        const badge = user.role !== 'master' ? `📱 *ASISTENTE COMERCIAL:*` : `🏛️ *HERMES C2:*`;
         return { handled: true, replyMessage: `${badge}\n\n${answer}`, actionExecuted: 'NATURAL_LANGUAGE' };
       }
     } catch (err: any) {
       console.warn('[HermesC2] Error consultando LLM para admin:', err.message);
     }
 
-    const fallback = isClientNode 
-      ? `📱 *ASISTENTE COMERCIAL:* Recibido. Escribe /comandos para ver tus opciones comerciales (/pipeline, /leads, /lead, /won, /status, /manual).`
+    const fallback = user.role !== 'master'
+      ? `📱 *ASISTENTE COMERCIAL:* Recibido. Escribe /comandos para ver tus opciones comerciales (/leads, /won, /status, /manual).`
       : `🏛️ *HERMES C2:* Recibido. Comandos disponibles: /status, /saldo, /pipeline, /leads, /won, /provision.`;
 
     return {
