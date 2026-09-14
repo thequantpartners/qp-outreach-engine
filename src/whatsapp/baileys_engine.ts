@@ -335,7 +335,7 @@ export class BaileysEngine {
 
           // Interceptar comandos de Hermes C2 enviados desde la cuenta propia (ej. notas consigo mismo o en cualquier chat)
           const trimmed = incomingText.trim();
-          const isSlashCommand = trimmed.startsWith('/') || ['sop', 'status', 'leads', 'won', 'help', 'ayuda'].includes(trimmed.toLowerCase());
+          const isSlashCommand = trimmed.startsWith('/') || ['sop', 'status', 'leads', 'won', 'help', 'ayuda', 'comandos', 'menu', 'pipeline', 'etapas', 'manual', 'guia'].includes(trimmed.toLowerCase());
           if (isSlashCommand) {
             console.log(`👑 [BaileysEngine] Comando Hermes detectado desde cuenta propia (fromMe): "${incomingText}"`);
             try {

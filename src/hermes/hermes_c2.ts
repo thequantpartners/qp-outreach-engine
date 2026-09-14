@@ -18,18 +18,26 @@ export class HermesC2 {
   private static schedulerInterval: NodeJS.Timeout | null = null;
 
   /**
-   * Determina si un número de WhatsApp corresponde al Administrador autorizado
+   * Determina si un número de WhatsApp corresponde al Administrador autorizado o a un Asesor de Ventas
    */
   public static async isAdminPhone(phone: string): Promise<boolean> {
     const clean = phone.replace(/[^0-9]/g, '');
     if (clean === '269363907195002') return true;
     const settings = await OutreachRepo.getSettings();
     const adminPhone = (settings.adminWhatsAppPhone || process.env.ADMIN_WHATSAPP_PHONE || '51902105668').replace(/[^0-9]/g, '');
-    return clean.endsWith(adminPhone) || adminPhone.endsWith(clean);
+    if (clean.endsWith(adminPhone) || adminPhone.endsWith(clean)) return true;
+
+    // Autorizar a los vendedores y asesores comerciales del cliente
+    const reps = settings.salesReps || [];
+    const isRep = reps.some(r => {
+      const repClean = (r.phone || '').replace(/[^0-9]/g, '');
+      return repClean && (clean.endsWith(repClean) || repClean.endsWith(clean));
+    });
+    return isRep;
   }
 
   /**
-   * Intercepta y procesa comandos u órdenes en lenguaje natural del Administrador
+   * Intercepta y procesa comandos u órdenes en lenguaje natural del Administrador o Asesor Comercial
    */
   public static async handleAdminMessage(incomingText: string, senderPhone: string): Promise<HermesExecutionResult> {
     const cleanText = incomingText.trim();
@@ -47,20 +55,25 @@ export class HermesC2 {
       lower === 'menu'
     ) {
       const isClient = process.env.MODE === 'client';
+      const company = process.env.COMPANY_NAME || 'Equipo Comercial';
       let menuMsg = '';
 
       if (isClient) {
         menuMsg = 
-          `📱 *PANEL DE COMANDOS · ASESOR COMERCIAL*\n` +
+          `📱 *PANEL DE COMANDOS · ${company.toUpperCase()}*\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
-          `📊 *REPORTES Y VENTAS:*\n` +
-          `• \`/pipeline\` : Ver embudo de prospectos e ingresos.\n` +
-          `• \`/leads\` : Lista prospectos calientes que esperan respuesta.\n` +
-          `• \`/lead <tel>\` : Ver expediente comercial de un prospecto.\n` +
-          `• \`/won <tel> <monto> [USD|PEN]\` : Registrar venta ganada.\n` +
-          `• \`/status\` : Salud del sistema y estado de WhatsApp.\n\n` +
+          `Bienvenido a tu Asistente Comercial de WhatsApp. Aquí tienes tus herramientas disponibles:\n\n` +
+          `📊 *REPORTES Y PIPELINE:*\n` +
+          `• \`/pipeline\` : Visualiza el embudo de prospectos, tasas de conversión y facturación.\n` +
+          `• \`/leads\` : Lista los prospectos calificados que esperan atención.\n` +
+          `• \`/lead <tel>\` : Consulta el expediente, notas de IA y último chat del prospecto.\n` +
+          `• \`/status\` : Salud del canal de WhatsApp y estado comercial general.\n\n` +
+          `💰 *CIERRE DE VENTAS:*\n` +
+          `• \`/won <tel> <monto> [USD|PEN]\` : Registra una venta ganada y optimiza tus campañas de Meta Ads.\n\n` +
+          `📘 *GUÍA OPERATIVA:*\n` +
+          `• \`/manual\` (o \`/sop\`) : Manual rápido de atención y mejores prácticas comerciales.\n\n` +
           `🤖 *COPILOT IA:*\n` +
-          `Puedes hacerme cualquier pregunta en texto libre (ej. "¿cuántas citas cerramos esta semana?").`;
+          `Escribe cualquier duda en texto libre (ej. "¿cuántas citas se agendaron?" o "¿cuál es el estado del último prospecto?").`;
       } else {
         menuMsg = 
           `👑 *HERMES C2 · CATÁLOGO COMPLETO DE COMANDOS*\n` +
@@ -93,8 +106,32 @@ export class HermesC2 {
       const summary = await GhostCRM.getFunnelSummary();
       const services = await OutreachRepo.getServices();
       const activeOutbound = services.filter(s => s.isActive && s.type === 'OUTBOUND');
-      const credits = await HermesC2.getCreditsInfo();
+      const isClientNode = process.env.MODE === 'client';
 
+      if (isClientNode) {
+        const company = process.env.COMPANY_NAME || 'Empresa';
+        const msg = 
+          `🏢 *SISTEMA COMERCIAL · ${company.toUpperCase()}*\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `🟢 *Canal WhatsApp:* Conectado y Operativo\n\n` +
+          `📊 *Métricas del Embudo de Ventas:*\n` +
+          `• Total Prospectos: *${summary.totalLeads}*\n` +
+          `• Contactados: *${summary.outreachSent}*\n` +
+          `• Respuestas Recibidas: *${summary.replied}*\n` +
+          `• Leads Calificados: *${summary.qualified}*\n` +
+          `• Citas Agendadas: *${summary.meetingScheduled}*\n` +
+          `• Ventas Cerradas: *${summary.closedWon}*\n` +
+          `• Sincronizaciones Meta CAPI: *${summary.metaCapiEventsFired}*\n\n` +
+          `💰 *Facturación Registrada:*\n` +
+          `• USD: *$${summary.totalRevenueUSD.toLocaleString()}*\n` +
+          `• PEN: *S/. ${summary.totalRevenuePEN.toLocaleString()}*\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `💡 _Escribe /comandos para ver todas tus opciones comerciales._`;
+
+        return { handled: true, replyMessage: msg, actionExecuted: 'STATUS_CHECK' };
+      }
+
+      const credits = await HermesC2.getCreditsInfo();
       let creditsSection = '';
       if (credits.apify) {
         const a = credits.apify;
@@ -123,12 +160,12 @@ export class HermesC2 {
         `• PEN: *S/. ${summary.totalRevenuePEN.toLocaleString()}*` +
         creditsSection +
         `\n━━━━━━━━━━━━━━━━━━━━\n` +
-        `💡 _Escribe /saldo, /leads, /pausa, /reanudar o /sop_`;
+        `💡 _Escribe /comandos para ver el catálogo completo._`;
 
       return { handled: true, replyMessage: msg, actionExecuted: 'STATUS_CHECK' };
     }
 
-    // 1.5. Comando: /saldo o /balance o /apify (Consulta de créditos)
+    // 1.5. Comando: /saldo o /balance o /apify (Consulta de créditos - Solo Master Kenneth)
     if (
       lower.startsWith('/saldo') || 
       lower.startsWith('/balance') || 
@@ -141,6 +178,11 @@ export class HermesC2 {
       lower.includes('cuanto saldo') || 
       lower.includes('cuánto saldo')
     ) {
+      const isClientNode = process.env.MODE === 'client';
+      if (isClientNode) {
+        return { handled: true, replyMessage: '🔒 Comando no disponible. Escribe /comandos para ver tus opciones comerciales.' };
+      }
+
       const credits = await HermesC2.getCreditsInfo();
       let msg = `💳 *HERMES C2 · BALANCE DE CRÉDITOS Y CONSUMO*\n━━━━━━━━━━━━━━━━━━━━\n`;
 
@@ -326,6 +368,11 @@ export class HermesC2 {
 
     // 2. Comando: /pause o /pausa
     if (lower.startsWith('/pause') || lower.startsWith('/pausa') || lower === 'pausar') {
+      const isClientNode = process.env.MODE === 'client';
+      if (isClientNode) {
+        return { handled: true, replyMessage: '🔒 La cadencia de prospección es administrada centralmente. Escribe /comandos para consultar tus prospectos.' };
+      }
+
       const services = await OutreachRepo.getServices();
       let count = 0;
       for (const s of services) {
@@ -340,6 +387,11 @@ export class HermesC2 {
 
     // 3. Comando: /resume o /reanudar
     if (lower.startsWith('/resume') || lower.startsWith('/reanudar') || lower === 'reanudar') {
+      const isClientNode = process.env.MODE === 'client';
+      if (isClientNode) {
+        return { handled: true, replyMessage: '🔒 La cadencia de prospección es administrada centralmente. Escribe /comandos para consultar tus prospectos.' };
+      }
+
       const services = await OutreachRepo.getServices();
       let count = 0;
       for (const s of services) {
@@ -358,10 +410,10 @@ export class HermesC2 {
       const qualifiedLeads = await OutreachRepo.getLeads({ status: 'QUALIFIED', limit: 5 });
 
       if (repliedLeads.length === 0 && qualifiedLeads.length === 0) {
-        return { handled: true, replyMessage: '🔍 *HERMES C2:* No hay prospectos pendientes de atención en este momento.' };
+        return { handled: true, replyMessage: '🔍 No hay prospectos calientes pendientes de atención en este momento.' };
       }
 
-      let listMsg = `📋 *HERMES C2 · ÚLTIMOS LEADS CALIENTES:*\n━━━━━━━━━━━━━━━━━━━━\n`;
+      let listMsg = `📋 *ÚLTIMOS PROSPECTOS CALIENTES:*\n━━━━━━━━━━━━━━━━━━━━\n`;
       for (const l of qualifiedLeads) {
         listMsg += `⭐ *[CALIFICADO]* ${l.companyName}\n📱 wa.me/${l.phone}\n👤 Asesor: ${l.assignedRepName || 'Kenneth'}\n\n`;
       }
@@ -383,7 +435,7 @@ export class HermesC2 {
       const result = await GhostCRM.recordWonSale(targetPhone, amount, currency, 'Director Kenneth');
 
       if (!result.success) {
-        return { handled: true, replyMessage: `⚠️ *HERMES C2:* ${result.message}` };
+        return { handled: true, replyMessage: `⚠️ ${result.message}` };
       }
 
       const capiStatus = result.capiSynced ? '✅ Sincronizado con Meta CAPI (Purchase)' : '⚠️ CAPI pendiente de configuración';
@@ -400,8 +452,40 @@ export class HermesC2 {
       return { handled: true, replyMessage: msg, actionExecuted: 'RECORD_SALE' };
     }
 
-    // 6. Comando: /sop o "sop"
-    if (lower === '/sop' || lower === 'sop' || lower.includes('dame el sop') || lower.includes('sop de instalacion') || lower.includes('cómo instalo')) {
+    // 6. Comando: /sop o /manual o /guia
+    if (
+      lower === '/sop' || 
+      lower === 'sop' || 
+      lower === '/manual' || 
+      lower === 'manual' || 
+      lower === '/guia' || 
+      lower === 'guia' || 
+      lower.includes('dame el sop') || 
+      lower.includes('manual') || 
+      lower.includes('cómo instalo')
+    ) {
+      const isClientNode = process.env.MODE === 'client';
+      if (isClientNode) {
+        const portalUrl = process.env.PUBLIC_URL || '';
+        const sopMsg = 
+          `📘 *GUÍA OPERATIVA · EQUIPO DE VENTAS*\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `*1. Alerta de Lead Calificado:*\n` +
+          `Cuando la IA detecta interés, recibirás una notificación privada con las necesidades del cliente y su link directo a WhatsApp (wa.me/).\n\n` +
+          `*2. Atención Humana Inmediata:*\n` +
+          `Abre el chat y continúa la conversación de forma consultiva. La IA se silencia de inmediato para darte el control total.\n\n` +
+          `*3. Consulta de Expedientes:*\n` +
+          `Escribe \`/lead <teléfono>\` para revisar el resumen previo y preguntas respondidas por el prospecto.\n\n` +
+          `*4. Registro de Venta Ganada:*\n` +
+          `Apenas cierres la venta, escribe en este chat:\n` +
+          `\`/won <teléfono> <monto> USD\` (o PEN)\n` +
+          `Esto registrará tu facturación y notificará a Meta Ads para conseguir más prospectos con perfil similar.\n\n` +
+          (portalUrl ? `*5. Dashboard Web:*\nVisualiza tu pipeline en: https://${portalUrl}/portal\n\n` : '') +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `💡 _Escribe /comandos para ver todas tus herramientas._`;
+        return { handled: true, replyMessage: sopMsg, actionExecuted: 'CLIENT_SOP' };
+      }
+
       const sopMsg = 
         `📘 *HERMES C2 · SOP DE INSTALACIÓN RÁPIDA*\n` +
         `━━━━━━━━━━━━━━━━━━━━\n` +
@@ -421,6 +505,10 @@ export class HermesC2 {
 
     // 7. Comando: /provision <nombre> <nicho> <adminPhone> <vendedores>
     if (lower.startsWith('/provision')) {
+      const isClientNode = process.env.MODE === 'client';
+      if (isClientNode) {
+        return { handled: true, replyMessage: '🔒 Comando no disponible. Escribe /comandos para ver tus opciones comerciales.' };
+      }
       try {
         const { Deployer } = await import('../master/deployer.js');
         const regex = /^\/provision\s+"([^"]+)"\s+([a-zA-Z0-9_-]+)\s+([0-9+]+)\s+"([^"]+)"/i;
@@ -493,18 +581,42 @@ export class HermesC2 {
     const summary = await GhostCRM.getFunnelSummary();
     const settings = await OutreachRepo.getSettings();
     const apiKey = settings.aiApiKey || process.env.OPENROUTER_API_KEY || '';
-    const credits = await HermesC2.getCreditsInfo();
+    const isClientNode = process.env.MODE === 'client';
+    const company = process.env.COMPANY_NAME || 'Empresa';
 
-    let creditsPrompt = '';
-    if (credits.apify) {
-      creditsPrompt += `\n- Apify (Scraping): Límite $${credits.apify.max} USD, Consumido: $${credits.apify.used.toFixed(2)} USD, Saldo restante: $${credits.apify.remaining.toFixed(2)} USD (${credits.apify.percent}% consumido). Reinicia: ${credits.apify.reset}.`;
-    }
-    if (credits.openrouter) {
-      creditsPrompt += `\n- OpenRouter (IA): Créditos totales $${credits.openrouter.total.toFixed(2)} USD, Consumido: $${credits.openrouter.used.toFixed(2)} USD, Saldo restante: $${credits.openrouter.remaining.toFixed(2)} USD.`;
-    }
+    let systemPrompt = '';
+    if (isClientNode) {
+      systemPrompt = 
+        `Eres el Asistente Comercial Inteligente de ${company}.
+Hablas con el director o asesor comercial por WhatsApp con tono consultivo, respetuoso, conciso y profesional.
 
-    const systemPrompt = 
-      `Eres Hermes, el Agente Copiloto de Operaciones y C2 de Kenneth Herrera en The Quant Partners.
+DATOS ACTUALES DEL EMBUDO DE VENTAS (GHOST CRM):
+- Total Prospectos: ${summary.totalLeads}
+- Prospectos Contactados: ${summary.outreachSent}
+- Respondieron: ${summary.replied}
+- Calificados por IA: ${summary.qualified}
+- Citas Agendadas: ${summary.meetingScheduled}
+- Ventas Cerradas: ${summary.closedWon}
+- Ingresos USD: $${summary.totalRevenueUSD}
+- Ingresos PEN: S/. ${summary.totalRevenuePEN}
+- Sincronizaciones Meta CAPI: ${summary.metaCapiEventsFired}
+
+INSTRUCCIONES:
+- Responde de forma clara y directa (máximo 2 párrafos breves).
+- Si te piden acciones, sugiéreles los comandos disponibles: /pipeline, /leads, /lead <tel>, /won <tel> <monto>, /status, /manual.
+- NUNCA menciones scraping, Apify, proxies ni infraestructura técnica interna.`;
+    } else {
+      const credits = await HermesC2.getCreditsInfo();
+      let creditsPrompt = '';
+      if (credits.apify) {
+        creditsPrompt += `\n- Apify (Scraping): Límite $${credits.apify.max} USD, Consumido: $${credits.apify.used.toFixed(2)} USD, Saldo restante: $${credits.apify.remaining.toFixed(2)} USD (${credits.apify.percent}% consumido). Reinicia: ${credits.apify.reset}.`;
+      }
+      if (credits.openrouter) {
+        creditsPrompt += `\n- OpenRouter (IA): Créditos totales $${credits.openrouter.total.toFixed(2)} USD, Consumido: $${credits.openrouter.used.toFixed(2)} USD, Saldo restante: $${credits.openrouter.remaining.toFixed(2)} USD.`;
+      }
+
+      systemPrompt = 
+        `Eres Hermes, el Agente Copiloto de Operaciones y C2 de Kenneth Herrera en The Quant Partners.
 Hablas directamente con Kenneth por WhatsApp con tono ejecutivo, ultra-analítico, conciso y respetuoso.
 
 DATOS ACTUALES DEL GHOST CRM:
@@ -523,7 +635,8 @@ SALDOS Y CONSUMO DE PLATAFORMAS EN TIEMPO REAL:${creditsPrompt}
 INSTRUCCIONES:
 - Responde a su pregunta de forma clara y directa (máximo 2 párrafos breves).
 - Si te pregunta por saldos de Apify o OpenRouter, dale los números exactos con tono ejecutivo y alerta si Apify está bajo ($< 1 USD).
-- Si te pide realizar una acción que tiene un comando (/status, /saldo, /pausa, /reanudar, /won <tel> <monto>, /leads, /sop, /provision), indícale el resultado o recomiéndale el comando exacto.`;
+- Si te pide realizar una acción que tiene un comando (/status, /saldo, /pipeline, /mensaje, /pausa, /reanudar, /won <tel> <monto>, /leads, /sop, /provision), indícale el resultado o recomiéndale el comando exacto.`;
+    }
 
     try {
       const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -532,7 +645,7 @@ INSTRUCCIONES:
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
           'HTTP-Referer': 'https://thequantpartners.com',
-          'X-Title': 'QP Outreach Engine - Hermes C2'
+          'X-Title': isClientNode ? `QP Outreach Engine - ${company}` : 'QP Outreach Engine - Hermes C2'
         },
         body: JSON.stringify({
           model: settings.aiModel || 'google/gemini-2.5-flash',
@@ -547,16 +660,21 @@ INSTRUCCIONES:
 
       if (resp.ok) {
         const json = await resp.json() as any;
-        const answer = json?.choices?.[0]?.message?.content || 'Comando recibido por Hermes.';
-        return { handled: true, replyMessage: `🏛️ *HERMES C2:*\n\n${answer}`, actionExecuted: 'NATURAL_LANGUAGE' };
+        const answer = json?.choices?.[0]?.message?.content || 'Mensaje procesado.';
+        const badge = isClientNode ? `📱 *ASISTENTE COMERCIAL:*` : `🏛️ *HERMES C2:*`;
+        return { handled: true, replyMessage: `${badge}\n\n${answer}`, actionExecuted: 'NATURAL_LANGUAGE' };
       }
     } catch (err: any) {
       console.warn('[HermesC2] Error consultando LLM para admin:', err.message);
     }
 
+    const fallback = isClientNode 
+      ? `📱 *ASISTENTE COMERCIAL:* Recibido. Escribe /comandos para ver tus opciones comerciales (/pipeline, /leads, /lead, /won, /status, /manual).`
+      : `🏛️ *HERMES C2:* Recibido. Comandos disponibles: /status, /saldo, /pipeline, /leads, /won, /provision.`;
+
     return {
       handled: true,
-      replyMessage: `🏛️ *HERMES C2:* Recibido. Comandos disponibles: /status, /pausa, /reanudar, /leads, /won <tel> <monto>.`
+      replyMessage: fallback
     };
   }
 
