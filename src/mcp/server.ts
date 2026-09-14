@@ -707,6 +707,9 @@ export class McpServerManager {
                   if (cloudStatus.isWhatsAppReady) {
                     waStatus = { isReady: true, hasQr: false };
                     pipeStatus = { isRunning: cloudStatus.autonomousPipelineActive, sentToday: 0, day: '', lastScrapeTime: null };
+                  } else {
+                    waStatus = { isReady: false, hasQr: !!cloudStatus.qrAvailable };
+                    pipeStatus = { isRunning: cloudStatus.autonomousPipelineActive, sentToday: 0, day: '', lastScrapeTime: null };
                   }
                 }
               } catch {}
@@ -1250,8 +1253,25 @@ export class McpServerManager {
 
           case 'get_whatsapp_qr': {
             const wa = BaileysEngine.getInstance();
-            const status = wa.getStatus();
-            const qr = wa.getLatestQr();
+            let status = wa.getStatus();
+            let qr = wa.getLatestQr();
+
+            if (!status.isReady && !qr) {
+              const remoteUrl = process.env.GATEWAY_URL || 'https://gateway-production-2264.up.railway.app';
+              try {
+                const res = await fetch(`${remoteUrl}/api/qr`, {
+                  headers: { 'x-api-key': process.env.API_SECRET_KEY || 'qp-master-secret-2026' }
+                });
+                if (res.ok) {
+                  const data: any = await res.json();
+                  if (data.qr) {
+                    qr = data.qr;
+                    status = { isReady: false, hasQr: true };
+                  }
+                }
+              } catch {}
+            }
+
             return {
               content: [
                 {
@@ -1260,10 +1280,11 @@ export class McpServerManager {
                     isReady: status.isReady,
                     hasQr: status.hasQr,
                     qr: qr,
+                    qrImageUrl: qr ? `${process.env.GATEWAY_URL || 'https://gateway-production-2264.up.railway.app'}/qr` : null,
                     message: status.isReady
                       ? 'WhatsApp está actualmente CONECTADO y listo para despachar.'
                       : status.hasQr
-                      ? 'Código QR pendiente de escaneo. Escanea el código en WhatsApp > Dispositivos Vinculados.'
+                      ? 'Código QR pendiente de escaneo. Escanea el código en WhatsApp > Dispositivos Vinculados o abre la URL en tu navegador.'
                       : 'WhatsApp desconectado, esperando regeneración de socket.'
                   }, null, 2)
                 }

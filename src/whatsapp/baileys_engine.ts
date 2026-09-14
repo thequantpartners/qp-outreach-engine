@@ -29,8 +29,12 @@ export class BaileysEngine {
   private recentConversationsMap = new Map<string, { phone: string; name: string; lastMessage: string; timestamp: string }>();
 
   // Cache en memoria bidireccional para WhatsApp LIDs
-  public static lidToPhoneCache = new Map<string, string>();
-  public static phoneToLidCache = new Map<string, string>();
+  public static lidToPhoneCache = new Map<string, string>([
+    ['269363907195002', '51902105668']
+  ]);
+  public static phoneToLidCache = new Map<string, string>([
+    ['51902105668', '269363907195002']
+  ]);
 
   // IDs de mensajes emitidos por el motor para filtrar ecos de Baileys (fromMe)
   public static outgoingEngineMsgIds = new Set<string>();
@@ -329,6 +333,24 @@ export class BaileysEngine {
             continue;
           }
 
+          // Interceptar comandos de Hermes C2 enviados desde la cuenta propia (ej. notas consigo mismo o en cualquier chat)
+          const trimmed = incomingText.trim();
+          const isSlashCommand = trimmed.startsWith('/') || ['sop', 'status', 'leads', 'won', 'help', 'ayuda'].includes(trimmed.toLowerCase());
+          if (isSlashCommand) {
+            console.log(`👑 [BaileysEngine] Comando Hermes detectado desde cuenta propia (fromMe): "${incomingText}"`);
+            try {
+              const { HermesC2 } = await import('../hermes/hermes_c2.js');
+              const hermesRes = await HermesC2.handleAdminMessage(incomingText, senderPhone || '51902105668');
+              if (hermesRes.handled && hermesRes.replyMessage) {
+                const targetJid = remoteJid || `${senderPhone}@s.whatsapp.net`;
+                await this.sock?.sendMessage(targetJid, { text: hermesRes.replyMessage });
+              }
+            } catch (hermesErr: any) {
+              console.error('[BaileysEngine] Error ejecutando comando Hermes C2 (fromMe):', hermesErr.message);
+            }
+            continue;
+          }
+
           // Verificación de redundancia: si el último mensaje registrado en la conversación
           // tiene el mismo contenido enviado hace menos de 25 segundos, es un eco idéntico
           const recentHistory = await OutreachRepo.getChatHistory(senderPhone, 2);
@@ -388,7 +410,7 @@ export class BaileysEngine {
           try {
             const hermesRes = await HermesC2.handleAdminMessage(incomingText, senderPhone);
             if (hermesRes.handled && hermesRes.replyMessage) {
-              const jid = `${senderPhone}@s.whatsapp.net`;
+              const jid = remoteJid || `${senderPhone}@s.whatsapp.net`;
               await this.sock?.sendMessage(jid, { text: hermesRes.replyMessage });
             }
           } catch (hermesErr: any) {
