@@ -13,6 +13,10 @@ export class AutonomousPipeline {
   private static currentDay: string = new Date().toISOString().slice(0, 10);
   private static lastScrapeTime: number = 0;
   private static currentQueryIndex: number = 0;
+  private static lastScrapedQuery: string = '';
+  private static lastScrapedLocation: string = '';
+  private static lastScrapedService: string = '';
+  private static lastScrapedCount: number = 0;
 
   // Circuit Breaker Anti-Ban (Reglas Meta 2026: mitigación de unanswered message counter)
   private static consecutiveUnansweredOutreachCount: number = 0;
@@ -629,11 +633,78 @@ export class AutonomousPipeline {
       });
 
       const { inserted, skipped } = await OutreachRepo.saveLeadsFromScraper(service.id, scraped);
+      this.lastScrapedQuery = query;
+      this.lastScrapedLocation = location;
+      this.lastScrapedService = service.name;
+      this.lastScrapedCount = inserted;
+
       console.log(`✅ [AutonomousPipeline] Scraping finalizado con Outscraper para "${service.name}": ${inserted} prospectos nuevos insertados, ${skipped} omitidos/duplicados.`);
       return { inserted, skipped };
     } catch (err: any) {
       console.error('❌ [AutonomousPipeline] Fallo al raspar Outscraper:', err.message);
       return { inserted: 0, skipped: 0 };
     }
+  }
+
+  /**
+   * Obtiene diagnóstico completo en vivo del scraper y estado de buffers por campaña
+   */
+  public static async getScraperStatus(): Promise<{
+    isPipelineRunning: boolean;
+    isAutonomousConfigured: boolean;
+    engine: string;
+    lastScrapeTime: number;
+    lastScrapedQuery: string;
+    lastScrapedLocation: string;
+    lastScrapedService: string;
+    lastScrapedCount: number;
+    consecutiveUnanswered: number;
+    circuitBreakerActive: boolean;
+    circuitBreakerCooldownRemainingMinutes: number;
+    campaignBuffers: Array<{
+      id: string;
+      name: string;
+      region: 'USA' | 'PERU' | 'GLOBAL';
+      uncontacted: number;
+      isBufferLow: boolean;
+      queries: string[];
+    }>;
+  }> {
+    const settings = await OutreachRepo.getSettings();
+    const services = await OutreachRepo.getServices();
+    const activeServices = services.filter(s => s.isActive && (s.type === 'OUTBOUND' || !s.type));
+
+    const campaignBuffers: any[] = [];
+    for (const s of activeServices) {
+      const count = await OutreachRepo.countUncontactedLeads(s.id);
+      const region = this.getCampaignRegion(s);
+      campaignBuffers.push({
+        id: s.id,
+        name: s.name,
+        region,
+        uncontacted: count,
+        isBufferLow: count < 15,
+        queries: s.apifyQueries || []
+      });
+    }
+
+    const cooldownRemaining = this.circuitBreakerCooldownUntil > Date.now()
+      ? Math.ceil((this.circuitBreakerCooldownUntil - Date.now()) / (60 * 1000))
+      : 0;
+
+    return {
+      isPipelineRunning: this.isRunning,
+      isAutonomousConfigured: !!settings.isAutonomousActive,
+      engine: 'Outscraper API v2 (Google Maps Síncrono)',
+      lastScrapeTime: this.lastScrapeTime,
+      lastScrapedQuery: this.lastScrapedQuery,
+      lastScrapedLocation: this.lastScrapedLocation,
+      lastScrapedService: this.lastScrapedService,
+      lastScrapedCount: this.lastScrapedCount,
+      consecutiveUnanswered: this.consecutiveUnansweredOutreachCount,
+      circuitBreakerActive: cooldownRemaining > 0,
+      circuitBreakerCooldownRemainingMinutes: cooldownRemaining,
+      campaignBuffers
+    };
   }
 }

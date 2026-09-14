@@ -148,6 +148,26 @@ export class NLPRouter {
       return { command: 'alertas', args: ['on'] };
     }
 
+    // 8.5. Estado del Scraper: "¿el scraper está activo?", "estado del scraper", "scraper"
+    if (
+      clean === 'scraper' ||
+      clean === 'scraper activo' ||
+      clean === 'el scraper esta activo' ||
+      clean === 'esta activo el scraper' ||
+      clean === 'estado del scraper' ||
+      clean === 'como va el scraper' ||
+      clean === 'como esta el scraper' ||
+      clean === 'ver scraper' ||
+      clean === 'status scraper' ||
+      clean === 'cola de scraping' ||
+      clean === 'colas' ||
+      clean.includes('scraper activo') ||
+      clean.includes('scraper esta activo') ||
+      clean.includes('estado del scraper')
+    ) {
+      return { command: 'scraper', args: [] };
+    }
+
     // 9. Scraping con Outscraper: "raspar X", "busca X en maps", "scrape X"
     const scrapeMatch = clean.match(/^(?:raspar|raspa|scrapear|scrapea|scrape|buscar|busca|extraer|extrae)\s+(.+)$/i);
     if (scrapeMatch && scrapeMatch[1]) {

@@ -188,6 +188,7 @@ export class HermesC2 {
           `• \`/pausa\` : Detener envíos de prospección en frío.\n` +
           `• \`/reanudar\` : Reactivar envíos de prospección.\n\n` +
           `🔍 *SCRAPING Y ADQUISICIÓN:*\n` +
+          `• \`/scraper\` : Diagnóstico en vivo del auto-scraper de Outscraper y colas.\n` +
           `• \`/scrape <query> [max]\` : Extraer prospectos de Google Maps con Outscraper (USA y Perú).\n\n` +
           `✉️ *PROSPECCIÓN Y MENSAJES:*\n` +
           `• \`/mensaje\` : Previsualizar la plantilla activa y chequeo anti-ban.\n` +
@@ -345,6 +346,68 @@ export class HermesC2 {
       }
 
       return { handled: true, replyMessage: msg, actionExecuted: 'CREDITS_CHECK' };
+    }
+
+    // 1.54. Comando: /scraper (Diagnóstico del Scraper Autónomo, Colas y Outscraper - Solo Master Kenneth)
+    if (lower === '/scraper' || lower.startsWith('/scraper ') || lower === 'scraper') {
+      if (user.role !== 'master') {
+        return { handled: true, replyMessage: '🔒 El estado de infraestructura de scraping es exclusivo del Master Hub central.' };
+      }
+
+      const { AutonomousPipeline } = await import('../pipeline/autonomous_pipeline.js');
+      const scraperInfo = await AutonomousPipeline.getScraperStatus();
+      const credits = await HermesC2.getCreditsInfo();
+
+      const isScraperActive = scraperInfo.isPipelineRunning && scraperInfo.isAutonomousConfigured;
+      const statusIcon = isScraperActive ? '🟢' : '⏸️';
+      const statusText = isScraperActive ? 'ACTIVO (Auto-recarga continua)' : 'PAUSADO';
+
+      let lastScrapeSection = '• Sin extracciones en esta sesión aún.';
+      if (scraperInfo.lastScrapeTime > 0) {
+        const minutesAgo = Math.floor((Date.now() - scraperInfo.lastScrapeTime) / (60 * 1000));
+        const dateObj = new Date(scraperInfo.lastScrapeTime);
+        const timeStr = dateObj.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Lima' });
+        lastScrapeSection = 
+          `• *Campaña:* ${scraperInfo.lastScrapedService || 'General'}\n` +
+          `• *Búsqueda:* "${scraperInfo.lastScrapedQuery}" en "${scraperInfo.lastScrapedLocation}"\n` +
+          `• *Prospectos extraídos:* ${scraperInfo.lastScrapedCount} nuevos insertados\n` +
+          `• *Hora:* ${timeStr} Lima (${minutesAgo === 0 ? 'hace unos momentos' : `hace ${minutesAgo} min`})`;
+      }
+
+      let buffersSection = '';
+      if (scraperInfo.campaignBuffers.length === 0) {
+        buffersSection = '• No hay campañas outbound activas.';
+      } else {
+        for (const b of scraperInfo.campaignBuffers) {
+          const bufIcon = b.isBufferLow ? '⚠️' : '🟢';
+          const flag = b.region === 'USA' ? '🇺🇸' : b.region === 'PERU' ? '🇵🇪' : '🌎';
+          buffersSection += `• ${bufIcon} *${b.name}* (${flag}): *${b.uncontacted}* en cola ${b.isBufferLow ? '*(Recarga en próximo ciclo)*' : '*(Buffer OK)*'}\n`;
+        }
+      }
+
+      const cbIcon = scraperInfo.circuitBreakerActive ? '🚨' : '🛡️';
+      const cbStatus = scraperInfo.circuitBreakerActive
+        ? `PAUSADO preventivo (${scraperInfo.circuitBreakerCooldownRemainingMinutes} min restantes)`
+        : `Normal (${scraperInfo.consecutiveUnanswered}/10 sin respuesta)`;
+
+      const outscraperBalance = credits.outscraper ? `$${credits.outscraper.balance.toFixed(2)} USD` : 'Token activo';
+
+      const reply = 
+        `📡 *HERMES C2 · ESTADO DEL SCRAPER Y ADQUISICIÓN*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `${statusIcon} *Estado del Scraper:* *${statusText}*\n` +
+        `🗺️ *Motor Activo:* ${scraperInfo.engine}\n` +
+        `💳 *Saldo Outscraper:* *${outscraperBalance}*\n\n` +
+        `🔄 *Última Extracción de Prospectos:*\n` +
+        `${lastScrapeSection}\n\n` +
+        `📊 *Colas de Prospectos por Campaña (Buffers):*\n` +
+        `${buffersSection}\n` +
+        `${cbIcon} *Circuit Breaker Meta:* ${cbStatus}\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `💡 _El scraper auto-recarga 25 prospectos cuando el buffer de una campaña baja de 15._\n` +
+        `_Para extraer prospectos de inmediato escribe:_ \`/scrape <búsqueda> [cantidad]\``;
+
+      return { handled: true, replyMessage: reply, actionExecuted: 'SCRAPER_STATUS' };
     }
 
     // 1.55. Comando: /scrape o /raspar <query> [max] (Extracción ad-hoc de comercios con Outscraper - Solo Master Kenneth)
