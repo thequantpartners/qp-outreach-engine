@@ -42,6 +42,17 @@ export class HermesC2 {
       const summary = await GhostCRM.getFunnelSummary();
       const services = await OutreachRepo.getServices();
       const activeOutbound = services.filter(s => s.isActive && s.type === 'OUTBOUND');
+      const credits = await HermesC2.getCreditsInfo();
+
+      let creditsSection = '';
+      if (credits.apify) {
+        const a = credits.apify;
+        const icon = a.remaining < 1 ? '⚠️' : '🕷️';
+        creditsSection += `\n💳 *Consumo de Infraestructura:*\n• ${icon} Apify: *$${a.remaining.toFixed(2)} USD* restante (${a.percent}% usado de $${a.max})\n`;
+      }
+      if (credits.openrouter) {
+        creditsSection += `• 🤖 OpenRouter: *$${credits.openrouter.remaining.toFixed(2)} USD* restante\n`;
+      }
 
       const msg = 
         `🏛️ *HERMES C2 · ESTADO OPERATIVO*\n` +
@@ -58,11 +69,59 @@ export class HermesC2 {
         `• Conversiones Meta CAPI: *${summary.metaCapiEventsFired}*\n\n` +
         `💰 *Ingresos Registrados:*\n` +
         `• USD: *$${summary.totalRevenueUSD.toLocaleString()}*\n` +
-        `• PEN: *S/. ${summary.totalRevenuePEN.toLocaleString()}*\n` +
-        `━━━━━━━━━━━━━━━━━━━━\n` +
-        `💡 _Escribe /leads, /pausa, /reanudar o /won <tel> <monto>_`;
+        `• PEN: *S/. ${summary.totalRevenuePEN.toLocaleString()}*` +
+        creditsSection +
+        `\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `💡 _Escribe /saldo, /leads, /pausa, /reanudar o /sop_`;
 
       return { handled: true, replyMessage: msg, actionExecuted: 'STATUS_CHECK' };
+    }
+
+    // 1.5. Comando: /saldo o /balance o /apify (Consulta de créditos)
+    if (
+      lower.startsWith('/saldo') || 
+      lower.startsWith('/balance') || 
+      lower.startsWith('/apify') || 
+      lower.startsWith('/credito') || 
+      lower.startsWith('/crédito') || 
+      lower === 'saldo' || 
+      lower === 'balance' || 
+      lower.includes('saldo apify') || 
+      lower.includes('cuanto saldo') || 
+      lower.includes('cuánto saldo')
+    ) {
+      const credits = await HermesC2.getCreditsInfo();
+      let msg = `💳 *HERMES C2 · BALANCE DE CRÉDITOS Y CONSUMO*\n━━━━━━━━━━━━━━━━━━━━\n`;
+
+      if (credits.apify) {
+        const a = credits.apify;
+        const alertIcon = a.remaining < 1 ? '🚨' : '🕷️';
+        msg += 
+          `${alertIcon} *Apify (Scraping Google Maps / B2B):*\n` +
+          `• Límite Mensual: *$${a.max.toFixed(2)} USD*\n` +
+          `• Consumido: *$${a.used.toFixed(2)} USD* (${a.percent}%)\n` +
+          `• Saldo Restante: *${a.remaining < 1 ? '⚠️ ' : ''}$${a.remaining.toFixed(2)} USD*\n` +
+          `• Próxima Renovación: *${a.reset}*\n\n`;
+      } else {
+        msg += `🕷️ *Apify:* Token no configurado o no disponible.\n\n`;
+      }
+
+      if (credits.openrouter) {
+        const o = credits.openrouter;
+        msg += 
+          `🤖 *OpenRouter (IA de Calificación / Setter):*\n` +
+          `• Créditos Totales: *$${o.total.toFixed(2)} USD*\n` +
+          `• Consumido: *$${o.used.toFixed(2)} USD* (${o.percent}%)\n` +
+          `• Saldo Restante: *$${o.remaining.toFixed(2)} USD*\n\n`;
+      }
+
+      if (credits.apify && credits.apify.remaining < 1) {
+        msg += `⚠️ *ALERTA:* Te queda menos de $1.00 USD en Apify. Si vas a lanzar un lote grande de scraping (+50 prospectos), se recomienda recargar fondos para evitar pausas.`;
+      } else {
+        msg += `💡 _Escribe /status para ver métricas del embudo o /sop para el manual._`;
+      }
+
+      return { handled: true, replyMessage: msg, actionExecuted: 'CREDITS_CHECK' };
     }
 
     // 2. Comando: /pause o /pausa
@@ -234,6 +293,15 @@ export class HermesC2 {
     const summary = await GhostCRM.getFunnelSummary();
     const settings = await OutreachRepo.getSettings();
     const apiKey = settings.aiApiKey || process.env.OPENROUTER_API_KEY || '';
+    const credits = await HermesC2.getCreditsInfo();
+
+    let creditsPrompt = '';
+    if (credits.apify) {
+      creditsPrompt += `\n- Apify (Scraping): Límite $${credits.apify.max} USD, Consumido: $${credits.apify.used.toFixed(2)} USD, Saldo restante: $${credits.apify.remaining.toFixed(2)} USD (${credits.apify.percent}% consumido). Reinicia: ${credits.apify.reset}.`;
+    }
+    if (credits.openrouter) {
+      creditsPrompt += `\n- OpenRouter (IA): Créditos totales $${credits.openrouter.total.toFixed(2)} USD, Consumido: $${credits.openrouter.used.toFixed(2)} USD, Saldo restante: $${credits.openrouter.remaining.toFixed(2)} USD.`;
+    }
 
     const systemPrompt = 
       `Eres Hermes, el Agente Copiloto de Operaciones y C2 de Kenneth Herrera en The Quant Partners.
@@ -250,9 +318,12 @@ DATOS ACTUALES DEL GHOST CRM:
 - Ingresos PEN: S/. ${summary.totalRevenuePEN}
 - Eventos Meta CAPI Disparados: ${summary.metaCapiEventsFired}
 
+SALDOS Y CONSUMO DE PLATAFORMAS EN TIEMPO REAL:${creditsPrompt}
+
 INSTRUCCIONES:
 - Responde a su pregunta de forma clara y directa (máximo 2 párrafos breves).
-- Si te pide realizar una acción que tiene un comando (/status, /pausa, /reanudar, /won <tel> <monto>, /leads, /sop, /provision), indícale el resultado o recomiéndale el comando exacto.`;
+- Si te pregunta por saldos de Apify o OpenRouter, dale los números exactos con tono ejecutivo y alerta si Apify está bajo ($< 1 USD).
+- Si te pide realizar una acción que tiene un comando (/status, /saldo, /pausa, /reanudar, /won <tel> <monto>, /leads, /sop, /provision), indícale el resultado o recomiéndale el comando exacto.`;
 
     try {
       const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -362,5 +433,68 @@ INSTRUCCIONES:
       `💤 _El pipeline de envíos pausará automáticamente hasta las 9:00 AM de mañana._`;
 
     await BaileysEngine.getInstance().notifyAdmin(message);
+  }
+
+  /**
+   * Consulta el saldo en tiempo real de Apify y OpenRouter
+   */
+  public static async getCreditsInfo(): Promise<{
+    apify?: { max: number; used: number; remaining: number; reset: string; percent: string };
+    openrouter?: { total: number; used: number; remaining: number; percent: string };
+  }> {
+    const settings = await OutreachRepo.getSettings();
+    const apifyToken = settings.apifyToken || process.env.APIFY_TOKEN || '';
+    const openRouterKey = settings.aiApiKey || process.env.OPENROUTER_API_KEY || '';
+
+    let apify: { max: number; used: number; remaining: number; reset: string; percent: string } | undefined = undefined;
+    if (apifyToken) {
+      try {
+        const res = await fetch('https://api.apify.com/v2/users/me/limits', {
+          headers: { Authorization: `Bearer ${apifyToken}` }
+        });
+        if (res.ok) {
+          const d: any = await res.json();
+          const max = d?.data?.limits?.maxMonthlyUsageUsd || 5;
+          const used = d?.data?.current?.monthlyUsageUsd || 0;
+          const remaining = Math.max(0, max - used);
+          const endAt = d?.data?.monthlyUsageCycle?.endAt;
+          const reset = endAt ? new Date(endAt).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }) : 'Próximo mes';
+          apify = {
+            max,
+            used,
+            remaining,
+            reset,
+            percent: ((used / max) * 100).toFixed(1)
+          };
+        }
+      } catch (e: any) {
+        console.warn('[HermesC2] Error consultando saldo Apify:', e.message);
+      }
+    }
+
+    let openrouter: { total: number; used: number; remaining: number; percent: string } | undefined = undefined;
+    if (openRouterKey) {
+      try {
+        const res = await fetch('https://openrouter.ai/api/v1/credits', {
+          headers: { Authorization: `Bearer ${openRouterKey}` }
+        });
+        if (res.ok) {
+          const d: any = await res.json();
+          const total = d?.data?.total_credits || 0;
+          const used = d?.data?.total_usage || 0;
+          const remaining = Math.max(0, total - used);
+          openrouter = {
+            total,
+            used,
+            remaining,
+            percent: total > 0 ? ((used / total) * 100).toFixed(1) : '0'
+          };
+        }
+      } catch (e: any) {
+        console.warn('[HermesC2] Error consultando saldo OpenRouter:', e.message);
+      }
+    }
+
+    return { apify, openrouter };
   }
 }

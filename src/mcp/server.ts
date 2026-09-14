@@ -26,6 +26,14 @@ const TOOLS: Tool[] = [
     }
   },
   {
+    name: 'check_credits',
+    description: 'Consulta el saldo, consumo y límites en tiempo real de Apify (Scraping Google Maps/B2B) y OpenRouter (IA de Calificación).',
+    inputSchema: {
+      type: 'object',
+      properties: {}
+    }
+  },
+  {
     name: 'list_campaigns',
     description: 'Lista todas las campañas y servicios registrados en el motor (con su id, nombre, estado activo/inactivo, queries de scraping, mecanismo de cierre y plantilla de prospección).',
     inputSchema: {
@@ -731,6 +739,19 @@ export class McpServerManager {
                     null,
                     2
                   )
+                }
+              ]
+            };
+          }
+
+          case 'check_credits': {
+            const { HermesC2 } = await import('../hermes/hermes_c2.js');
+            const credits = await HermesC2.getCreditsInfo();
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(credits, null, 2)
                 }
               ]
             };

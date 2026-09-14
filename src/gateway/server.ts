@@ -2311,6 +2311,17 @@ app.get('/api/status', authenticate, (_req: Request, res: Response) => {
   res.json(response);
 });
 
+// Endpoint de Consulta de Créditos y Saldo de Infraestructura (Apify y OpenRouter)
+app.get('/api/credits', authenticate, async (_req: Request, res: Response) => {
+  try {
+    const { HermesC2 } = await import('../hermes/hermes_c2.js');
+    const credits = await HermesC2.getCreditsInfo();
+    res.json({ success: true, credits });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // 4. Estadísticas del Embudo
 app.get('/api/pipeline/stats', authenticate, async (_req: Request, res: Response) => {
   try {
