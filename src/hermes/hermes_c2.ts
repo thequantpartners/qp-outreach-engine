@@ -140,7 +140,89 @@ export class HermesC2 {
       return { handled: true, replyMessage: msg, actionExecuted: 'RECORD_SALE' };
     }
 
-    // 6. Lenguaje Natural Copilot vía OpenRouter (Gemini Flash)
+    // 6. Comando: /sop o "sop"
+    if (lower === '/sop' || lower === 'sop' || lower.includes('dame el sop') || lower.includes('sop de instalacion') || lower.includes('cómo instalo')) {
+      const sopMsg = 
+        `📘 *HERMES C2 · SOP DE INSTALACIÓN RÁPIDA*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `*1. Pide al cliente:* IP y SSH de su VPS ($4-$6 Hetzner/DigitalOcean), celular del gerente y lista de vendedores.\n\n` +
+        `*2. Aprovisiona aquí por WhatsApp:*\n` +
+        `\`/provision "Nombre Empresa" clinicas_salud 51999888777 "Carlos:519111222"\`\n\n` +
+        `*3. Pega en su VPS por SSH:*\n` +
+        `El comando curl generado (tarda < 2 min).\n\n` +
+        `*4. Escanea WhatsApp:*\n` +
+        `Entran a su dashboard con el PIN generado y escanean QR en 30s.\n\n` +
+        `*5. Entrega el Portal:*\n` +
+        `Le pasas su enlace: \`http://IP:3100/portal\` (solo lectura).\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `💡 _Guía completa en docs/SOP_ONBOARDING_CLIENTES.md_`;
+      return { handled: true, replyMessage: sopMsg, actionExecuted: 'SOP_HELP' };
+    }
+
+    // 7. Comando: /provision <nombre> <nicho> <adminPhone> <vendedores>
+    if (lower.startsWith('/provision')) {
+      try {
+        const { Deployer } = await import('../master/deployer.js');
+        const regex = /^\/provision\s+"([^"]+)"\s+([a-zA-Z0-9_-]+)\s+([0-9+]+)\s+"([^"]+)"/i;
+        const match = cleanText.match(regex);
+
+        if (!match) {
+          const help = 
+            `⚠️ *Uso correcto del comando /provision:*\n\n` +
+            `\`/provision "Nombre Empresa" nicho adminPhone "Nombre1:Tel1,Nombre2:Tel2"\`\n\n` +
+            `*Ejemplo:*\n` +
+            `\`/provision "Clínica Sonrisas" clinicas_salud 51999888777 "Dr. Carlos:51911122233,Dra. Maria:51944455566"\`\n\n` +
+            `*Nichos disponibles:* clinicas_salud, inmobiliarias, estudios_abogados, construccion_b2b, custom`;
+          return { handled: true, replyMessage: help, actionExecuted: 'PROVISION_HELP' };
+        }
+
+        const companyName = match[1].trim();
+        const niche = match[2].trim();
+        const adminPhone = match[3].replace(/[^0-9]/g, '');
+        const salesRepsRaw = match[4].trim();
+
+        const salesReps = salesRepsRaw.split(',').map(r => {
+          const [name, phone] = r.split(':');
+          return {
+            name: name?.trim() || 'Asesor',
+            phone: (phone || '').replace(/[^0-9]/g, '')
+          };
+        }).filter(r => r.phone.length >= 8);
+
+        if (salesReps.length === 0) {
+          return { handled: true, replyMessage: '⚠️ Debe incluir al menos un vendedor con formato "Nombre:Telefono".' };
+        }
+
+        const provisionResult = await Deployer.provisionClient({
+          companyName,
+          niche,
+          adminPhone,
+          salesReps,
+          deployTarget: 'vps'
+        });
+
+        const masterBase = process.env.PUBLIC_URL || 'https://gateway-production-2264.up.railway.app';
+        const installUrl = `${masterBase.startsWith('http') ? masterBase : 'https://' + masterBase}/api/install/${provisionResult.clientId}/${provisionResult.clientPin}`;
+
+        const successMsg = 
+          `🚀 *¡CLIENTE APROVISIONADO EXITOSAMENTE!*\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `🏢 *Empresa:* ${provisionResult.companyName}\n` +
+          `🆔 *ID:* \`${provisionResult.clientId}\`\n` +
+          `🔑 *PIN Maestro:* \`${provisionResult.clientPin}\`\n` +
+          `👥 *Vendedores:* ${provisionResult.salesRepsCount}\n\n` +
+          `📋 *COMANDO PARA PEGAR EN EL VPS POR SSH:*\n` +
+          `\`curl -sSL ${installUrl} | bash\`\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `👉 *Próximo paso:* Conéctate por SSH al VPS del cliente y pega este comando. Todo quedará corriendo en 120s con Zero Leakage.`;
+
+        return { handled: true, replyMessage: successMsg, actionExecuted: 'PROVISION_CLIENT' };
+      } catch (err: any) {
+        return { handled: true, replyMessage: `❌ Error aprovisionando cliente: ${err.message}` };
+      }
+    }
+
+    // 8. Lenguaje Natural Copilot vía OpenRouter (Gemini Flash)
     return await this.handleNaturalLanguageQuery(cleanText);
   }
 
@@ -169,7 +251,7 @@ DATOS ACTUALES DEL GHOST CRM:
 
 INSTRUCCIONES:
 - Responde a su pregunta de forma clara y directa (máximo 2 párrafos breves).
-- Si te pide realizar una acción que tiene un comando (/status, /pausa, /reanudar, /won <tel> <monto>, /leads), indícale el resultado o recomiéndale el comando exacto.`;
+- Si te pide realizar una acción que tiene un comando (/status, /pausa, /reanudar, /won <tel> <monto>, /leads, /sop, /provision), indícale el resultado o recomiéndale el comando exacto.`;
 
     try {
       const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
