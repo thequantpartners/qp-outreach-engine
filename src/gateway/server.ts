@@ -2547,6 +2547,17 @@ app.get('/api/campaigns', authenticate, (_req: Request, res: Response) => {
   res.json(DripOrchestrator.listCampaigns());
 });
 
+// Bloqueo estricto de Scraping en Nodos Cliente (Cero Fugas / Privilegio Exclusivo del Master Hub)
+app.use('/api/scrape', (req: Request, res: Response, next: NextFunction) => {
+  if (process.env.MODE === 'client') {
+    res.status(403).json({
+      error: 'Acceso denegado: El motor de scraping de prospectos es exclusivo de la Central Maestra de Kenneth / The Quant Partners. En los nodos cliente solo se permiten reportes comerciales e inbound.'
+    });
+    return;
+  }
+  next();
+});
+
 // 15. Scraping Google Maps manual
 app.post('/api/scrape/google-maps', authenticate, async (req: Request, res: Response) => {
   const parseResult = ScrapeGoogleMapsSchema.safeParse(req.body);

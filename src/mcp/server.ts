@@ -684,16 +684,34 @@ export class McpServerManager {
       }
     );
 
-    // 1. Listar herramientas (Aislar herramientas maestras si corre en MODE=client)
+    // Nombres de herramientas de scraping reservadas exclusivamente para la Central Maestra de Kenneth
+    const SCRAPING_TOOL_NAMES = new Set([
+      'trigger_scraping',
+      'scrape_meta_ads',
+      'scrape_instagram',
+      'scrape_apollo_b2b',
+      'scrape_google_search',
+      'launch_campaign'
+    ]);
+
+    // 1. Listar herramientas (Aislar scrapers y herramientas maestras si corre en MODE=client)
     server.setRequestHandler(ListToolsRequestSchema, async () => {
       const isClientNode = process.env.MODE === 'client';
-      const activeTools = isClientNode ? TOOLS : [...TOOLS, ...MASTER_TOOLS];
+      const filteredBaseTools = isClientNode 
+        ? TOOLS.filter(t => !SCRAPING_TOOL_NAMES.has(t.name)) 
+        : TOOLS;
+      const activeTools = isClientNode ? filteredBaseTools : [...filteredBaseTools, ...MASTER_TOOLS];
       return { tools: activeTools };
     });
 
     // 2. Ejecución de herramientas
     server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
+      const isClientNode = process.env.MODE === 'client';
+
+      if (isClientNode && SCRAPING_TOOL_NAMES.has(name)) {
+        throw new Error('Acceso denegado: El motor de scraping de prospectos es exclusivo de la Central Maestra de Kenneth / The Quant Partners. En los nodos cliente solo se permiten reportes comerciales e inbound.');
+      }
 
       try {
         switch (name) {

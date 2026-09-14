@@ -124,6 +124,155 @@ export class HermesC2 {
       return { handled: true, replyMessage: msg, actionExecuted: 'CREDITS_CHECK' };
     }
 
+    // 1.6. Comando: /mensaje o /preview o /plantilla (Previsualizar mensaje de prospección - Solo Master Kenneth)
+    if (lower.startsWith('/mensaje') || lower.startsWith('/preview') || lower.startsWith('/plantilla') || lower === 'mensaje' || lower === 'plantilla') {
+      const isClientNode = process.env.MODE === 'client';
+      if (isClientNode) {
+        return { handled: true, replyMessage: '🔒 *HERMES:* La configuración de plantillas outbound es gestionada centralmente desde la Matriz Maestra de The Quant Partners.' };
+      }
+
+      const activeService = await OutreachRepo.getActiveService();
+      if (!activeService) {
+        return { handled: true, replyMessage: '⚠️ *HERMES C2:* No hay ninguna campaña outbound activa en este momento. Escribe /status para revisar tus campañas.' };
+      }
+
+      const rawTemplate = activeService.outreachTemplate || 'Sin plantilla configurada.';
+      const sampleExample = rawTemplate
+        .replace(/\{\{\s*name\s*\}\}/gi, 'Clínica Estética San Isidro')
+        .replace(/\{\{\s*empresa\s*\}\}/gi, 'Clínica Estética San Isidro');
+
+      const msg = 
+        `📝 *HERMES C2 · PLANTILLA DE PROSPECCIÓN ACTIVA*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `📢 *Campaña:* *${activeService.name}*\n` +
+        `🆔 *ID:* \`${activeService.id}\`\n` +
+        `🎯 *Mecanismo de Cierre:* \`${activeService.closingType || 'HUMAN_TAKEOVER'}\`\n\n` +
+        `📋 *TEXTO VIRGEN CON VARIABLES:*\n` +
+        `\`\`\`\n${rawTemplate}\n\`\`\`\n\n` +
+        `👀 *EJEMPLO RENDERIZADO (Cómo lo ve el cliente real):*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `${sampleExample}\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `🛡️ *Auditoría Anti-Baneo:* 0 enlaces en frío · Permiso en 2 pasos cumplido.\n\n` +
+        `✏️ *Para editar esta plantilla desde WhatsApp:*\n` +
+        `Escribe:\n` +
+        `\`/setmensaje <tu nuevo mensaje aquí con {{name}}>\``;
+
+      return { handled: true, replyMessage: msg, actionExecuted: 'PREVIEW_MESSAGE' };
+    }
+
+    // 1.7. Comando: /setmensaje <nuevo texto> (Editar plantilla en caliente desde WhatsApp - Solo Master Kenneth)
+    const setMsgMatch = cleanText.match(/^\/setmensaje\s+([\s\S]+)$/i);
+    if (setMsgMatch) {
+      const isClientNode = process.env.MODE === 'client';
+      if (isClientNode) {
+        return { handled: true, replyMessage: '🔒 *HERMES:* La edición de plantillas de prospección es exclusiva del Master Hub de Kenneth.' };
+      }
+
+      const newTemplate = setMsgMatch[1].trim();
+
+      // Regla Anti-Baneo Innegociable: Prohibido enviar links en frío
+      if (/https?:\/\//i.test(newTemplate)) {
+        return {
+          handled: true,
+          replyMessage: '🚫 *REGLA ANTI-BANEO VIOLADA:* El primer mensaje en frío NO debe contener enlaces (http/https). Debe usar la *Técnica del Permiso en 2 Pasos* pidiendo autorización para compartir el valor tras la respuesta del prospecto.'
+        };
+      }
+
+      if (newTemplate.length < 30) {
+        return { handled: true, replyMessage: '⚠️ El mensaje es demasiado corto (mínimo 30 caracteres para que sea persuasivo y profesional).' };
+      }
+
+      const activeService = await OutreachRepo.getActiveService();
+      if (!activeService) {
+        return { handled: true, replyMessage: '⚠️ No hay servicio activo para actualizar.' };
+      }
+
+      // Actualizar en base de datos
+      activeService.outreachTemplate = newTemplate;
+      await OutreachRepo.saveService(activeService);
+
+      const sample = newTemplate.replace(/\{\{\s*name\s*\}\}/gi, 'Clínica Dental San Isidro');
+
+      const successMsg = 
+        `✅ *HERMES C2 · PLANTILLA ACTUALIZADA EXITOSAMENTE*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `📢 Campaña: *${activeService.name}*\n\n` +
+        `👀 *Nueva Previsualización:*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `${sample}\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `🚀 Todos los nuevos prospectos contactados recibirán este mensaje.`;
+
+      return { handled: true, replyMessage: successMsg, actionExecuted: 'SET_OUTREACH_MESSAGE' };
+    }
+
+    // 1.8. Comando: /pipeline o /etapas (Visualización visual del embudo de Ghost CRM)
+    if (lower.startsWith('/pipeline') || lower.startsWith('/etapas') || lower === 'pipeline' || lower === 'etapas') {
+      const summary = await GhostCRM.getFunnelSummary();
+      const total = summary.totalLeads || 1;
+
+      const pct = (val: number) => Math.round((val / total) * 100);
+
+      const msg = 
+        `📊 *HERMES C2 · PIPELINE COMERCIAL (GHOST CRM)*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `📥 *1. Descubiertos (Base Fría):* ${summary.discovered} (${pct(summary.discovered)}%)\n` +
+        `📨 *2. Outreach Enviado:* ${summary.outreachSent} (${pct(summary.outreachSent)}%)\n` +
+        `💬 *3. Respondieron:* ${summary.replied} (${Math.round((summary.replied / (summary.outreachSent || 1)) * 100)}% resp.)\n` +
+        `🎯 *4. Calificados (AI Setter):* ${summary.qualified}\n` +
+        `📅 *5. Citas Agendadas:* ${summary.meetingScheduled}\n` +
+        `🏆 *6. Ventas Ganadas:* ${summary.closedWon}\n` +
+        `🛑 *7. Rechazos / Opt-Out:* ${summary.closedLost}\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `💰 *Ingresos Totales:* *$${summary.totalRevenueUSD.toLocaleString()} USD* | *S/. ${summary.totalRevenuePEN.toLocaleString()} PEN*\n` +
+        `📡 *Eventos Meta CAPI:* ${summary.metaCapiEventsFired} eventos offline sincronizados con el Pixel.\n\n` +
+        `👉 _Escribe /lead <telefono> para consultar la ficha de un prospecto específico._`;
+
+      return { handled: true, replyMessage: msg, actionExecuted: 'VIEW_PIPELINE' };
+    }
+
+    // 1.9. Comando: /lead <teléfono> (Consultar ficha técnica de un prospecto específico)
+    const leadDetailMatch = cleanText.match(/^\/lead\s+(\+?[0-9]{8,15})$/i);
+    if (leadDetailMatch) {
+      const queryPhone = leadDetailMatch[1].replace(/[^0-9]/g, '');
+      const lead = await OutreachRepo.getLeadByPhone(queryPhone);
+
+      if (!lead) {
+        return { handled: true, replyMessage: `🔍 *HERMES C2:* No se encontró ningún prospecto con el número +${queryPhone}.` };
+      }
+
+      const history = await OutreachRepo.getChatHistory(queryPhone, 2);
+      const lastMsg = history[history.length - 1];
+
+      const stageEmojis: Record<string, string> = {
+        DISCOVERED: '📥 DESCUBIERTO',
+        OUTREACH_SENT: '📨 MENSAJE ENVIADO',
+        REPLIED: '💬 RESPONDIÓ',
+        QUALIFIED: '🎯 CALIFICADO POR IA',
+        MEETING_SCHEDULED: '📅 CITA AGENDADA',
+        CLOSED_WON: '🏆 VENTA GANADA',
+        CLOSED_LOST: '🛑 PERDIDO / OPT-OUT',
+        HUMAN_TAKEOVER: '👤 CONTROL HUMANO ACTIVO'
+      };
+
+      const msg = 
+        `👤 *HERMES C2 · FICHA DE PROSPECTO*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `🏢 *Empresa:* ${lead.companyName || 'Sin nombre'}\n` +
+        `📱 *WhatsApp:* wa.me/${lead.phone}\n` +
+        `🏷️ *Etapa Actual:* ${stageEmojis[lead.status] || lead.status}\n` +
+        `📢 *Campaña:* ${lead.serviceId || 'General'}\n` +
+        (lead.assignedRepName ? `👤 *Asesor Asignado:* ${lead.assignedRepName} (+${lead.assignedRepPhone})\n` : '') +
+        (lead.saleAmount ? `💰 *Venta Registrada:* $${lead.saleAmount} ${lead.saleCurrency || 'USD'}\n` : '') +
+        (lead.handoffNotes ? `📝 *Notas de Calificación:* "${lead.handoffNotes}"\n` : '') +
+        (lastMsg ? `\n💬 *Último Mensaje:* _"${lastMsg.content.slice(0, 150)}"_\n` : '') +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `👉 _Para marcar como venta: /won ${lead.phone} <monto>_`;
+
+      return { handled: true, replyMessage: msg, actionExecuted: 'LEAD_DETAILS' };
+    }
+
     // 2. Comando: /pause o /pausa
     if (lower.startsWith('/pause') || lower.startsWith('/pausa') || lower === 'pausar') {
       const services = await OutreachRepo.getServices();

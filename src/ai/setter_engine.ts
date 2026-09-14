@@ -103,28 +103,36 @@ TU MISIÓN:
       const json = await response.json() as any;
       const rawReply = json?.choices?.[0]?.message?.content || '';
 
-      // 4. Analizar si la IA activó el trigger de transferencia
-      const transferMatch = rawReply.match(/\[ACTION:(TRANSFER_KENNETH|QUALIFIED):(.*?)\]/);
+      // 4. Analizar si la IA activó el trigger de transferencia o agendamiento
+      const transferMatch = rawReply.match(/\[ACTION:(TRANSFER_KENNETH|QUALIFIED|SCHEDULED):(.*?)\]/);
       let isQualified = false;
       let isTransferred = false;
       let cleanReply = rawReply;
       let details: LeadQualificationDetails | undefined;
 
       if (transferMatch) {
-        isQualified = true;
+        const actionType = transferMatch[1];
         cleanReply = rawReply.replace(transferMatch[0], '').trim();
         const parts = (transferMatch[2] || '').split('|');
 
-        details = {
-          need: parts[0]?.trim() || 'Automatización y triaje en WhatsApp',
-          urgency: parts[1]?.trim() || 'Inmediata / Esta semana',
-          budget: parts[2]?.trim() || 'Calificado',
-          lastMessage: incomingText
-        };
+        if (actionType === 'SCHEDULED') {
+          const { GhostCRM } = await import('../crm/ghost_crm.js');
+          await GhostCRM.transitionStatus(cleanPhone, 'MEETING_SCHEDULED', {
+            handoffNotes: `Cita coordinada con prospecto: "${incomingText}"`
+          });
+        } else {
+          isQualified = true;
+          details = {
+            need: parts[0]?.trim() || 'Automatización y triaje en WhatsApp',
+            urgency: parts[1]?.trim() || 'Inmediata / Esta semana',
+            budget: parts[2]?.trim() || 'Calificado',
+            lastMessage: incomingText
+          };
 
-        // Ejecutar traspaso
-        await SalesDispatcher.dispatchQualifiedLead(cleanPhone, details, service?.name);
-        isTransferred = true;
+          // Ejecutar traspaso y transición a QUALIFIED
+          await SalesDispatcher.dispatchQualifiedLead(cleanPhone, details, service?.name);
+          isTransferred = true;
+        }
       }
 
       return {
