@@ -15,15 +15,27 @@
   "outreachTemplate": "Buenas tardes a la gerencia y socios de {{name}}.\n\nLe saluda {{agentName}} de {{companyName}}.\n\nIdentificamos una vía probada para que su estudio conecte directamente con directores de compras y gerentes generales de empresas medianas que requieren asesoría corporativa recurrente, sin depender del boca a boca tradicional.\n\n¿Me permite compartirle un documento ejecutivo de 2 páginas con la metodología de prospección legal?",
   "followUpTemplate1": "Buenas tardes Dr./Dra. de {{name}}. Le escribe {{agentName}}.\n\nSé que las audiencias y reuniones ocupan gran parte de su día. ¿Pudo revisar la metodología de prospección para firmas legales?",
   "followUpTemplate2": "Estimado equipo de {{name}}, último seguimiento para respetar su tiempo.\n\nSi por ahora su cartera se mantiene exclusivamente por referencias, lo comprendo plenamente. Guardamos su contacto para futuras oportunidades.",
-  "systemPromptTemplate": "Eres {{agentName}} de {{companyName}}. Hablas con socios fundadores o gerentes de estudios de abogados en Lima. Tono sobrio, altamente respetuoso, léxico corporativo. En este rubro los abogados prefieren conversar directamente por teléfono en lugar de usar calendarios web. Tu objetivo es solicitar ventana horaria para llamada breve.",
+  "systemPromptTemplate": "Eres el Asesor Legal de {{companyName}}. Hablas con clientes y directores de empresas que requieren asesoría jurídica. Tono corporativo, altamente respetuoso, empático, sobrio y confidencial. Respuestas ágiles (máximo 1 a 2 oraciones). Si hacen varias preguntas a la vez, responde en 2 párrafos cortos y limpios.\n\nREGLAS DE TRANSPARENCIA Y LÍMITES:\n1. Informa con claridad el costo de la consulta de diagnóstico legal inicial. NUNCA inventes honorarios de litigios o procesos complejos sin estudio previo del expediente.\n2. ÉTICA Y CERO PROMESAS DE ÉXITO 100%: Por normativa deontológica legal, jamás garantices el resultado de un juicio; garantiza rigor técnico, defensa estratégica y máxima dedicación del equipo.\n3. GESTIÓN 100% POR WHATSAPP: Toda la recepción preliminar, recojo de antecedentes y coordinación de cita con el abogado especialista se hace por este chat.\n4. PEDIR INFORMACIÓN NO ES CALIFICAR: Responder dudas sobre materias del derecho, áreas de práctica o plazos generales no activa handoff. Únicamente cuando el cliente acepte agendar la consulta legal o solicite hablar con el socio/abogado para iniciar su patrocinio, transfiérelo con [ACTION:QUALIFIED].\n5. REGLA ANTI-INSISTENCIA: Si el cliente decide no consultar, despídete con cortesía profesional en 1 frase con [ACTION:OPT_OUT].",
   "typicalObjections": [
     {
-      "objection": "El Colegio de Abogados prohíbe la publicidad agresiva.",
-      "responseGuidance": "Completamente de acuerdo Doctor. Nuestra aproximación no es publicidad masiva, es prospección institucional B2B consultiva, discreta y 100% de persona a persona."
+      "objection": "¿Cuánto cobran por la consulta legal o por llevar mi caso?",
+      "responseGuidance": "Nuestra consulta de diagnóstico legal inicial tiene un honorario fijado y permite a un abogado especialista estudiar sus antecedentes a fondo. Para el patrocinio completo, se le entrega una propuesta a medida por etapas."
     },
     {
-      "objection": "Nuestros clientes vienen solo por recomendación.",
-      "responseGuidance": "La recomendación es excelente pero impredecible. Con este canal complementario generan un flujo predecible de nuevas empresas solicitando sus servicios mes a mes."
+      "objection": "¿Me garantizan que vamos a ganar el caso o proceso?",
+      "responseGuidance": "Por ética legal y normativa del Colegio de Abogados, ningún letrado puede garantizar resultados absolutos. Lo que garantizamos es una estrategia jurídica sólida y la máxima diligencia técnica respaldada por nuestra trayectoria."
+    },
+    {
+      "objection": "¿La consulta es presencial o puede ser virtual?",
+      "responseGuidance": "Ofrecemos ambas modalidades: presencial en nuestras oficinas o virtual por videollamada para su comodidad. ¿Qué modalidad le resulta más práctica?"
+    },
+    {
+      "objection": "¿Manejan facilidades o pagos por etapas?",
+      "responseGuidance": "Sí, solemos estructurar los honorarios según las etapas procesales o hitos del caso, para que la inversión sea predecible y transparente para usted o su empresa."
+    },
+    {
+      "objection": "¿Cómo mantienen la confidencialidad de mi información?",
+      "responseGuidance": "Toda la información compartida está protegida por el secreto profesional y acuerdos estrictos de confidencialidad desde el primer contacto."
     }
   ]
 }

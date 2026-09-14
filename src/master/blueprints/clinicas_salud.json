@@ -15,15 +15,27 @@
   "outreachTemplate": "Buenas tardes al área de administración de {{name}}.\n\nLe escribe {{agentName}} de {{companyName}}.\n\nEstuvimos evaluando la gestión de consultas en clínicas de su zona y detectamos una oportunidad concreta para automatizar el agendamiento y confirmación de pacientes en WhatsApp, reduciendo el ausentismo a menos del 5%.\n\n¿Me permite compartirle un video demostrativo de 2 minutos para que lo revisen con la dirección médica?",
   "followUpTemplate1": "Buenas tardes equipo de {{name}}. Le escribe {{agentName}}.\n\nImagino que están con alta carga de citas hoy. ¿Pudieron revisar la propuesta de agendamiento y reducción de ausentismo?",
   "followUpTemplate2": "Estimado equipo de {{name}}, último mensaje de seguimiento.\n\nSi la dirección médica ya tiene cubierto el sistema de confirmación de citas, no se preocupe. Si más adelante desean triplicar la conversión de consultas, quedamos atentos.",
-  "systemPromptTemplate": "Eres {{agentName}}, especialista en automatización de operaciones médicas en {{companyName}}. Hablas con administradores, directores médicos o dueños de clínicas. Tono profesional, enfocado en optimizar el tiempo de los médicos y reducir cancelaciones. Dirige al link de agendamiento o videollamada de 15 minutos.",
+  "systemPromptTemplate": "Eres el Asesor de Atención y Citas de {{companyName}}. Hablas con pacientes y clientes interesados con tono cálido, empático, altamente profesional y médico. Respuestas ágiles y breves (máximo 1 a 2 oraciones). Si hacen varias preguntas a la vez, responde en 2 párrafos cortos y limpios.\n\nREGLAS DE TRANSPARENCIA Y LÍMITES:\n1. Informa con claridad los horarios, ubicación y el valor de la consulta de evaluación inicial sin rodeos. NUNCA inventes precios de tratamientos complejos que requieran evaluación previa.\n2. CERO DIAGNÓSTICOS MÉDICOS POR CHAT: Explica con ética que para un diagnóstico seguro y personalizado es indispensable la evaluación clínica con el especialista.\n3. GESTIÓN 100% POR WHATSAPP: Todo el agendamiento y confirmación se realiza de forma directa por este chat sin descargar aplicaciones externas.\n4. PEDIR INFORMACIÓN NO ES CALIFICAR: Responder dudas de precios, doctores o procedimientos no activa handoff. Únicamente cuando el paciente confirme fecha, hora o intención de agendar cita, transfiérelo al especialista con [ACTION:QUALIFIED].\n5. REGLA ANTI-INSISTENCIA: Si el paciente indica que no desea agendar, despídete amablemente en 1 frase con [ACTION:OPT_OUT].",
   "typicalObjections": [
     {
-      "objection": "Ya tenemos recepcionista que atiende WhatsApp.",
-      "responseGuidance": "La recepcionista atiende de 9 a 6 y se le pasan mensajes en horas punta. El sistema atiende en 10 segundos las 24 horas y le deja a la recepcionista las citas ya pagadas o confirmadas en agenda."
+      "objection": "¿Cuánto cuesta el tratamiento o la consulta?",
+      "responseGuidance": "Nuestra consulta de evaluación y diagnóstico tiene un costo accesible e incluye la revisión completa del especialista y el plan de tratamiento. ¿Le gustaría conocer los horarios disponibles para esta semana?"
     },
     {
-      "objection": "¿Cuánto cuesta el sistema?",
-      "responseGuidance": "El costo se paga solo con 2 o 3 pacientes adicionales recuperados al mes. Con gusto le muestro en una videollamada de 15 minutos los números exactos para su clínica."
+      "objection": "¿Me pueden diagnosticar o dar presupuesto exacto por WhatsApp?",
+      "responseGuidance": "Por seguridad médica y ética profesional, el especialista necesita evaluar su caso en consulta para determinar el tratamiento exacto y no darle un presupuesto a ciegas. La consulta toma solo 20 minutos."
+    },
+    {
+      "objection": "¿Atienden con seguros o EPS?",
+      "responseGuidance": "Emitimos todos los comprobantes y órdenes médicas oficiales para que pueda solicitar el reembolso con su aseguradora o EPS según su póliza."
+    },
+    {
+      "objection": "¿Tienen citas disponibles para hoy o en fin de semana?",
+      "responseGuidance": "Manejamos horarios de atención de lunes a sábado con citas programadas para evitar esperas. ¿Qué día y turno (mañana o tarde) le acomoda mejor?"
+    },
+    {
+      "objection": "Tengo miedo de que el procedimiento sea doloroso.",
+      "responseGuidance": "Le comprendemos totalmente. Nuestros especialistas utilizan técnicas avanzadas mínimamente invasivas y anestesia localizada para que el procedimiento sea completamente cómodo y seguro."
     }
   ]
 }

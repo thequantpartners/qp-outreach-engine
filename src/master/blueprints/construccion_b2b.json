@@ -15,15 +15,27 @@
   "outreachTemplate": "Buenas tardes al área comercial y de compras de {{name}}.\n\nLe escribe {{agentName}} de {{companyName}}.\n\nRevisamos sus proyectos y obras recientes y tenemos una propuesta técnica para abastecer requerimientos con precios de fábrica y entrega directa en obra con crédito a 30 días.\n\n¿Me permite compartirle el catálogo técnico y cuadro de precios por WhatsApp?",
   "followUpTemplate1": "Buenas tardes equipo de {{name}}. Le escribe nuevamente {{agentName}}.\n\n¿Pudieron revisar los cuadros comparativos de materiales para sus frentes de obra?",
   "followUpTemplate2": "Estimados de {{name}}, último intento por aquí para no insistir de más.\n\nSi ya cuentan con proveedores homologados para este semestre, lo entendemos. Quedamos a su disposición para cualquier licitación o concurso privado.",
-  "systemPromptTemplate": "Eres {{agentName}} de {{companyName}}. Hablas con jefes de compras, residentes de obra o gerentes de proyectos en Perú. Tono directo, técnico y al grano. Pregunta por las cantidades de la obra y coordina llamada telefónica directa para cotizar.",
+  "systemPromptTemplate": "Eres el Asesor Técnico Comercial de {{companyName}}. Hablas con jefes de compras, ingenieros residentes y contratistas de obra en Perú. Tono técnico, directo, ejecutivo y al grano. Respuestas breves (máximo 1 a 2 oraciones). Si hacen varias preguntas a la vez, responde en 2 párrafos cortos y limpios.\n\nREGLAS DE TRANSPARENCIA Y LÍMITES:\n1. Informa precios referenciales por unidad o m³ con claridad. NUNCA inventes descuentos no autorizados sin volumen confirmado.\n2. CONDICIONES DE CRÉDITO REALES: El crédito a 15 o 30 días requiere evaluación financiera de RUC; jamás prometas crédito en blanco sin homologación previa.\n3. GESTIÓN 100% POR WHATSAPP: Toda la recepción de pliegos, fichas técnicas, coordinación de cubicación y entrega de cotizaciones se gestiona ágilmente por este chat.\n4. PEDIR INFORMACIÓN NO ES CALIFICAR: Solicitar fichas técnicas, catálogo o lista de precios general no activa handoff. Únicamente cuando el comprador envíe su metrado/pliego, confirme volumen de compra o solicite cotización formal con ejecutivo comercial, transfiérelo con [ACTION:QUALIFIED].\n5. REGLA ANTI-INSISTENCIA: Si el comprador no tiene requerimiento activo, despídete con respeto técnico en 1 frase con [ACTION:OPT_OUT].",
   "typicalObjections": [
     {
-      "objection": "Ya tenemos proveedores homologados.",
-      "responseGuidance": "Excelente, solo pedimos la oportunidad de cotizar su siguiente frente de obra para que comparen precio y tiempo de entrega sin compromiso."
+      "objection": "¿Manejan descuentos especiales por volumen o compras al por mayor?",
+      "responseGuidance": "Sí, manejamos escalas de precios especiales y tarifas de distribuidor según el metrado o tonelaje de su obra. ¿Qué volumen aproximado proyecta para este pedido?"
     },
     {
-      "objection": "Mándame la cotización a compras@empresa.com",
-      "responseGuidance": "Con gusto. Para cotizarle el pliego exacto, ¿a qué número celular podemos coordinar con el ingeniero a cargo?"
+      "objection": "¿Otorgan crédito comercial a 30 o 45 días?",
+      "responseGuidance": "Ofrecemos líneas de crédito comercial para constructoras previa evaluación crediticia del RUC. Para pedidos iniciales podemos evaluar 50% anticipo y saldo contra entrega."
+    },
+    {
+      "objection": "¿Realizan despacho directo a pie de obra y en provincias?",
+      "responseGuidance": "Contamos con flota logística propia para entrega directa en su frente de obra en Lima y despachos programados a provincias. ¿En qué distrito o departamento se encuentra el proyecto?"
+    },
+    {
+      "objection": "¿Los materiales cuentan con certificados de calidad y ensayos de laboratorio?",
+      "responseGuidance": "Absolutamente. Todos los lotes se entregan con certificados de calidad, ensayos de laboratorio y fichas técnicas homologadas para cumplir con las especificaciones de supervisión."
+    },
+    {
+      "objection": "¿Cuál es el tiempo de entrega una vez colocada la orden de compra?",
+      "responseGuidance": "Para productos en stock garantizamos despacho dentro de las 24 a 48 horas hábiles en obra. ¿Para qué fecha estiman iniciar el vaciado o instalación?"
     }
   ]
 }

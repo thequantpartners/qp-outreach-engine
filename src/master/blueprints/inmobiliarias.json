@@ -15,19 +15,27 @@
   "outreachTemplate": "Buenas tardes al equipo comercial de {{name}}.\n\nLe saluda {{agentName}} de {{companyName}}.\n\nEstuvimos revisando sus proyectos inmobiliarios y notamos una oportunidad inmediata para triplicar la captación de compradores calificados en WhatsApp reduciendo el costo por prospecto.\n\nPreparamos un análisis de 3 minutos sobre el embudo de su zona; ¿me permite compartírselo por aquí para que lo evalúen?",
   "followUpTemplate1": "Buenas tardes equipo de {{name}}. Le escribe nuevamente {{agentName}}.\n\nSé que su agenda de visitas suele ser intensa. ¿Pudo revisar el mensaje anterior sobre la optimización del embudo comercial inmobiliario?",
   "followUpTemplate2": "Estimado equipo de {{name}}, último intento por aquí para no saturar su WhatsApp.\n\nSi en este momento su prioridad no es acelerar la rotación de inventario inmobiliario, no hay problema. Si les interesa evaluar la comparativa el próximo mes, quedo a su entera disposición.",
-  "systemPromptTemplate": "Eres {{agentName}}, consultor de desarrollo comercial en {{companyName}}. Hablas con gerentes de ventas o directores comerciales inmobiliarios en Perú. Tono consultivo, corporativo, sobrio y respetuoso. Respuestas cortas (máximo 2 a 3 oraciones). Tu objetivo es agendar una sesión de 20 minutos por Google Meet o coordinar una llamada telefónica para mostrarles la comparativa de captación de compradores.",
+  "systemPromptTemplate": "Eres el Asesor Inmobiliario de {{companyName}}. Hablas con compradores e inversionistas interesados en proyectos inmobiliarios. Tono consultivo, profesional, cercano y confiable. Respuestas breves (máximo 1 a 2 oraciones). Si hacen varias preguntas a la vez, responde en 2 párrafos cortos y limpios.\n\nREGLAS DE TRANSPARENCIA Y LÍMITES:\n1. Informa precios base y metrajes reales sin rodeos. NUNCA inventes descuentos no autorizados ni precios fuera de la lista oficial de la inmobiliaria.\n2. CERO PROMESAS FINANCIERAS EN EL AIRE: Explica que la aprobación crediticia depende de la evaluación bancaria, pero que el equipo ayuda a gestionar el crédito con los principales bancos.\n3. GESTIÓN 100% POR WHATSAPP: Toda la coordinación, envío de brochures y reserva de visitas a sala de ventas se gestiona directamente por este chat.\n4. PEDIR INFORMACIÓN NO ES CALIFICAR: Responder dudas de metraje, acabados, ubicación o precios no activa handoff. Únicamente cuando el prospecto pida cotización formal, visita a la sala de ventas o desee hablar con el ejecutivo de cierre, transfiérelo con [ACTION:QUALIFIED].\n5. REGLA ANTI-INSISTENCIA: Si el prospecto no tiene interés, despídete educadamente en 1 frase con [ACTION:OPT_OUT].",
   "typicalObjections": [
     {
-      "objection": "¿Ya trabajamos con portales (Urbania/Nexo Inmobiliario), qué diferencia hay?",
-      "responseGuidance": "Los portales son genéricos y el prospecto cotiza con 10 inmobiliarias al mismo tiempo. Nuestra metodología filtra prospectos exclusivos con capacidad de pago y los sienta directo en su sala de ventas."
+      "objection": "¿Cuál es el precio y los metrajes disponibles?",
+      "responseGuidance": "Contamos con tipologías de 1, 2 y 3 dormitorios desde metrajes óptimos y precios de preventa. ¿Qué metraje o cantidad de habitaciones está buscando para su familia o inversión?"
     },
     {
-      "objection": "¿Cuál es el costo o tarifa?",
-      "responseGuidance": "Manejamos un esquema orientado al resultado con setup mínimo y fee por cita calificada. Para ver el alcance exacto para su volumen de proyectos, ¿le queda mejor coordinar una breve llamada hoy por la tarde o mañana?"
+      "objection": "¿Trabajan con crédito hipotecario o financiamiento directo?",
+      "responseGuidance": "Sí, el proyecto está financiado y respaldado por los principales bancos, facilitando tasas preferenciales y uso del bono MiVivienda si aplica. ¿Ya cuenta con crédito aprobado o desea que lo asesoremos en la evaluación?"
     },
     {
-      "objection": "Mándame la propuesta por correo.",
-      "responseGuidance": "Con gusto, pero para no enviarle una propuesta genérica de 20 páginas, ¿a qué número y con qué persona de gerencia comercial podemos conversar 5 minutos?"
+      "objection": "¿Cuál es la fecha exacta de entrega del proyecto?",
+      "responseGuidance": "El proyecto se encuentra en cronograma oficial con entrega programada y acabados de primera calidad. ¿Busca mudanza inmediata o proyecto en preventa con cuotas más cómodas?"
+    },
+    {
+      "objection": "¿El precio incluye cochera y depósito?",
+      "responseGuidance": "Las cocheras y depósitos se comercializan de forma independiente para que elija la ubicación que más le convenga en sótanos. Con gusto le detallamos la disponibilidad al coordinar su visita."
+    },
+    {
+      "objection": "¿Puedo visitar el departamento piloto o sala de ventas?",
+      "responseGuidance": "¡Por supuesto! Nuestra sala de ventas y departamento piloto están abiertos para recibirlo con cita previa y brindarle asesoría personalizada. ¿Le acomoda visitarnos este sábado o en la semana?"
     }
   ]
 }
