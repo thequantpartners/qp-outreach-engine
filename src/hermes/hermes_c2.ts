@@ -10,6 +10,7 @@ import { SalesRep } from '../types/index.js';
 import { MetaCAPIClient } from '../crm/meta_capi.js';
 import { OutscraperScraper } from '../scraper/outscraper_scraper.js';
 import { NLPRouter } from '../whatsapp/nlp_router.js';
+import { AutonomousPipeline } from '../pipeline/autonomous_pipeline.js';
 
 export type HermesUserRole = 'master' | 'client_manager' | 'client_rep' | 'unauthorized';
 
@@ -181,6 +182,7 @@ export class HermesC2 {
           `━━━━━━━━━━━━━━━━━━━━\n` +
           `📊 *SUPERVISIÓN Y CONTROL:*\n` +
           `• \`/status\` : Estado del gateway, campañas y métricas.\n` +
+          `• \`/horarios\` : Horarios de prospección por país (USA y Perú) y bloque actual.\n` +
           `• \`/saldo\` : Saldo y consumo en vivo de Outscraper y OpenRouter.\n` +
           `• \`/pipeline\` : Embudo comercial Ghost CRM e ingresos.\n` +
           `• \`/leads\` : Prospectos calientes pendientes de atención.\n` +
@@ -296,6 +298,50 @@ export class HermesC2 {
         `💡 _Escribe /comandos para ver el catálogo completo._`;
 
       return { handled: true, replyMessage: msg, actionExecuted: 'STATUS_CHECK' };
+    }
+
+    // 1.45. Comando: /horarios o /horario o /schedule (Rangos de prospección y adquisición)
+    if (
+      lower.startsWith('/horario') ||
+      lower.startsWith('/horarios') ||
+      lower.startsWith('/schedule') ||
+      lower === 'horarios' ||
+      lower === 'horario'
+    ) {
+      const lima = AutonomousPipeline.getLimaTime();
+      const status = AutonomousPipeline.getStatus();
+      let slotDesc = '🌙 Fuera de horario comercial (Outbound en pausa)';
+      if (status.currentSlot === 'USA_MORNING') {
+        slotDesc = '🇺🇸 *Bloque Mañanas USA* (Activo ahora)';
+      } else if (status.currentSlot === 'LUNCH_PAUSE') {
+        slotDesc = '🍽️ *Pausa de Almuerzo Anti-Bot* (Activo ahora)';
+      } else if (status.currentSlot === 'PERU_AFTERNOON') {
+        slotDesc = '🇵🇪 *Bloque Tardes Perú* (Activo ahora)';
+      }
+
+      const msg =
+        `🏛️ *HERMES C2 · HORARIOS DE ADQUISICIÓN Y OPERACIÓN*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `🕒 *Hora actual en Lima:* ${lima.timeStr} PET (UTC-5)\n` +
+        `📍 *Bloque actual:* ${slotDesc}\n\n` +
+        `⏰ *RANGOS HORARIOS OUTBOUND (Prospección en Frío):*\n` +
+        `• 🇺🇸 *Mañanas USA (09:00 AM – 01:00 PM PET):*\n` +
+        `  ↳ Campañas para Estados Unidos (Realtors Florida/Texas, Abogados, etc.).\n` +
+        `• 🍽️ *Pausa de Almuerzo (01:00 PM – 02:00 PM PET):*\n` +
+        `  ↳ Cero envíos en frío. Pausa preventiva humana anti-bloqueo.\n` +
+        `• 🇵🇪 *Tardes Perú (02:00 PM – 06:30 PM PET):*\n` +
+        `  ↳ Campañas para Perú (Clínicas, Constructoras, WhatsApp B2B).\n` +
+        `• 🌙 *Pausa Nocturna (06:30 PM – 09:00 AM PET):*\n` +
+        `  ↳ Cero envíos en frío para evitar reportes de spam fuera de oficina.\n\n` +
+        `⚡ *ATENCIÓN INBOUND (Setter IA 24/7):*\n` +
+        `• *Activa 24/7 sin excepción.* Si cualquier prospecto responde de día, noche o fin de semana, la IA le atiende al instante en segundos.\n\n` +
+        `🛡️ *CADENCIA Y PROTECCIÓN ANTI-BAN:*\n` +
+        `• Delays: 180s – 300s (3 a 5 min) aleatorio entre envíos.\n` +
+        `• Límite Diario: 35 prospectos/día.\n` +
+        `• Circuit Breaker: Pausa preventiva de 45 min si 10 mensajes seguidos no reciben respuesta.\n` +
+        `━━━━━━━━━━━━━━━━━━━━`;
+
+      return { handled: true, replyMessage: msg, actionExecuted: 'SCHEDULE_CHECK' };
     }
 
     // 1.5. Comando: /saldo o /balance o /outscraper (Consulta de créditos - Solo Master Kenneth)
@@ -1340,10 +1386,20 @@ DATOS ACTUALES DEL GHOST CRM:
 
 SALDOS Y CONSUMO DE PLATAFORMAS EN TIEMPO REAL:${creditsPrompt}
 
+HORARIOS Y ARQUITECTURA DE ADQUISICIÓN (OUTREACH ENGINE):
+- Zona horaria base: Lima, Perú (PET / UTC-5).
+- 🇺🇸 Bloque Mañanas (09:00 AM – 01:00 PM PET): Prospección en frío (Outbound) exclusiva para USA (Realtors Florida/Texas, Abogados de Inmigración, etc.).
+- 🍽️ Pausa de Almuerzo (01:00 PM – 02:00 PM PET): Pausa total anti-bot. Cero envíos en frío para emular descanso humano.
+- 🇵🇪 Bloque Tardes (02:00 PM – 06:30 PM PET): Prospección en frío (Outbound) exclusiva para PERÚ (Clínicas, Constructoras, WhatsApp B2B).
+- 🌙 Fuera de Horario (06:30 PM – 09:00 AM PET): Pausa nocturna de Outbound para proteger el chip contra reportes de spam.
+- ⚡ Atención Inbound (Setter IA): Activa 24/7 sin excepción. Cualquier prospecto que responda a cualquier hora es atendido al instante en segundos.
+- 🛡️ Parámetros Anti-Ban: Delays de 180s a 300s entre mensajes, límite diario de 35 envíos, circuit breaker de 45 min si 10 mensajes seguidos no reciben respuesta.
+
 INSTRUCCIONES:
 - Responde a su pregunta de forma clara y directa (máximo 2 párrafos breves).
 - Si te pregunta por saldos de Outscraper o OpenRouter, dale los números exactos con tono ejecutivo y alerta si Outscraper está bajo ($< 1 USD).
-- Si te pide realizar una acción que tiene un comando (/status, /saldo, /pipeline, /mensaje, /pausa, /reanudar, /scrape, /won <tel> <monto>, /leads, /sop, /provision), indícale el resultado o recomiéndale el comando exacto.`;
+- Si te pregunta por horarios o rangos de adquisición de USA y Perú, dale SIEMPRE la división exacta de bloques (Mañanas USA 9am-1pm, Pausa Almuerzo 1pm-2pm, Tardes Perú 2pm-6:30pm, Inbound 24/7). NUNCA digas rangos genéricos como 9 a 5.
+- Si te pide realizar una acción que tiene un comando (/status, /horarios, /saldo, /pipeline, /mensaje, /pausa, /reanudar, /scrape, /won <tel> <monto>, /leads, /sop, /provision), indícale el resultado o recomiéndale el comando exacto.`;
     }
 
     try {

@@ -168,6 +168,31 @@ export class NLPRouter {
       return { command: 'scraper', args: [] };
     }
 
+    // 8.8. Horarios y rangos de adquisición (USA y Perú)
+    if (
+      clean === 'horarios' ||
+      clean === 'horario' ||
+      clean === 'schedule' ||
+      clean === 'rango horario' ||
+      clean === 'rangos horarios' ||
+      clean.includes('rango horario') ||
+      clean.includes('rangos horarios') ||
+      clean.includes('horario de adquisicion') ||
+      clean.includes('horarios de adquisicion') ||
+      clean.includes('horario de prospeccion') ||
+      clean.includes('horarios de prospeccion') ||
+      clean.includes('a que hora prospecta') ||
+      clean.includes('a que hora envia') ||
+      clean.includes('a que hora mandas') ||
+      clean.includes('a que hora prospectas') ||
+      clean.includes('a que hora salen los mensajes') ||
+      clean.includes('bloque horario') ||
+      clean.includes('bloques horarios') ||
+      (clean.includes('horario') && (clean.includes('usa') || clean.includes('peru')))
+    ) {
+      return { command: 'horarios', args: [] };
+    }
+
     // 9. Scraping con Outscraper: "raspar X", "busca X en maps", "scrape X"
     const scrapeMatch = clean.match(/^(?:raspar|raspa|scrapear|scrapea|scrape|buscar|busca|extraer|extrae)\s+(.+)$/i);
     if (scrapeMatch && scrapeMatch[1]) {
