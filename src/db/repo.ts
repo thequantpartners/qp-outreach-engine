@@ -152,6 +152,13 @@ export class OutreachRepo {
       ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS meta_webhook_verify_token VARCHAR(100);
       ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT false;
       ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_customer_message_at TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE leads ADD COLUMN IF NOT EXISTS sale_amount NUMERIC DEFAULT 0;
+      ALTER TABLE leads ADD COLUMN IF NOT EXISTS sale_currency VARCHAR(10) DEFAULT 'USD';
+      ALTER TABLE leads ADD COLUMN IF NOT EXISTS capi_synced_at TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE leads ADD COLUMN IF NOT EXISTS capi_event_id VARCHAR(100);
+      ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS meta_dataset_id VARCHAR(100);
+      ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS meta_capi_token TEXT;
+      ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS meta_test_event_code VARCHAR(50);
     `);
 
     // Asegurar que el servicio base para Inbound General exista siempre
@@ -630,9 +637,83 @@ export class OutreachRepo {
       closingMode: r.closing_mode || undefined,
       meetingAttendanceStatus: (r.meeting_attendance_status as any) || 'PENDING',
       customFields: r.custom_fields || {},
+      saleAmount: r.sale_amount ? parseFloat(r.sale_amount) : undefined,
+      saleCurrency: r.sale_currency || 'USD',
+      capiSyncedAt: r.capi_synced_at?.toISOString(),
+      capiEventId: r.capi_event_id || undefined,
       createdAt: r.created_at?.toISOString(),
       updatedAt: r.updated_at?.toISOString()
     };
+  }
+
+  public static async getLead(phone: string): Promise<Lead | null> {
+    return this.getLeadByPhone(phone);
+  }
+
+  public static async updateLead(phone: string, updates: Partial<Lead>): Promise<Lead | null> {
+    const clean = phone.replace(/[^0-9]/g, '');
+    const current = await OutreachRepo.getLeadByPhone(clean);
+    if (!current) return null;
+
+    if (DbConnection.isPg()) {
+      const setClauses: string[] = ['updated_at = NOW()'];
+      const values: any[] = [];
+      let idx = 1;
+
+      if (updates.status !== undefined) {
+        setClauses.push(`status = $${idx++}`);
+        values.push(updates.status);
+      }
+      if (updates.assignedRepName !== undefined) {
+        setClauses.push(`assigned_rep_name = $${idx++}`);
+        values.push(updates.assignedRepName);
+      }
+      if (updates.assignedRepPhone !== undefined) {
+        setClauses.push(`assigned_rep_phone = $${idx++}`);
+        values.push(updates.assignedRepPhone);
+      }
+      if (updates.handoffNotes !== undefined) {
+        setClauses.push(`handoff_notes = $${idx++}`);
+        values.push(updates.handoffNotes);
+      }
+      if (updates.humanTakeoverAt !== undefined) {
+        setClauses.push(`human_takeover_at = $${idx++}`);
+        values.push(updates.humanTakeoverAt ? new Date(updates.humanTakeoverAt) : null);
+      }
+      if (updates.scheduledMeetingAt !== undefined) {
+        setClauses.push(`scheduled_meeting_at = $${idx++}`);
+        values.push(updates.scheduledMeetingAt ? new Date(updates.scheduledMeetingAt) : null);
+      }
+      if (updates.saleAmount !== undefined) {
+        setClauses.push(`sale_amount = $${idx++}`);
+        values.push(updates.saleAmount);
+      }
+      if (updates.saleCurrency !== undefined) {
+        setClauses.push(`sale_currency = $${idx++}`);
+        values.push(updates.saleCurrency);
+      }
+      if (updates.capiSyncedAt !== undefined) {
+        setClauses.push(`capi_synced_at = $${idx++}`);
+        values.push(updates.capiSyncedAt ? new Date(updates.capiSyncedAt) : null);
+      }
+      if (updates.capiEventId !== undefined) {
+        setClauses.push(`capi_event_id = $${idx++}`);
+        values.push(updates.capiEventId);
+      }
+
+      values.push(clean);
+      const query = `UPDATE leads SET ${setClauses.join(', ')} WHERE phone = $${idx} RETURNING *`;
+      const res = await DbConnection.getPool().query(query, values);
+      if (res.rows.length === 0) return null;
+      return OutreachRepo.mapLeadRow(res.rows[0]);
+    } else {
+      const data = DbConnection.getFallbackData();
+      const lead = (data.leads || []).find((l: Lead) => l.phone === clean);
+      if (!lead) return null;
+      Object.assign(lead, updates, { updatedAt: new Date().toISOString() });
+      DbConnection.saveFallbackData(data);
+      return lead;
+    }
   }
 
   public static async getLeadByPhone(phone: string): Promise<Lead | null> {
@@ -1286,6 +1367,9 @@ export class OutreachRepo {
         metaWabaId: r.meta_waba_id || '',
         metaAccessToken: r.meta_access_token || '',
         metaWebhookVerifyToken: r.meta_webhook_verify_token || 'qp_verify_token_2026',
+        metaDatasetId: r.meta_dataset_id || '',
+        metaCapiToken: r.meta_capi_token || '',
+        metaTestEventCode: r.meta_test_event_code || '',
         onboardingCompleted: r.onboarding_completed != null ? Boolean(r.onboarding_completed) : (process.env.MODE !== 'client')
       };
     } else {
@@ -1311,6 +1395,9 @@ export class OutreachRepo {
         metaWabaId: '',
         metaAccessToken: '',
         metaWebhookVerifyToken: 'qp_verify_token_2026',
+        metaDatasetId: '',
+        metaCapiToken: '',
+        metaTestEventCode: '',
         onboardingCompleted: process.env.MODE !== 'client'
       };
     }
@@ -1344,7 +1431,10 @@ export class OutreachRepo {
            meta_waba_id = $20,
            meta_access_token = $21,
            meta_webhook_verify_token = $22,
-           onboarding_completed = $23,
+           meta_dataset_id = $23,
+           meta_capi_token = $24,
+           meta_test_event_code = $25,
+           onboarding_completed = $26,
            updated_at = NOW()
          WHERE id = 'main_config'`,
         [
@@ -1370,6 +1460,9 @@ export class OutreachRepo {
           updated.metaWabaId || '',
           updated.metaAccessToken || '',
           updated.metaWebhookVerifyToken || 'qp_verify_token_2026',
+          updated.metaDatasetId || '',
+          updated.metaCapiToken || '',
+          updated.metaTestEventCode || '',
           Boolean(updated.onboardingCompleted)
         ]
       );

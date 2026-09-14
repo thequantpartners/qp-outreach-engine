@@ -69,6 +69,10 @@ export interface Lead {
   meetingAttendanceStatus?: 'ATTENDED' | 'NO_SHOW' | 'PENDING';
   source?: LeadSource;
   customFields?: Record<string, any>;
+  saleAmount?: number;
+  saleCurrency?: string;
+  capiSyncedAt?: string;
+  capiEventId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -115,6 +119,9 @@ export interface CampaignSettings {
   metaWabaId?: string;
   metaAccessToken?: string;
   metaWebhookVerifyToken?: string;
+  metaDatasetId?: string;
+  metaCapiToken?: string;
+  metaTestEventCode?: string;
   useCustomApify?: boolean;
   apifyToken?: string;
   onboardingCompleted?: boolean;
@@ -439,4 +446,35 @@ export const CloneClientSchema = z.object({
 
 export type CloneClientRequest = z.infer<typeof CloneClientSchema>;
 
+export interface MetaCAPIUserData {
+  ph?: string[];     // SHA-256 hash del teléfono en E.164
+  em?: string[];     // SHA-256 hash del email en minúsculas
+  client_ip_address?: string;
+  client_user_agent?: string;
+}
 
+export interface MetaCAPICustomData {
+  currency?: 'USD' | 'PEN';
+  value?: number;
+  service_id?: string;
+  lead_phone?: string;
+  lead_name?: string;
+  lead_status?: string;
+  order_id?: string;
+}
+
+export interface MetaCAPIEvent {
+  event_name: 'Lead' | 'Schedule' | 'Purchase' | 'Contact';
+  event_time: number;
+  event_id: string;
+  action_source: 'system_generated' | 'chat';
+  user_data: MetaCAPIUserData;
+  custom_data?: MetaCAPICustomData;
+}
+
+export interface MetaCAPIResult {
+  success: boolean;
+  eventsReceived?: number;
+  fbtraceId?: string;
+  error?: string;
+}

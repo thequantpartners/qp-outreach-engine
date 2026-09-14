@@ -1,0 +1,60 @@
+version: '3.8'
+
+# =================================================================
+# THE QUANT PARTNERS · QP OUTREACH ENGINE & HERMES C2
+# Infraestructura Unificada en Docker (Postgres Ghost CRM + Engine)
+# =================================================================
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: qp-postgres-db
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-qp_outreach}
+      POSTGRES_USER: ${POSTGRES_USER:-qp_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-qp_secure_pass_2026}
+    ports:
+      - "5432:5432"
+    volumes:
+      - qp_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-qp_user} -d ${POSTGRES_DB:-qp_outreach}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - qp_network
+
+  engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: qp-outreach-engine
+    restart: always
+    working_dir: /app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER:-qp_user}:${POSTGRES_PASSWORD:-qp_secure_pass_2026}@postgres:5432/${POSTGRES_DB:-qp_outreach}
+      - PORT=3100
+      - STORAGE_DIR=/app/storage
+    ports:
+      - "3100:3100"
+    volumes:
+      - qp_storage:/app/storage
+    networks:
+      - qp_network
+
+volumes:
+  qp_pgdata:
+    driver: local
+  qp_storage:
+    driver: local
+
+networks:
+  qp_network:
+    driver: bridge

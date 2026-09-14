@@ -73,6 +73,80 @@ app.get('/master', (_req: Request, res: Response) => {
   res.sendFile(path.join(publicMasterDir, 'index.html'));
 });
 
+// Montar Portal de Cliente Live View (/portal)
+const publicPortalDir = fs.existsSync(path.resolve('public/portal'))
+  ? path.resolve('public/portal')
+  : path.resolve(__dirname, '../../public/portal');
+
+app.use('/portal', express.static(publicPortalDir));
+app.get('/portal', (_req: Request, res: Response) => {
+  res.sendFile(path.join(publicPortalDir, 'index.html'));
+});
+
+// Endpoints de datos del Portal de Cliente
+app.get('/api/portal/data', async (_req: Request, res: Response) => {
+  try {
+    const { GhostCRM } = await import('../crm/ghost_crm.js');
+    const summary = await GhostCRM.getFunnelSummary();
+    const leads = await OutreachRepo.getLeads({ limit: 100 });
+    const companyName = process.env.COMPANY_NAME || 'The Quant Partners';
+
+    res.json({
+      companyName,
+      summary,
+      leads: leads.map(l => ({
+        companyName: l.companyName,
+        phone: l.phone,
+        status: l.status,
+        assignedRepName: l.assignedRepName,
+        handoffNotes: l.handoffNotes,
+        saleAmount: l.saleAmount,
+        saleCurrency: l.saleCurrency,
+        capiSyncedAt: l.capiSyncedAt,
+        updatedAt: l.updatedAt
+      }))
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/portal/record-sale', async (req: Request, res: Response) => {
+  try {
+    const { phone, amount, currency } = req.body;
+    if (!phone || !amount) {
+      return res.status(400).json({ success: false, error: 'Teléfono y monto son requeridos' });
+    }
+    const { GhostCRM } = await import('../crm/ghost_crm.js');
+    const result = await GhostCRM.recordWonSale(phone, Number(amount), currency || 'USD', 'Portal Web');
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Endpoint de Descarga Segura del Instalador Llave en Mano para VPS en 1 línea
+app.get('/api/install/:clientId/:token', async (req: Request, res: Response) => {
+  try {
+    const clientId = String(req.params.clientId);
+    const token = String(req.params.token);
+    const { ClientRegistry } = await import('../master/client_registry.js');
+    const { VpsInstaller } = await import('../master/vps_installer.js');
+    
+    const client = await ClientRegistry.getClient(clientId);
+    if (!client || client.clientPin !== token) {
+      return res.status(404).send('# Error: Cliente no encontrado o PIN inválido');
+    }
+
+    const masterUrl = process.env.PUBLIC_URL || 'https://gateway-production-2264.up.railway.app';
+    const script = VpsInstaller.generateInstallScript(client, masterUrl);
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.send(script);
+  } catch (err: any) {
+    res.status(500).send(`# Error generando instalador: ${err.message}`);
+  }
+});
+
 // Suscriptores SSE para tiempo real en el Dashboard
 const clientSseSubscribers = new Set<Response>();
 

@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Portal de Conversión Live · The Quant Partners</title>
+  
+  <!-- Obsidian Precision Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            serif: ['"Playfair Display"', 'Georgia', 'serif'],
+            sans: ['Inter', '-apple-system', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            obsidian: '#05070B',
+            surface: '#0B0F19',
+            subsurface: '#111625',
+            card: '#0E1322',
+            gold: {
+              DEFAULT: '#D4AF37',
+              light: '#F3E5AB',
+              dark: '#997A15'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #05070B;
+      color: #E2E8F0;
+      font-family: 'Inter', sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .text-gold-gradient {
+      background: linear-gradient(135deg, #F3E5AB 0%, #D4AF37 50%, #997A15 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .btn-gold {
+      background: linear-gradient(135deg, #F3E5AB 0%, #D4AF37 50%, #997A15 100%);
+      color: #05070B;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+    .btn-gold:hover {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
+    }
+    .card-luxury {
+      background: #0B0F19;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 1rem;
+    }
+    .card-luxury:hover {
+      border-color: rgba(212, 175, 55, 0.25);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between">
+  <!-- Top Navigation -->
+  <header class="border-b border-white/10 bg-surface/80 backdrop-blur sticky top-0 z-40 px-4 py-3">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-8 h-8 rounded-lg bg-gold/10 border border-gold/30 flex items-center justify-center text-gold">
+          <i data-lucide="zap" class="w-4 h-4"></i>
+        </div>
+        <div>
+          <h1 id="portalCompanyName" class="text-sm font-semibold text-white tracking-wide uppercase">Cargando Empresa...</h1>
+          <p class="text-[11px] text-gray-400">Portal Privado de Conversión Live (Solo Lectura)</p>
+        </div>
+      </div>
+      
+      <div class="flex items-center space-x-2">
+        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse"></span>
+          AI Setter Activo 24/7
+        </span>
+        <button onclick="fetchPortalData()" class="p-1.5 text-gray-400 hover:text-gold rounded-lg hover:bg-white/5 transition" title="Refrescar">
+          <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto w-full p-4 md:p-6 space-y-6">
+    <!-- Hero Banner -->
+    <div class="card-luxury p-5 md:p-6 relative overflow-hidden">
+      <div class="absolute -right-10 -bottom-10 w-48 h-48 bg-gold/5 rounded-full blur-3xl pointer-events-none"></div>
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <p class="text-xs font-mono uppercase tracking-widest text-gold mb-1">Closed-Loop Meta Ads & AI Setter</p>
+          <h2 class="text-xl md:text-2xl font-serif font-bold text-white">Monitoreo de Conversiones y Leads en Tiempo Real</h2>
+          <p class="text-xs md:text-sm text-gray-400 mt-1">Los prospectos son recibidos en < 5s, precalificados por IA y entregados a tus asesores para cierre.</p>
+        </div>
+        <div class="flex items-center space-x-3">
+          <button onclick="openWonModal()" class="btn-gold text-xs px-4 py-2.5 rounded-lg flex items-center space-x-2 shadow-lg shadow-gold/10">
+            <i data-lucide="award" class="w-4 h-4"></i>
+            <span>Registrar Venta Ganada</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bento Grid KPIs -->
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
+      <div class="card-luxury p-4">
+        <p class="text-[11px] font-mono text-gray-400 uppercase tracking-wider">Total Prospectos</p>
+        <p id="kpiTotalLeads" class="text-2xl md:text-3xl font-bold text-white mt-1">0</p>
+        <p class="text-[10px] text-gray-500 mt-1">Recibidos por WhatsApp</p>
+      </div>
+      
+      <div class="card-luxury p-4">
+        <p class="text-[11px] font-mono text-gray-400 uppercase tracking-wider">Calificados (Setter)</p>
+        <p id="kpiQualified" class="text-2xl md:text-3xl font-bold text-gold mt-1">0</p>
+        <p class="text-[10px] text-emerald-400 mt-1">Filtro de curiosos superado</p>
+      </div>
+
+      <div class="card-luxury p-4">
+        <p class="text-[11px] font-mono text-gray-400 uppercase tracking-wider">Citas Agendadas</p>
+        <p id="kpiMeetings" class="text-2xl md:text-3xl font-bold text-cyan-400 mt-1">0</p>
+        <p class="text-[10px] text-gray-500 mt-1">En calendario / llamada</p>
+      </div>
+
+      <div class="card-luxury p-4">
+        <p class="text-[11px] font-mono text-gray-400 uppercase tracking-wider">Ventas Cerradas</p>
+        <p id="kpiWon" class="text-2xl md:text-3xl font-bold text-emerald-400 mt-1">0</p>
+        <p id="kpiRevenue" class="text-[10px] text-emerald-300 font-medium mt-1">$0 USD generado</p>
+      </div>
+
+      <div class="card-luxury p-4 col-span-2 lg:col-span-1 border-gold/30 bg-gold/[0.02]">
+        <p class="text-[11px] font-mono text-gold uppercase tracking-wider flex items-center justify-between">
+          <span>Meta Ads CAPI</span>
+          <i data-lucide="activity" class="w-3.5 h-3.5"></i>
+        </p>
+        <p id="kpiCapi" class="text-2xl md:text-3xl font-bold text-white mt-1">0</p>
+        <p class="text-[10px] text-gray-400 mt-1">Eventos enviados a Pixel/Dataset</p>
+      </div>
+    </div>
+
+    <!-- Leads Live Feed -->
+    <div class="card-luxury overflow-hidden">
+      <div class="p-4 border-b border-white/10 flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+          <i data-lucide="users" class="w-4 h-4 text-gold"></i>
+          <h3 class="text-sm font-semibold text-white">Prospectos Calificados y en Atención</h3>
+        </div>
+        <span class="text-xs text-gray-400 font-mono" id="leadCountLabel">0 leads</span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="border-b border-white/5 bg-white/[0.02] text-gray-400 uppercase font-mono text-[10px]">
+              <th class="py-3 px-4">Prospecto / Empresa</th>
+              <th class="py-3 px-4">Estado</th>
+              <th class="py-3 px-4">Asesor Asignado</th>
+              <th class="py-3 px-4">Último Mensaje</th>
+              <th class="py-3 px-4">Meta CAPI</th>
+              <th class="py-3 px-4 text-right">Acción</th>
+            </tr>
+          </thead>
+          <tbody id="leadsTableBody" class="divide-y divide-white/5">
+            <tr>
+              <td colspan="6" class="py-8 text-center text-gray-500">Cargando prospectos...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal Registrar Venta Ganada -->
+  <div id="wonModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="card-luxury max-w-md w-full p-6 space-y-4 border-gold/40">
+      <div class="flex items-center justify-between">
+        <h3 class="font-serif font-bold text-lg text-white">Registrar Venta Ganada</h3>
+        <button onclick="closeWonModal()" class="text-gray-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <p class="text-xs text-gray-400">Al registrar la venta, Ghost CRM guardará el valor del contrato y despachará automáticamente el evento <b>Purchase</b> a Meta Conversions API para optimizar el retorno de tus anuncios.</p>
+
+      <form id="wonForm" onsubmit="submitWonSale(event)" class="space-y-3">
+        <div>
+          <label class="block text-[11px] font-mono text-gray-300 mb-1">Teléfono de WhatsApp del Cliente *</label>
+          <input type="text" id="wonPhone" required placeholder="ej. 51987654321" class="w-full bg-subsurface border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:border-gold outline-none">
+        </div>
+        
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] font-mono text-gray-300 mb-1">Monto Cobrado *</label>
+            <input type="number" step="0.01" id="wonAmount" required placeholder="1200" class="w-full bg-subsurface border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:border-gold outline-none">
+          </div>
+          <div>
+            <label class="block text-[11px] font-mono text-gray-300 mb-1">Moneda *</label>
+            <select id="wonCurrency" class="w-full bg-subsurface border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:border-gold outline-none">
+              <option value="USD">USD ($)</option>
+              <option value="PEN">PEN (S/.)</option>
+            </select>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-gold w-full py-2.5 rounded-lg text-xs font-semibold mt-2 flex items-center justify-center space-x-2">
+          <i data-lucide="check-circle" class="w-4 h-4"></i>
+          <span>Confirmar Venta y Notificar a Meta Ads</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="border-t border-white/5 py-4 px-6 text-center text-[11px] text-gray-500 font-mono">
+    Desarrollado y Blindado por <span class="text-gold">The Quant Partners</span> · Sistema Autónomo de Conversión
+  </footer>
+
+  <script>
+    lucide.createIcons();
+
+    function openWonModal(phone = '') {
+      if (phone) document.getElementById('wonPhone').value = phone;
+      document.getElementById('wonModal').classList.remove('hidden');
+    }
+
+    function closeWonModal() {
+      document.getElementById('wonModal').classList.add('hidden');
+    }
+
+    async function fetchPortalData() {
+      try {
+        const resp = await fetch('/api/portal/data');
+        if (!resp.ok) throw new Error('Error al cargar datos');
+        const data = await resp.json();
+
+        // Update Company Name
+        if (data.companyName) {
+          document.getElementById('portalCompanyName').innerText = data.companyName;
+        }
+
+        // Update KPIs
+        if (data.summary) {
+          document.getElementById('kpiTotalLeads').innerText = data.summary.totalLeads || 0;
+          document.getElementById('kpiQualified').innerText = data.summary.qualified || 0;
+          document.getElementById('kpiMeetings').innerText = data.summary.meetingScheduled || 0;
+          document.getElementById('kpiWon').innerText = data.summary.closedWon || 0;
+          document.getElementById('kpiCapi').innerText = data.summary.metaCapiEventsFired || 0;
+
+          const revUSD = data.summary.totalRevenueUSD || 0;
+          const revPEN = data.summary.totalRevenuePEN || 0;
+          let revText = '';
+          if (revUSD > 0) revText += `$${revUSD.toLocaleString()} USD `;
+          if (revPEN > 0) revText += `S/. ${revPEN.toLocaleString()} PEN`;
+          document.getElementById('kpiRevenue').innerText = revText || '$0 USD generado';
+        }
+
+        // Update Leads Table
+        const tbody = document.getElementById('leadsTableBody');
+        const leads = data.leads || [];
+        document.getElementById('leadCountLabel').innerText = `${leads.length} leads`;
+
+        if (leads.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-gray-500">No hay prospectos registrados aún.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = leads.map(l => {
+          let statusBadge = '';
+          switch(l.status) {
+            case 'QUALIFIED':
+              statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] bg-gold/10 text-gold border border-gold/30 font-medium">Calificado</span>';
+              break;
+            case 'CLOSED_WON':
+              statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-medium">Venta Ganada</span>';
+              break;
+            case 'MEETING_SCHEDULED':
+              statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 font-medium">Cita Agendada</span>';
+              break;
+            case 'REPLIED':
+              statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/30">Respondió</span>';
+              break;
+            default:
+              statusBadge = `<span class="px-2 py-0.5 rounded text-[10px] bg-gray-500/10 text-gray-400 border border-gray-500/30">${l.status}</span>`;
+          }
+
+          const capiBadge = l.capiSyncedAt 
+            ? '<span class="text-emerald-400 flex items-center gap-1 font-mono text-[10px]"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>Sincronizado</span>'
+            : '<span class="text-gray-500 text-[10px]">Pendiente</span>';
+
+          const snippet = l.handoffNotes || l.lastMessage || 'Conversación en curso con IA';
+
+          return `
+            <tr class="hover:bg-white/[0.02] transition">
+              <td class="py-3 px-4">
+                <div class="font-medium text-white">${l.companyName || 'Prospecto'}</div>
+                <div class="text-[11px] text-gray-400 font-mono">+${l.phone}</div>
+              </td>
+              <td class="py-3 px-4">${statusBadge}</td>
+              <td class="py-3 px-4 text-gray-300">${l.assignedRepName || 'Equipo General'}</td>
+              <td class="py-3 px-4 max-w-xs truncate text-gray-400" title="${snippet}">${snippet}</td>
+              <td class="py-3 px-4">${capiBadge}</td>
+              <td class="py-3 px-4 text-right space-x-2">
+                <a href="https://wa.me/${l.phone}" target="_blank" class="inline-flex items-center justify-center p-1.5 rounded bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition" title="Abrir WhatsApp">
+                  <i data-lucide="message-circle" class="w-3.5 h-3.5"></i>
+                </a>
+                <button onclick="openWonModal('${l.phone}')" class="inline-flex items-center justify-center p-1.5 rounded bg-gold/10 text-gold hover:bg-gold/20 transition" title="Registrar Venta">
+                  <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+        lucide.createIcons();
+      } catch (err) {
+        console.error('Error cargando portal:', err);
+      }
+    }
+
+    async function submitWonSale(e) {
+      e.preventDefault();
+      const phone = document.getElementById('wonPhone').value;
+      const amount = parseFloat(document.getElementById('wonAmount').value);
+      const currency = document.getElementById('wonCurrency').value;
+
+      try {
+        const resp = await fetch('/api/portal/record-sale', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, amount, currency })
+        });
+
+        const json = await resp.json();
+        if (json.success) {
+          alert('¡Venta registrada y transmitida a Meta CAPI con éxito!');
+          closeWonModal();
+          fetchPortalData();
+        } else {
+          alert('Error: ' + (json.error || 'No se pudo registrar la venta'));
+        }
+      } catch (err) {
+        alert('Error de conexión con el servidor.');
+      }
+    }
+
+    // Cargar al inicio y refrescar cada 30 segundos
+    fetchPortalData();
+    setInterval(fetchPortalData, 30000);
+  </script>
+</body>
+</html>

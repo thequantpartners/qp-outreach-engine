@@ -186,6 +186,14 @@ export class BaileysEngine {
           this.isReady = true;
           this.latestQr = null;
 
+          // Iniciar Hermes C2 Scheduler para briefings matutinos y reportes de cierre
+          try {
+            const { HermesC2 } = await import('../hermes/hermes_c2.js');
+            HermesC2.initScheduler();
+          } catch (err: any) {
+            console.warn('[BaileysEngine] No se pudo inicializar Hermes C2 scheduler:', err.message);
+          }
+
           await this.notifyExternalAlert('✅ [QP Outreach Engine] WhatsApp conectado exitosamente y listo para despachar.');
 
           // Respaldar sesión en tar.gz en segundo plano
@@ -373,20 +381,23 @@ export class BaileysEngine {
         }
 
         // 2. Si el mensaje viene del propio admin (Kenneth) a la cuenta del bot
-        const adminClean = settings.adminWhatsAppPhone ? settings.adminWhatsAppPhone.replace(/[^0-9]/g, '') : '';
-        const isAdmin = adminClean && senderPhone === adminClean;
+        const { HermesC2 } = await import('../hermes/hermes_c2.js');
+        const isAdmin = await HermesC2.isAdminPhone(senderPhone);
 
-        if (isAdmin && incomingText.trim().startsWith('/')) {
-          console.log(`[BaileysEngine] Comando de administrador recibido: "${incomingText}"`);
-          // Procesar futuros comandos slash del admin aquí
+        if (isAdmin) {
+          try {
+            const hermesRes = await HermesC2.handleAdminMessage(incomingText, senderPhone);
+            if (hermesRes.handled && hermesRes.replyMessage) {
+              const jid = `${senderPhone}@s.whatsapp.net`;
+              await this.sock?.sendMessage(jid, { text: hermesRes.replyMessage });
+            }
+          } catch (hermesErr: any) {
+            console.error('[BaileysEngine] Error ejecutando comando en Hermes C2:', hermesErr.message);
+          }
           continue;
         }
 
-        if (isAdmin) {
-          console.log(`[BaileysEngine] Mensaje de interacción/prueba del administrador (${senderPhone}): "${incomingText}"`);
-        } else {
-          console.log(`\n📩 [BaileysEngine] Mensaje entrante de ${senderPhone}: "${incomingText}"`);
-        }
+        console.log(`\n📩 [BaileysEngine] Mensaje entrante de ${senderPhone}: "${incomingText}"`);
 
         // 3. Buscar o registrar al prospecto con atribución inteligente de Meta Ads
         const { lead, isNew, matchedService } = await OutreachRepo.ingestInboundLead({
@@ -439,12 +450,32 @@ export class BaileysEngine {
           continue;
         }
 
-        // 4. Registrar mensaje del usuario en la base de datos y activar Human Takeover (El bot se silencia)
+        // 4. Registrar mensaje del usuario en la base de datos
         await OutreachRepo.addChatMessage(senderPhone, 'user', incomingText);
         await OutreachRepo.updateLeadStatus(senderPhone, 'REPLIED', {
-          humanTakeoverAt: new Date().toISOString(),
           lastCustomerMessageAt: new Date().toISOString()
         });
+
+        // 4.1. Evaluar si el AI Setter debe calificar y responder en 5s
+        const isHumanLocked = lead.status === 'HUMAN_TAKEOVER' || lead.status === 'CLOSED_WON' || lead.status === 'CLOSED_LOST';
+        if (!isHumanLocked) {
+          try {
+            const { SetterEngine } = await import('../ai/setter_engine.js');
+            const setterRes = await SetterEngine.processMessage(lead, incomingText, matchedService);
+            if (setterRes.replyText && setterRes.replyText.trim().length > 0) {
+              const jid = `${senderPhone}@s.whatsapp.net`;
+              await this.sock?.sendMessage(jid, { text: setterRes.replyText });
+              await OutreachRepo.addChatMessage(senderPhone, 'assistant', setterRes.replyText);
+              console.log(`🤖 [SetterEngine] Respuesta enviada a ${senderPhone}: "${setterRes.replyText.substring(0, 70)}..."`);
+            }
+            if (setterRes.isTransferred) {
+              // El Setter ya ejecutó el traspaso vía SalesDispatcher y activó HUMAN_TAKEOVER
+              continue;
+            }
+          } catch (setterErr: any) {
+            console.error('[BaileysEngine] Error ejecutando SetterEngine:', setterErr.message);
+          }
+        }
 
         // Transmitir al Dashboard en tiempo real
         // 4.5. Comprobar si el prospecto está activando o avanzando en la DEMO interactiva de su nicho
