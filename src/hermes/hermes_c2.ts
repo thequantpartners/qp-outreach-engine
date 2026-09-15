@@ -251,6 +251,51 @@ export class HermesC2 {
       return { handled: true, replyMessage: menuMsg, actionExecuted: 'HELP_MENU' };
     }
 
+    // 0.8. Aprobación y Gestión de Correos Corporativos (Zoho Mailer)
+    if (
+      lower === 'aprobar' || 
+      lower === 'aprobar correo' || 
+      lower === 'enviar correo' || 
+      lower === 'enviar email' || 
+      lower === 'si, envialo' || 
+      lower === 'sí, envíalo' ||
+      lower.startsWith('/aprobar') ||
+      lower.startsWith('/enviar_correo')
+    ) {
+      const parts = cleanText.split(/\s+/);
+      const targetId = parts.length > 1 && !['correo', 'email'].includes(parts[1].toLowerCase()) ? parts[1] : undefined;
+      const { EmailDispatcher } = await import('../email/email_dispatcher.js');
+      const res = await EmailDispatcher.approvePendingEmail(targetId);
+      if (res.success && res.draft) {
+        const reply = 
+          `✅ *CORREO CORPORATIVO ENVIADO CON ÉXITO*\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `🏢 Empresa: *${res.draft.companyName}*\n` +
+          `📧 Destinatario: *${res.draft.recipientEmail}*\n` +
+          `📝 Asunto: *${res.draft.subject}*\n` +
+          `🕒 Enviado: *${new Date().toLocaleTimeString('es-PE')}*\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `💼 Despachado desde partners@thequantpartners.com vía Zoho Mail.`;
+        return { handled: true, replyMessage: reply, actionExecuted: 'EMAIL_SENT' };
+      } else {
+        return { handled: true, replyMessage: `⚠️ ${res.message}` };
+      }
+    }
+
+    if (
+      lower === 'cancelar' || 
+      lower === 'cancelar correo' || 
+      lower === 'descartar' || 
+      lower === 'descartar correo' ||
+      lower.startsWith('/cancelar_correo')
+    ) {
+      const parts = cleanText.split(/\s+/);
+      const targetId = parts.length > 1 && !['correo', 'email'].includes(parts[1].toLowerCase()) ? parts[1] : undefined;
+      const { EmailDispatcher } = await import('../email/email_dispatcher.js');
+      const res = await EmailDispatcher.cancelPendingEmail(targetId);
+      return { handled: true, replyMessage: res.success ? `🗑️ ${res.message}` : `⚠️ ${res.message}` };
+    }
+
     // 1. Comando: /status o "¿cómo vamos?"
     if (lower.startsWith('/status') || lower === 'status' || lower.includes('cómo vamos') || lower.includes('como vamos') || lower.includes('estado')) {
       if (user.role === 'client_rep') {
@@ -1481,7 +1526,7 @@ INSTRUCCIONES:
             { role: 'user', content: query }
           ],
           temperature: 0.3,
-          max_tokens: 500
+          max_tokens: 800
         })
       });
 

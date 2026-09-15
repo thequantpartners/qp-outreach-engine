@@ -564,6 +564,48 @@ export class BaileysEngine {
           AutonomousPipeline.recordLeadReply(senderPhone);
         } catch {}
 
+        // 4.05. Mapeo Automático de Correo Electrónico y Generación de Borrador para Aprobación
+        try {
+          const { EmailDispatcher } = await import('../email/email_dispatcher.js');
+          const extractedEmail = EmailDispatcher.extractEmailFromText(incomingText);
+          if (extractedEmail && !EmailDispatcher.hasAlreadyReceivedEmail(lead)) {
+            console.log(`📧 [EmailDispatcher] Correo detectado en mensaje de ${senderPhone}: "${extractedEmail}". Generando borrador híbrido...`);
+            const draft = await EmailDispatcher.generateEmailDraft(lead, extractedEmail, incomingText);
+
+            // 1. Responder inmediatamente al lead por WhatsApp con tono cálido como asistente virtual
+            const leadAckMessage = `¡Excelente! 🙌 Ya le pasé los datos a Kenneth para enviarte la propuesta oficial a tu correo. En breve te estará llegando desde partners@thequantpartners.com 📧🤝`;
+            const jid = `${senderPhone}@s.whatsapp.net`;
+            await this.sock?.sendMessage(jid, { text: leadAckMessage });
+            await OutreachRepo.addChatMessage(senderPhone, 'assistant', leadAckMessage);
+
+            // 2. Notificar inmediatamente a Kenneth para aprobación rápida en 1 clic
+            const adminPhone = (settings.adminWhatsAppPhone || process.env.ADMIN_WHATSAPP_PHONE || '51902105668').replace(/[^0-9]/g, '');
+            if (adminPhone) {
+              const approvalAlert = 
+                `📧 *NUEVO CORREO LISTO PARA APROBACIÓN*\n` +
+                `━━━━━━━━━━━━━━━━━━━━\n` +
+                `🏢 Empresa: *${lead.companyName}*\n` +
+                `📱 Teléfono: *+${senderPhone}*\n` +
+                `📬 Destinatario: *${extractedEmail}*\n` +
+                `📝 Asunto: *${draft.subject}*\n` +
+                `━━━━━━━━━━━━━━━━━━━━\n` +
+                `📄 *Vista Previa del Correo:*\n` +
+                `"${draft.text.substring(0, 260)}..."\n` +
+                `━━━━━━━━━━━━━━━━━━━━\n` +
+                `👉 *Para enviar ahora:* Responde *aprobar* (o *enviar correo*)\n` +
+                `👉 *Para descartar:* Responde *cancelar*`;
+
+              await this.sock?.sendMessage(`${adminPhone}@s.whatsapp.net`, { text: approvalAlert });
+              console.log(`📢 [EmailDispatcher] Alerta de aprobación enviada a Kenneth (${adminPhone}).`);
+            }
+
+            // Ya se procesó el correo y se confirmó al prospecto
+            continue;
+          }
+        } catch (emailErr: any) {
+          console.error('[BaileysEngine] Error procesando correo automático:', emailErr.message);
+        }
+
         // 4.1. Evaluar si el AI Setter debe calificar y responder en 5s
         try {
           const { SetterEngine } = await import('../ai/setter_engine.js');
