@@ -484,3 +484,11 @@ export interface MetaCAPIResult {
   fbtraceId?: string;
   error?: string;
 }
+
+export interface AudioTranscriptionResult {
+  success: boolean;
+  text?: string;
+  durationSeconds?: number;
+  format?: 'ogg' | 'mp4' | 'wav' | 'mp3';
+  error?: string;
+}

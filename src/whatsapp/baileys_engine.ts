@@ -317,12 +317,31 @@ export class BaileysEngine {
           m.message.documentWithCaptionMessage?.message || 
           m.message;
 
-        const incomingText =
+        let incomingText =
           content?.conversation ||
           content?.extendedTextMessage?.text ||
           content?.imageMessage?.caption ||
           content?.videoMessage?.caption ||
           '';
+
+        // Detección y transcripción autónoma de notas de voz / audios con Gemini 2.5 Flash
+        if (!incomingText.trim() && content?.audioMessage) {
+          try {
+            console.log(`🎙️ [BaileysEngine] Nota de voz entrante detectada de +${senderPhone} (${content.audioMessage.seconds || 0}s). Descargando y transcribiendo con Gemini...`);
+            const { VoiceTranscriber } = await import('../ai/voice_transcriber.js');
+            const transcription = await VoiceTranscriber.transcribeBaileysAudio(content.audioMessage);
+            if (transcription) {
+              if (transcription === '[INAUDIBLE]') {
+                incomingText = '🎙️ [Nota de voz inaudible o en silencio]';
+              } else {
+                incomingText = `🎙️ [Nota de voz]: "${transcription}"`;
+              }
+              console.log(`🎙️ [BaileysEngine] Audio de +${senderPhone} transcrito con éxito: "${incomingText}"`);
+            }
+          } catch (audioErr: any) {
+            console.error(`[BaileysEngine] Error transcribiendo audio de +${senderPhone}:`, audioErr.message);
+          }
+        }
 
         if (!incomingText.trim()) continue;
 
