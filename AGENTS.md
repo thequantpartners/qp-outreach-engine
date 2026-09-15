@@ -16,6 +16,17 @@
 
 ---
 
+## 1.2. Canales Oficiales e Identidad Inmutable del Sistema
+| Activo / Canal | Identidad / Configuración | Regla Obligatoria |
+| :--- | :--- | :--- |
+| **Identidad del Bot** | Asistente Virtual de Kenneth Herrera | **PROHIBIDO** hablar en primera persona como Kenneth. Siempre: *"el asistente virtual de Kenneth Herrera en The Quant Partners"*. |
+| **Email Corporativo** | `partners@thequantpartners.com` | **ESTRICTAMENTE PROHIBIDO** usar o mencionar `kenneth@thequantpartners.com`. |
+| **WhatsApp Saliente** | `+51 924 464 410` (Business) | Número oficial conectado en Baileys para prospección en frío y atención setter. |
+| **WhatsApp Admin** | `+51 902 105 668` (Kenneth) | Canal privado para alertas críticas de cierre, takeover humano y aprobación de correos. |
+| **Zoho SMTP Gateway** | `smtp.zoho.com:465` (SSL) | Despacho de emails ejecutivos tras aprobación de Kenneth (`partners@thequantpartners.com`). |
+
+---
+
 ## 2. Conexión como Servidor MCP (Model Context Protocol)
 
 Cualquier IA puede conectarse a este microservicio mediante el estándar oficial MCP sin escribir código HTTP.
@@ -287,6 +298,24 @@ El motor toma la lista de prospectos y envía **1 mensaje cada N segundos** (def
 3. **Verificación de Existencia de Cuenta:**
    - El motor ejecuta automáticamente `sock.onWhatsApp()` antes de transmitir. Si el número no existe o es fijo, la solicitud es rechazada limpiamente sin quebrar el socket.
 
+4. **Regla de Concisión y Anti-Truncamiento en WhatsApp:**
+   - Techo técnico fijado en `max_tokens: 800` en todos los endpoints LLM (`setter_engine.ts`, `openrouter_closer.ts`, `hermes_c2.ts`) para evitar cortes a la mitad de una palabra.
+   - En WhatsApp los mensajes largos no se leen: si el prospecto pide *"la ficha"* o *"información"*, responder en **MÁXIMO 2 a 3 viñetas breves (<90 palabras en total)**.
+   - Cierre conversacional obligatorio invitando a demostración en pantalla: *"¿Te gustaría coordinar un Meet de 10 min para mostrártelo funcionando en pantalla?"*.
+   - Invariante anti-truncamiento: Jamás dejar una frase o idea abierta a medias.
+
+5. **Horarios Oficiales del Autonomous Pipeline (Zona Lima PET / UTC-5):**
+   - **Mañanas USA (Florida / Texas):** 09:00 - 13:00 PET.
+   - **Pausa de Almuerzo Anti-Bot:** 13:00 - 14:00 PET (envíos en frío pausados; setter inbound 24/7 activo).
+   - **Tardes Perú (Lima / Provincias):** 14:00 - 18:30 PET.
+   - **Apagado Nocturno a las 18:30 PET:** A las 6:30 PM en punto se detiene todo el outbound y el scraper autónomo por la noche hasta las 09:00 AM del día siguiente. Se emite el reporte de cierre nocturno.
+   - **Atención Inbound 24/7:** El setter responde en 5 segundos día, noche y feriados a cualquier prospecto que escriba.
+
+6. **Despacho Automatizado de Correos Corporativos (Zoho Mail):**
+   - Si un prospecto proporciona su correo por WhatsApp, el motor detecta el email vía regex y genera un borrador ejecutivo personalizado.
+   - Envía alerta instantánea a Kenneth a su WhatsApp privado (`51902105668`).
+   - Kenneth solo responde *"aprobar"* (o *"enviar correo"* / `/aprobar <tel>`) y el motor transmite el email de inmediato vía SMTP corporativo (`partners@thequantpartners.com`).
+
 ---
 
 ## 6. Ejemplos de Implementación en Código
@@ -330,3 +359,30 @@ async function notificarLeadCalificado(coachPhone: string, leadData: any) {
   });
 }
 ```
+
+---
+
+## 7. Módulos Satélite y Arquitectura C2
+
+### 7.1. Despachador de Correo Corporativo (`src/email/`)
+- **`ZohoMailer` (`src/email/zoho_mailer.ts`):** Cliente SMTP nativo sobre `smtp.zoho.com:465` con SSL y autenticación por App Password.
+- **`EmailDispatcher` (`src/email/email_dispatcher.ts`):** Mapeo de prospectos, generación de borradores híbridos B2B, cola en memoria y persistencia en `custom_fields` de PostgreSQL.
+- **Variables requeridas en Railway:** `ZOHO_MAIL_USER`, `ZOHO_MAIL_PASS`, `ZOHO_MAIL_HOST`, `ZOHO_MAIL_PORT`.
+
+### 7.2. Hermes C2 (Copiloto Operativo en WhatsApp)
+- **Archivo:** `src/hermes/hermes_c2.ts`
+- **Capacidades:** Consciencia temporal en vivo de la hora de Lima (PET), detección de bloque horario en curso, métricas en caliente de Ghost CRM y balance de créditos (Outscraper / OpenRouter).
+- **Personalidad:** 100% humano, energía de socio co-fundador 🤝🚀, sin formalismos rígidos (*"Kenneth,"*, *"Saludos."*).
+
+---
+
+## 8. Bitácora Sintética de Decisiones Arquitectónicas (Changelog 2026)
+
+| Fecha | Componente | Decisión & Cambio Clave | Invariante Activa |
+| :--- | :--- | :--- | :--- |
+| **2026-09-15** | `setter_engine.ts` | Subir `max_tokens` de 300 a 800 + Regla de Concisión. | Cero mensajes truncados en WhatsApp; máximo 2-3 viñetas (<90 palabras) al pedir ficha. |
+| **2026-09-15** | `services` (DB) | Actualizar plantillas en frío a Opción B (asistente virtual). | Todo primer mensaje en frío inicia: *"Le escribe el asistente virtual de Kenneth Herrera..."*. |
+| **2026-09-15** | `email/` | Integración SMTP Zoho Mail (`partners@thequantpartners.com`). | Aprobación con 1 palabra (*"aprobar"*) vía WhatsApp de Kenneth para despacho ejecutivo. |
+| **2026-09-15** | `hermes_c2.ts` | Inyección de hora oficial Lima PET y corte estricto de las 18:30. | Hermes conoce hora exacta y sabe que a las 18:30 se apaga outbound y scraper por la noche. |
+| **2026-09-15** | Railway Cloud | Configuración de variables Zoho Mail vía CLI y despliegue exitoso. | Infraestructura cloud en Railway sincronizada con el motor local al 100%. |
+
