@@ -137,8 +137,11 @@ app.get('/api/install/:clientId/:token', async (req: Request, res: Response) => 
       return res.status(404).send('# Error: Cliente no encontrado o PIN inválido');
     }
 
-    const masterUrl = process.env.PUBLIC_URL || 'https://gateway-production-2264.up.railway.app';
-    const script = VpsInstaller.generateInstallScript(client, masterUrl);
+    const masterBase = process.env.PUBLIC_URL
+      ? (process.env.PUBLIC_URL.startsWith('http') ? process.env.PUBLIC_URL : `https://${process.env.PUBLIC_URL}`)
+      : `https://${req.headers.host || 'gateway-production-2264.up.railway.app'}`;
+    const masterHeartbeatUrl = `${masterBase}/api/master/heartbeat`;
+    const script = VpsInstaller.generateInstallScript(client, masterHeartbeatUrl);
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.send(script);
   } catch (err: any) {
@@ -246,9 +249,83 @@ app.post('/api/webhook/whatsapp', async (req: Request, res: Response) => {
           AutonomousPipeline.recordLeadReply(rawPhone);
         } catch {}
 
-        // Cumplimiento estricto de política Meta y Blindaje Anti-Insistencia
+        // Detección Temprana de Correo Electrónico (Derivación por Email)
+        try {
+          const { EmailDispatcher } = await import('../email/email_dispatcher.js');
+          const extractedEmail = EmailDispatcher.extractEmailFromText(text);
+          if (extractedEmail && !EmailDispatcher.hasAlreadyReceivedEmail(lead)) {
+            console.log(`📧 [MetaWebhook] Correo detectado en mensaje de ${rawPhone}: "${extractedEmail}". Generando borrador...`);
+            await OutreachRepo.addChatMessage(rawPhone, 'user', text);
+            const draft = await EmailDispatcher.generateEmailDraft(lead, extractedEmail, text);
+            const ack = `¡Excelente! 🙌 Ya le pasé los datos a Kenneth para enviarte la propuesta oficial a tu correo. En breve te estará llegando desde partners@thequantpartners.com 📧🤝`;
+            const { MetaCloudEngine } = await import('../whatsapp/meta_cloud_engine.js');
+            await MetaCloudEngine.sendTextMessage(rawPhone, ack);
+            await OutreachRepo.addChatMessage(rawPhone, 'assistant', ack);
+            continue;
+          }
+        } catch (emErr: any) {
+          console.error('[MetaWebhook] Error en email temprano:', emErr.message);
+        }
+
+        // Detección Temprana de Teléfono de Derivación (Referral Phone)
+        try {
+          const { PhoneExtractor } = await import('../utils/phone_extractor.js');
+          const referralPhone = PhoneExtractor.extractReferralPhone(text, rawPhone);
+          if (referralPhone) {
+            console.log(`📞 [MetaWebhook] Teléfono derivado detectado en ${rawPhone}: "+${referralPhone}"`);
+            await OutreachRepo.addChatMessage(rawPhone, 'user', text);
+            const ackMsg = `¡Muchas gracias por la información! 🙌 Nos comunicaremos directamente con ese número de parte de su equipo. ¡Que tengan un excelente día! 🤝`;
+            const { MetaCloudEngine } = await import('../whatsapp/meta_cloud_engine.js');
+            await MetaCloudEngine.sendTextMessage(rawPhone, ackMsg);
+            await OutreachRepo.addChatMessage(rawPhone, 'assistant', ackMsg);
+
+            await OutreachRepo.saveLeadsFromScraper(lead.serviceId, [{
+              title: `${lead.companyName} (Contacto Directo)`,
+              phone: referralPhone,
+              phoneClean: referralPhone,
+              address: lead.address,
+              categoryName: lead.category,
+              website: lead.website
+            }]);
+
+            await OutreachRepo.updateLeadCustomFields(referralPhone, {
+              referredFromPhone: rawPhone,
+              referredCompanyName: lead.companyName,
+              referredSourceText: text
+            });
+
+            await OutreachRepo.updateLeadCustomFields(rawPhone, {
+              referredToPhone: referralPhone,
+              redirectedAt: new Date().toISOString()
+            });
+            continue;
+          }
+        } catch (phErr: any) {
+          console.error('[MetaWebhook] Error en teléfono derivado:', phErr.message);
+        }
+
+        // Cumplimiento estricto de política Meta y Blindaje Anti-Insistencia / Redirección Amable
         const { RejectionDetector } = await import('../utils/rejection_detector.js');
         const rejection = RejectionDetector.analyze(text);
+
+        // Redirección Amable (Canal de pacientes / citas / privado sin rechazo)
+        if (rejection.isChannelRedirect && rejection.suggestedRedirectAsk) {
+          console.log(`🔄 [MetaWebhook] Lead ${rawPhone} indicó canal exclusivo (${rejection.category}: ${rejection.reason}). Enviando solicitud amable...`);
+          await OutreachRepo.addChatMessage(rawPhone, 'user', text);
+          const alreadyAsked = lead.customFields?.redirectAskSent === true;
+          if (!alreadyAsked) {
+            const { MetaCloudEngine } = await import('../whatsapp/meta_cloud_engine.js');
+            await MetaCloudEngine.sendTextMessage(rawPhone, rejection.suggestedRedirectAsk);
+            await OutreachRepo.addChatMessage(rawPhone, 'assistant', rejection.suggestedRedirectAsk);
+            await OutreachRepo.updateLeadCustomFields(rawPhone, {
+              redirectAskSent: true,
+              channelRedirectReason: rejection.reason,
+              waitingReferralContact: true
+            });
+            await OutreachRepo.updateLeadStatus(rawPhone, 'REPLIED');
+          }
+          continue;
+        }
 
         if (rejection.isRejection) {
           const finalStatus = rejection.category === 'EXPLICIT_OPTOUT' ? 'OPT_OUT' : 'CLOSED_LOST';
@@ -421,7 +498,7 @@ app.get('/', (_req: Request, res: Response) => {
         'trigger_scraping'
       ]
     },
-    documentation: 'https://github.com/the-quant-partners/qp-outreach-engine/blob/main/AGENTS.md'
+    documentation: 'https://github.com/thequantpartners/qp-outreach-engine/blob/main/AGENTS.md'
   });
 });
 

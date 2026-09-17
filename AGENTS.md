@@ -304,17 +304,50 @@ El motor toma la lista de prospectos y envía **1 mensaje cada N segundos** (def
    - Cierre conversacional obligatorio invitando a demostración en pantalla: *"¿Te gustaría coordinar un Meet de 10 min para mostrártelo funcionando en pantalla?"*.
    - Invariante anti-truncamiento: Jamás dejar una frase o idea abierta a medias.
 
-5. **Horarios Oficiales del Autonomous Pipeline (Zona Lima PET / UTC-5):**
-   - **Mañanas USA (Florida / Texas):** 09:00 - 13:00 PET.
+5. **Horarios Oficiales del Autonomous Pipeline (Zona Lima PET / UTC-5 - Todo el Perú):**
+   - **Mañanas Perú (Lima y Provincias):** 09:00 - 13:00 PET (Prospección saliente y auto-scraping).
    - **Pausa de Almuerzo Anti-Bot:** 13:00 - 14:00 PET (envíos en frío pausados; setter inbound 24/7 activo).
-   - **Tardes Perú (Lima / Provincias):** 14:00 - 18:30 PET.
-   - **Apagado Nocturno a las 18:30 PET:** A las 6:30 PM en punto se detiene todo el outbound y el scraper autónomo por la noche hasta las 09:00 AM del día siguiente. Se emite el reporte de cierre nocturno.
+   - **Tardes Perú (Lima y Provincias):** 14:00 - 19:00 PET (hasta las 7:00 PM PET).
+   - **Apagado Nocturno a las 19:00 PET:** A las 7:00 PM en punto se detiene todo el outbound y el scraper autónomo por la noche hasta las 09:00 AM del día siguiente. Se emite el reporte de cierre nocturno.
    - **Atención Inbound 24/7:** El setter responde en 5 segundos día, noche y feriados a cualquier prospecto que escriba.
 
 6. **Despacho Automatizado de Correos Corporativos (Zoho Mail):**
    - Si un prospecto proporciona su correo por WhatsApp, el motor detecta el email vía regex y genera un borrador ejecutivo personalizado.
    - Envía alerta instantánea a Kenneth a su WhatsApp privado (`51902105668`).
    - Kenneth solo responde *"aprobar"* (o *"enviar correo"* / `/aprobar <tel>`) y el motor transmite el email de inmediato vía SMTP corporativo (`partners@thequantpartners.com`).
+
+7. **Seguimiento Anti-Ghosting Conversacional (24h):**
+   - Si un prospecto interactuó en chat activo (`REPLIED`), el setter respondió y el prospecto dejó de contestar por más de 24 horas (silencio conversacional entre 24h y 7 días), el motor autónomo despacha 1 recontacto contextual y empático para reactivar la conversación y ofrecer el Meet de 10 min.
+   - Máximo 1 toque anti-ghosting para respetar normativas anti-spam; pausas anti-ban de 180s - 300s.
+
+8. **Invariante Innegociable: El "As Bajo la Manga" (Coste de Transferencia / Éxito):**
+   - **ESTRICTAMENTE PROHIBIDO** que cualquier bot o agente de IA mencione precios de transferencia por cita agendada (`$25-$50 USD`) o esquemas por porcentaje en el chat en frío.
+   - Este modelo por resultados es un **as bajo la manga exclusivo de Kenneth** para la videollamada de Meet si el cliente objeta la tarifa fija o pide pagar por resultados.
+
+---
+
+## 5.1. Arquitectura de 4 Agentes de IA en Paralelo y Matriz Oficial de Precios (2026)
+
+Toda la oferta comercial de The Quant Partners se articula bajo la doctrina de los **4 Agentes de IA que operan en paralelo**:
+
+| Agente | Nombre Comercial | Función Operativa |
+| :---: | :--- | :--- |
+| 🔍 **1** | **Agente de Prospección Activa** | Mapeo continuo de tomadores de decisión en Google Maps, Meta Ads y Apollo para inyectar un flujo predecible de nuevos prospectos calificados cada semana. |
+| ✍️ **2** | **Agente de Personalización & Atención 24/7 (5s)** | Recepción inmediata día y noche, precalificación con IA de presupuesto e interés real, y filtrado de preguntones sin dinero. |
+| 🔔 **3** | **Agente de Seguimiento Anti-Ghosting** | Recontacto automático inteligente a prospectos que dejan en visto o no responden (>48h en frío y >24h en chat activo), recuperando hasta el 40% de ventas. |
+| ☁️ **4** | **Agente de Sincronización CRM & Alertas** | Actualización en tiempo real del pipeline; entrega a los vendedores del cliente alertas en WhatsApp listas para cerrar. |
+
+### Matriz Oficial de Precios Regional:
+
+| Mercado / Región | Mensualidad Plana (Retainer) | Setup / Instalación (Llamada Meet) | Coste Transferencia (As en la Manga) |
+| :--- | :---: | :---: | :---: |
+| **🇵🇪 Perú y Latam (`+51`)** | **$450 a $800 USD/mes** | **$350 - $500 USD** (Bonificable con trimestre) | **$25 USD / cita** *(Solo en Meet si piden éxito)* |
+| **🇺🇸 USA Latinos (`+1`)** | **$850 a $1,500 USD/mes** | **$750 - $1,200 USD** (Bonificable con trimestre) | **$50 USD / cita** *(Solo en Meet si piden éxito)* |
+
+> [!IMPORTANT]
+> **Enfoque Dual ante Preguntas sobre Anuncios / Pauta:**  
+> Si el prospecto pregunta *"¿Ustedes hacen anuncios en Facebook/Instagram?"* o *"¿Cómo traen a los clientes?"*, la respuesta obligatoria es dual:  
+> *"Si ya invierten en anuncios conectamos el sistema nativamente a Meta Ads (CAPI) para abaratar el costo por lead, pero nuestro diferencial clave es que además les inyectamos nuestro Motor de Prospección Activa en su mercado para que tengan flujo constante garantizado sin depender exclusivamente del algoritmo o del costo de la pauta 🙌"*.
 
 ---
 
@@ -385,4 +418,7 @@ async function notificarLeadCalificado(coachPhone: string, leadData: any) {
 | **2026-09-15** | `email/` | Integración SMTP Zoho Mail (`partners@thequantpartners.com`). | Aprobación con 1 palabra (*"aprobar"*) vía WhatsApp de Kenneth para despacho ejecutivo. |
 | **2026-09-15** | `hermes_c2.ts` | Inyección de hora oficial Lima PET y corte estricto de las 18:30. | Hermes conoce hora exacta y sabe que a las 18:30 se apaga outbound y scraper por la noche. |
 | **2026-09-15** | Railway Cloud | Configuración de variables Zoho Mail vía CLI y despliegue exitoso. | Infraestructura cloud en Railway sincronizada con el motor local al 100%. |
+| **2026-09-16** | Oferta & Pipeline | Arquitectura de 4 Agentes de IA en Paralelo (Prospección Activa, Atención en 5s, Seguimiento Anti-Ghosting y CRM). | Rango de inversión $450-$800 USD/mes; recontacto automático tras 24h de silencio en chat activo (`REPLIED`); cero prospectos en visto. |
+| **2026-09-16** | Live Commerce & Horarios | Extensión de horarios Perú (09:00-13:00 y 14:00-19:00) y activación de nicho Live Shopping / TikTok Live. | Corte exacto a las 19:00 PET; pipeline 100% enfocado en todo el Perú; cero cobros directos por bot. |
+| **2026-09-17** | `setter_engine.ts` & DB | Meta-Demo en Tiempo Real y Fórmula de Inversión por Resultados. | Si piden demo o cómo funciona: *"Ya estás viviendo la experiencia en tiempo real..."*; precio formulado como *"La inversión para lograr [X] es de tan solo [Y] al mes"*; cierre orientado a implementación en 48h y filtro anti-clientes tóxicos. |
 

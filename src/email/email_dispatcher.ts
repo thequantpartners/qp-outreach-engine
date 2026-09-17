@@ -55,34 +55,34 @@ export class EmailDispatcher {
     let bullets: string[] = [];
 
     if (isLegal) {
-      subject = `Sistema de Triaje & Precalificación Inmediata en WhatsApp para ${companyName}`;
+      subject = `Infraestructura Comercial de 4 Agentes de IA: Prospección, Triaje 24/7 & Seguimiento para ${companyName}`;
       introParagraph = `Les escribe Kenneth Herrera, fundador de The Quant Partners, en seguimiento a nuestra comunicación por WhatsApp y a su solicitud de compartirles información por correo electrónico formal.`;
-      nicheParagraph = `Conversando con directores de firmas de inmigración y despachos jurídicos en Texas y Florida, notamos un cuello de botella recurrente: al correr anuncios o recibir alto flujo de consultas en redes, hasta un 65% de los prospectos se pierden por demoras en responder, o su equipo de recepción pierde horas valiosas atendiendo a personas con casos no viables o sin presupuesto.`;
+      nicheParagraph = `Conversando con directores de firmas legales y despachos jurídicos, notamos que el cuello de botella comercial suele ser triple: no tener un flujo predecible de nuevos prospectos calificados, demoras en responder consultas y perder horas atendiendo a personas sin viabilidad de caso o que dejan en visto.`;
       bullets = [
-        '1. Atención y Triaje Inmediato en 5 Segundos (24/7): Atiende día y noche en español e inglés a cada persona interesada.',
-        '2. Filtro de Viabilidad de Caso con IA: Identifica el estatus migratorio, tipo de alivio legal buscado y capacidad económica antes de derivar.',
-        '3. Entrega de Consultas Agendadas: Deriva a sus paralegales o abogados únicamente los expedientes precalificados listos para pagar la consulta.',
-        '4. Conexión Oficial Meta Cloud API: Cero riesgo de baneo (sin extensiones piratas de Chrome ni bots no autorizados).'
+        '1. Agente de Prospección Activa: Mapeo y contacto continuo de potenciales clientes en su zona para inyectar un flujo constante de casos calificados.',
+        '2. Agente de Atención y Triaje Inmediato en 5s (24/7): Responde al instante, perfilando estatus, tipo de caso y presupuesto antes de derivar.',
+        '3. Agente de Seguimiento Anti-Ghosting: Recontacta automáticamente a quienes dejan en visto o no responden para reactivar la cita de consulta.',
+        '4. Sincronización CRM & Entrega Lista: Deriva a sus abogados únicamente expedientes precalificados listos para pagar la consulta.'
       ];
     } else if (isClinic) {
-      subject = `Infraestructura Comercial & Agendamiento 24/7 en WhatsApp para ${companyName}`;
+      subject = `Infraestructura Comercial de 4 Agentes de IA: Flujo de Pacientes, Atención 24/7 & Seguimiento para ${companyName}`;
       introParagraph = `Les escribe Kenneth Herrera, fundador de The Quant Partners, en seguimiento a nuestra comunicación por WhatsApp y a su solicitud de compartirles información por correo oficial.`;
-      nicheParagraph = `En clínicas y centros estéticos notamos que muchas veces se pierde hasta el 70% de las consultas de potenciales pacientes que escriben por anuncios o redes, simplemente porque tardan minutos en contestarles o sus coordinadoras pierden horas respondiendo dudas básicas a curiosos sin intención real de agendar.`;
+      nicheParagraph = `En clínicas y centros de salud notamos que las ventas se pierden por falta de flujo constante, tardanzas en responder a interesados y ausencia de seguimiento cuando un paciente potencial deja en visto a mitad de coordinación.`;
       bullets = [
-        '1. Respuesta Instantánea en 5 Segundos (24/7): Atiende a los pacientes al instante, evitando que consulten con otra clínica.',
-        '2. Triaje y Calificación de Procedimientos con IA: Perfila el interés real, zona a tratar y presupuesto.',
-        '3. Agenda Directa con Depósito: Entrega a su equipo pacientes listos para confirmar su cita de valoración.',
-        '4. Optimización CAPI con Meta Ads: Retroalimenta a Meta con los agendamientos reales para abaratar el costo por paciente.'
+        '1. Agente de Prospección Activa: Inyección continua de nuevos pacientes potenciales de su zona geográfica semana a semana.',
+        '2. Agente de Respuesta Instantánea en 5s (24/7): Atiende de inmediato día y noche, evitando que el paciente consulte con otra clínica.',
+        '3. Agente de Seguimiento Anti-Ghosting: Recontacta de forma natural a pacientes que dejaron en visto para concretar el agendamiento.',
+        '4. Sincronización CRM & Meta Ads CAPI: Entrega a su equipo citas confirmadas y optimiza el Pixel de Meta para abaratar el costo por paciente.'
       ];
     } else {
-      subject = `Infraestructura Comercial & Filtrado de Prospectos en WhatsApp para ${companyName}`;
+      subject = `Infraestructura Comercial de 4 Agentes de IA: Flujo de Clientes, Atención 24/7 & Seguimiento para ${companyName}`;
       introParagraph = `Les escribe Kenneth Herrera, fundador de The Quant Partners, en seguimiento a nuestra comunicación por WhatsApp y a su solicitud de compartirles información por correo oficial.`;
-      nicheParagraph = `Revisando empresas de su sector, notamos que el principal cuello de botella comercial al invertir en anuncios o recibir tráfico no es la falta de interesados, sino la velocidad de respuesta y el tiempo que los asesores pierden atendiendo preguntones sin presupuesto.`;
+      nicheParagraph = `Revisando empresas de su sector, comprobamos que el cuello de botella comercial suele ser triple: no contar con un flujo continuo de nuevos prospectos, tardar minutos en responder y perder hasta el 70% de las ventas porque los prospectos dejan en visto y nadie les hace seguimiento.`;
       bullets = [
-        '1. Atención Inmediata en 5 Segundos (24/7): Respuestas naturales y sin demoras en todo momento.',
-        '2. Filtrado Inteligente de Curiosos: Separa a los preguntones de los compradores reales antes de pasarlos a su equipo.',
-        '3. Operación 100% Nativa en WhatsApp: Sin apps complicadas ni curvas de aprendizaje.',
-        '4. Conexión Empresarial Oficial Meta Cloud API: Blindaje total anti-baneo y sincronización de conversiones.'
+        '1. Agente de Prospección Activa: Mapeo continuo de su mercado para inyectar un flujo constante y predecible de clientes calificados.',
+        '2. Agente de Atención en 5 Segundos (24/7) y Filtrado con IA: Cero prospectos perdidos; separa a los curiosos de los compradores reales.',
+        '3. Agente de Seguimiento Anti-Ghosting: Recontacto automático e inteligente a prospectos que dejan en visto, recuperando ventas en automático.',
+        '4. Agente de Sincronización CRM & Manejo Nativo en WhatsApp: Sus asesores reciben directo en su chat al cliente calificado listo para agendar o comprar.'
       ];
     }
 

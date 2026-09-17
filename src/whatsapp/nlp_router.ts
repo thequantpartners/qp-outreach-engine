@@ -148,6 +148,79 @@ export class NLPRouter {
       return { command: 'alertas', args: ['on'] };
     }
 
+    // 8.2. Aprobación y Validación de Pagos (Comprobantes / Yape / Plin)
+    if (
+      clean === 'aprobar pago' ||
+      clean === 'valida el pago' ||
+      clean === 'validar pago' ||
+      clean === 'pago aprobado' ||
+      clean.startsWith('aprobar pago')
+    ) {
+      const parts = clean.split(' ');
+      const phone = parts.find(p => /^\d{9,15}$/.test(p));
+      return { command: 'aprobar_pago', args: phone ? [phone] : [] };
+    }
+
+    if (
+      clean === 'rechazar pago' ||
+      clean === 'pago rechazado' ||
+      clean.startsWith('rechazar pago')
+    ) {
+      const parts = clean.split(' ');
+      const phone = parts.find(p => /^\d{9,15}$/.test(p));
+      return { command: 'rechazar_pago', args: phone ? [phone] : [] };
+    }
+
+    // 8.3. Emisión de Guía de Envío Shalom
+    if (
+      clean === 'guia' ||
+      clean === 'generar guia' ||
+      clean === 'emitir guia' ||
+      clean === 'crear guia' ||
+      clean === 'sacar guia' ||
+      clean.startsWith('guia ') ||
+      clean.startsWith('generar guia ') ||
+      clean.startsWith('emitir guia ')
+    ) {
+      const parts = clean.split(' ');
+      const phone = parts.find(p => /^\d{9,15}$/.test(p));
+      return { command: 'guia', args: phone ? [phone] : [] };
+    }
+
+    // 8.4. Control del Bot de IA / Reactivación post-Handoff
+    if (
+      clean === 'bot on' ||
+      clean === 'ia on' ||
+      clean === 'activar bot' ||
+      clean === 'encender bot' ||
+      clean === 'prender bot' ||
+      clean === 'reactivar bot' ||
+      clean.startsWith('bot on ') ||
+      clean.startsWith('ia on ') ||
+      clean.startsWith('activar bot ') ||
+      clean.startsWith('reactivar bot ')
+    ) {
+      const parts = clean.split(' ');
+      const phone = parts.find(p => /^\d{9,15}$/.test(p));
+      return { command: 'bot', args: ['on', ...(phone ? [phone] : [])] };
+    }
+
+    if (
+      clean === 'bot off' ||
+      clean === 'ia off' ||
+      clean === 'pausar bot' ||
+      clean === 'apagar bot' ||
+      clean === 'desactivar bot' ||
+      clean.startsWith('bot off ') ||
+      clean.startsWith('ia off ') ||
+      clean.startsWith('pausar bot ')
+    ) {
+      const parts = clean.split(' ');
+      const phone = parts.find(p => /^\d{9,15}$/.test(p));
+      return { command: 'bot', args: ['off', ...(phone ? [phone] : [])] };
+    }
+
+
     // 8.5. Estado del Scraper: "¿el scraper está activo?", "estado del scraper", "scraper"
     if (
       clean === 'scraper' ||

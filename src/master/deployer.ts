@@ -171,7 +171,7 @@ export class Deployer {
         }
       }
 
-      railwayDeployUrl = `https://railway.app/new/template?template=https%3A%2F%2Fgithub.com%2Fthe-quant-partners%2Fqp-outreach-engine&envs=MODE%2CCOMPANY_NAME%2CCLIENT_ID%2CCLIENT_PIN%2CADMIN_WHATSAPP_PHONE%2CMASTER_HEARTBEAT_URL&MODE=client&COMPANY_NAME=${encodeURIComponent(req.companyName)}&CLIENT_ID=${clientId}&CLIENT_PIN=${clientPin}&ADMIN_WHATSAPP_PHONE=${req.adminPhone.replace(/[^0-9]/g, '')}&MASTER_HEARTBEAT_URL=${encodeURIComponent(masterHeartbeatUrl)}`;
+      railwayDeployUrl = `https://railway.app/new/template?template=https%3A%2F%2Fgithub.com%2Fthequantpartners%2Fqp-outreach-engine&envs=MODE%2CCOMPANY_NAME%2CCLIENT_ID%2CCLIENT_PIN%2CADMIN_WHATSAPP_PHONE%2CMASTER_HEARTBEAT_URL&MODE=client&COMPANY_NAME=${encodeURIComponent(req.companyName)}&CLIENT_ID=${clientId}&CLIENT_PIN=${clientPin}&ADMIN_WHATSAPP_PHONE=${req.adminPhone.replace(/[^0-9]/g, '')}&MASTER_HEARTBEAT_URL=${encodeURIComponent(masterHeartbeatUrl)}`;
       railwayCliCommand = `railway init --name "qp-${clientId}" && railway add -d postgres`;
     }
 

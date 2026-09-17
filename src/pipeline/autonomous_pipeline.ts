@@ -118,10 +118,10 @@ export class AutonomousPipeline {
     const lima = this.getLimaTime();
     let currentSlot = 'FUERA_DE_HORARIO';
     if (lima.hour >= 9 && lima.hour < 13) {
-      currentSlot = 'USA_MORNING';
+      currentSlot = 'PERU_MORNING';
     } else if (lima.hour === 13) {
       currentSlot = 'LUNCH_PAUSE';
-    } else if (lima.hour >= 14 && (lima.hour < 18 || (lima.hour === 18 && lima.minute <= 30))) {
+    } else if (lima.hour >= 14 && lima.hour < 19) {
       currentSlot = 'PERU_AFTERNOON';
     }
 
@@ -203,22 +203,22 @@ export class AutonomousPipeline {
     let slotName = '';
 
     if (currentHour >= 9 && currentHour < 13) {
-      activeRegion = 'USA';
-      slotName = 'Mañanas USA (Florida / Texas)';
+      activeRegion = 'PERU';
+      slotName = 'Mañanas Perú (Todo el Perú)';
     } else if (currentHour === 13) {
       console.log(`🍽️ [AutonomousPipeline] Pausa de almuerzo anti-bot (1:00 PM - 2:00 PM Lima, hora actual: ${limaTime.timeStr}). Cero envíos en frío. IA Inbound permanece activa 24/7.`);
       this.scheduleNextTick(5 * 60 * 1000);
       return;
-    } else if (currentHour >= 14 && (currentHour < 18 || (currentHour === 18 && currentMinute <= 30))) {
+    } else if (currentHour >= 14 && currentHour < 19) {
       activeRegion = 'PERU';
-      slotName = 'Tardes Perú (Lima / Provincias)';
+      slotName = 'Tardes Perú (Todo el Perú)';
     } else {
       // Fuera de horario comercial
-      if ((currentHour >= 18 || currentHour >= settings.endHour) && this.dailyReportSentDay !== today) {
+      if ((currentHour >= 19 || currentHour >= settings.endHour) && this.dailyReportSentDay !== today) {
         await this.sendNightlyReport(today, settings);
       }
 
-      console.log(`🌙 [AutonomousPipeline] Fuera de horario comercial (${limaTime.timeStr} Lima). Horarios: USA (9:00-13:00) | Perú (14:00-18:30). En pausa.`);
+      console.log(`🌙 [AutonomousPipeline] Fuera de horario comercial (${limaTime.timeStr} Lima). Horarios Perú: 09:00-13:00 y 14:00-19:00. En pausa.`);
       this.scheduleNextTick(10 * 60 * 1000); // esperar 10 minutos
       return;
     }
@@ -265,10 +265,10 @@ export class AutonomousPipeline {
       return;
     }
 
-    // Balanceo de cuota matutina USA para reservar cupos para la tarde en Perú
+    // Balanceo de cuota matutina para reservar cupos para la tarde en Perú
     const morningQuota = Math.floor(effectiveDailyLimit / 2);
-    if (activeRegion === 'USA' && this.sentMorningCount >= morningQuota) {
-      console.log(`🛡️ [AutonomousPipeline] Cuota matutina para USA alcanzada (${this.sentMorningCount}/${morningQuota} mensajes). Pausando envíos en frío hasta el bloque de la tarde (Perú a las 2:00 PM).`);
+    if (currentHour < 13 && this.sentMorningCount >= morningQuota) {
+      console.log(`🛡️ [AutonomousPipeline] Cuota matutina alcanzada (${this.sentMorningCount}/${morningQuota} mensajes). Pausando envíos en frío hasta el bloque de la tarde (2:00 PM).`);
       this.scheduleNextTick(10 * 60 * 1000);
       return;
     }
@@ -286,6 +286,22 @@ export class AutonomousPipeline {
     }
     if (followUpLead && followUpService) {
       await this.dispatchFollowUp(followUpLead, followUpService, effectiveSettings, activeRegion);
+      return;
+    }
+
+    // 6.1 PRIORIDAD 1.1: Prospectos con ghosting en conversación (>24h sin respuesta en chat activo)
+    let reengageLead: any = null;
+    let reengageService: any = null;
+    for (const s of regionalServices) {
+      const dueReengage = await OutreachRepo.getLeadsForConversationalFollowUp(s.id, 1);
+      if (dueReengage.length > 0) {
+        reengageLead = dueReengage[0];
+        reengageService = s;
+        break;
+      }
+    }
+    if (reengageLead && reengageService) {
+      await this.dispatchConversationalFollowUp(reengageLead, reengageService, effectiveSettings, activeRegion);
       return;
     }
 
@@ -322,14 +338,26 @@ export class AutonomousPipeline {
     }
 
     if (leadsToContact.length === 0) {
-      console.log(`⚠️ [AutonomousPipeline - ${activeRegion}] Cola vacía para el bloque ${slotName}. Disparando recarga automática inmediata desde Outscraper...`);
-      for (const s of regionalServices) {
-        if (s.apifyQueries && s.apifyQueries.length > 0) {
-          await this.triggerScrape(s);
-          break;
+      console.log(`⚠️ [AutonomousPipeline - ${activeRegion}] Cola de prospectos pendientes vacía para el bloque ${slotName}.`);
+
+      const timeSinceLastScrape = Date.now() - this.lastScrapeTime;
+      const emptyScrapeCooldownMs = 15 * 60 * 1000; // Cooldown de seguridad de 15 minutos para blindar saldo de Outscraper
+
+      if (timeSinceLastScrape > emptyScrapeCooldownMs) {
+        console.log(`🔄 [AutonomousPipeline - ${activeRegion}] Disparando recarga controlada desde Outscraper...`);
+        for (const s of regionalServices) {
+          if (s.apifyQueries && s.apifyQueries.length > 0) {
+            await this.triggerScrape(s);
+            break;
+          }
         }
+      } else {
+        const remainingMin = Math.ceil((emptyScrapeCooldownMs - timeSinceLastScrape) / 60000);
+        console.log(`🛡️ [AutonomousPipeline] Cooldown de scraping activo (${remainingMin} min restantes) para blindar saldo de Outscraper.`);
       }
-      this.scheduleNextTick(20000);
+
+      // Pausa prudente de 5 minutos (NUNCA 20 segundos para evitar bucles de consumo)
+      this.scheduleNextTick(5 * 60 * 1000);
       return;
     }
 
@@ -412,6 +440,46 @@ export class AutonomousPipeline {
       this.scheduleNextTick(randomDelay * 1000);
     } else {
       console.warn(`⚠️ [AutonomousPipeline] Error en follow-up a ${lead.phone}: ${result.error}`);
+      this.scheduleNextTick(15000);
+    }
+  }
+
+  /**
+   * Despacha seguimiento conversacional anti-ghosting a prospectos en REPLIED que dejaron de contestar (>24h)
+   */
+  private static async dispatchConversationalFollowUp(lead: any, service: any, settings: any, activeRegion?: 'USA' | 'PERU' | null): Promise<void> {
+    const provider = settings.whatsappProvider || 'direct_qr';
+    const company = lead.companyName ? lead.companyName.trim() : '';
+    const greeting = company ? `¡Hola al equipo de ${company}! 🙌` : '¡Hola! 🙌';
+    const message = `${greeting} Te escribe brevemente el asistente virtual de Kenneth. Quería consultarles si tuvieron oportunidad de revisar lo que conversamos ayer, o si les gustaría que coordinemos una videollamada de 10 min por Meet esta semana para mostrárselo funcionando en pantalla 🤝`;
+
+    console.log(`🔔 [AutonomousPipeline - ${activeRegion || 'ANTI-GHOSTING'}] Despachando seguimiento anti-ghosting a ${lead.companyName} (${lead.phone})...`);
+    let result: { success: boolean; error?: string };
+
+    if (provider === 'meta_cloud_api') {
+      const metaRes = await MetaCloudEngine.sendTextMessage(lead.phone, message);
+      result = { success: metaRes.success, error: metaRes.error };
+    } else {
+      const whatsapp = BaileysEngine.getInstance();
+      result = await whatsapp.send(lead.phone, message);
+    }
+
+    if (result.success) {
+      this.sentTodayCount++;
+      if (activeRegion === 'USA') {
+        this.sentMorningCount++;
+      }
+      await OutreachRepo.updateLeadConversationalFollowUp(lead.phone);
+      await OutreachRepo.addChatMessage(lead.phone, 'assistant', message);
+      console.log(`✅ [AutonomousPipeline - ${activeRegion || 'ANTI-GHOSTING'}] Seguimiento anti-ghosting entregado a ${lead.companyName}! (${this.sentTodayCount}/${settings.dailyLimit} hoy)`);
+
+      const min = settings.minDelaySeconds || 180;
+      const max = settings.maxDelaySeconds || 300;
+      const randomDelay = Math.floor(Math.random() * (max - min + 1)) + min;
+      console.log(`🛡️ [AutonomousPipeline] Pausa de seguridad de ${randomDelay}s tras seguimiento anti-ghosting...`);
+      this.scheduleNextTick(randomDelay * 1000);
+    } else {
+      console.warn(`⚠️ [AutonomousPipeline] Error en seguimiento anti-ghosting a ${lead.phone}: ${result.error}`);
       this.scheduleNextTick(15000);
     }
   }
@@ -570,7 +638,8 @@ export class AutonomousPipeline {
 
     if (result.success) {
       this.sentTodayCount++;
-      if (activeRegion === 'USA') {
+      const currentLima = AutonomousPipeline.getLimaTime();
+      if (currentLima.hour < 13) {
         this.sentMorningCount++;
       }
       this.consecutiveUnansweredOutreachCount++;
@@ -589,7 +658,7 @@ export class AutonomousPipeline {
       await OutreachRepo.updateLeadStatus(lead.phone, 'OUTREACH_SENT');
       await OutreachRepo.updateLeadCustomFields(lead.phone, { abVariant: variant });
       await OutreachRepo.addChatMessage(lead.phone, 'assistant', message);
-      const morningStr = activeRegion === 'USA' ? `, Mañana: ${this.sentMorningCount}/${Math.floor(settings.dailyLimit / 2)}` : '';
+      const morningStr = currentLima.hour < 13 ? `, Mañana: ${this.sentMorningCount}/${Math.floor(settings.dailyLimit / 2)}` : '';
       console.log(`✅ [AutonomousPipeline - ${activeRegion || 'OUTREACH'}] Enviado con éxito a ${lead.companyName} (Variante ${variant})! (${this.sentTodayCount}/${settings.dailyLimit} hoy${morningStr})`);
 
       // Pausa aleatoria anti-ban entre minDelaySeconds y maxDelaySeconds (ej. 180s - 300s)

@@ -21,6 +21,7 @@ export interface GhostCRMFunnelSummary {
   totalLeads: number;
   discovered: number;
   outreachSent: number;
+  followUpSent: number;
   replied: number;
   qualified: number;
   meetingScheduled: number;
@@ -30,6 +31,8 @@ export interface GhostCRMFunnelSummary {
   totalRevenueUSD: number;
   totalRevenuePEN: number;
   metaCapiEventsFired: number;
+  dueColdFollowUp?: number;
+  dueConversationalFollowUp?: number;
 }
 
 export class GhostCRM {
@@ -171,6 +174,7 @@ export class GhostCRM {
       totalLeads: leads.length,
       discovered: 0,
       outreachSent: 0,
+      followUpSent: 0,
       replied: 0,
       qualified: 0,
       meetingScheduled: 0,
@@ -179,7 +183,9 @@ export class GhostCRM {
       humanTakeover: 0,
       totalRevenueUSD: 0,
       totalRevenuePEN: 0,
-      metaCapiEventsFired: 0
+      metaCapiEventsFired: 0,
+      dueColdFollowUp: 0,
+      dueConversationalFollowUp: 0
     };
 
     for (const lead of leads) {
@@ -188,8 +194,10 @@ export class GhostCRM {
           summary.discovered++;
           break;
         case 'OUTREACH_SENT':
-        case 'FOLLOW_UP_SENT':
           summary.outreachSent++;
+          break;
+        case 'FOLLOW_UP_SENT':
+          summary.followUpSent++;
           break;
         case 'REPLIED':
           summary.replied++;
@@ -211,6 +219,7 @@ export class GhostCRM {
           }
           break;
         case 'CLOSED_LOST':
+        case 'OPT_OUT':
           summary.closedLost++;
           break;
         case 'HUMAN_TAKEOVER':
@@ -222,6 +231,13 @@ export class GhostCRM {
         summary.metaCapiEventsFired++;
       }
     }
+
+    try {
+      const dueCold = await OutreachRepo.getLeadsForFollowUp(serviceId, 1000);
+      summary.dueColdFollowUp = dueCold.length;
+      const dueConv = await OutreachRepo.getLeadsForConversationalFollowUp(serviceId, 1000);
+      summary.dueConversationalFollowUp = dueConv.length;
+    } catch {}
 
     return summary;
   }

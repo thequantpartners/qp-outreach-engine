@@ -38,9 +38,9 @@ export class OutreachRepo {
     },
     {
       id: 'infraestructura-comercial-peru',
-      name: 'Infraestructura Comercial WhatsApp - Empresas con Tráfico/Ads (Perú)',
-      description: 'Infraestructura comercial en WhatsApp para empresas que ya invierten en anuncios o reciben tráfico constante.',
-      targetPersona: 'Dueños, gerentes generales y directores comerciales de empresas en Lima y provincias con anuncios activos.',
+      name: 'Infraestructura Comercial 4 Agentes IA - Prospección, Atención 24/7 & Seguimiento (Perú)',
+      description: 'Infraestructura comercial con 4 agentes de IA en paralelo: Prospección activa de clientes, atención en 5s, seguimiento anti-ghosting y sincronización CRM.',
+      targetPersona: 'Dueños, gerentes generales y directores comerciales de empresas en Lima y provincias.',
       apifyQueries: [
         'clinica estetica miraflores',
         'centro odontologico san isidro',
@@ -48,45 +48,82 @@ export class OutreachRepo {
         'estudio de abogados san borja'
       ],
       targetLocations: ['Lima, Peru', 'Arequipa, Peru', 'Trujillo, Peru'],
-      outreachTemplate: `Buenas tardes al equipo de {{name}}, un gusto saludarlos.\n\nLe escribe el asistente virtual de Kenneth Herrera en The Quant Partners.\n\nEstuvimos revisando sus canales comerciales y notamos que tienen un flujo activo de potenciales clientes consultando por sus servicios.\n\nEn empresas de su sector vemos que muchas veces se pierde hasta el 70% de las consultas de personas que escriben por anuncios o redes, simplemente porque tardan minutos en responderles o porque el equipo de ventas pierde horas atendiendo a curiosos sin presupuesto.\n\nImplementamos una infraestructura comercial en WhatsApp que responde en 5 segundos 24/7, filtra a los curiosos y le entrega a sus asesores solo a los clientes calificados listos para agendar o comprar, aprovechando los anuncios y el tráfico que ustedes ya tienen activos.\n\n¿Me permite compartirle un breve resumen por aquí para ver si tendría sentido evaluar esta integración para {{name}}?`,
-      outreachTemplateB: `Buenas tardes al equipo de {{name}}, un gusto saludarlos.\n\nLe escribe el asistente virtual de Kenneth Herrera en The Quant Partners.\n\nRevisando empresas de su sector en {{location}}, notamos que el cuello de botella común al invertir en anuncios no es la falta de interesados, sino la velocidad de respuesta: un prospecto que escribe y no recibe atención inmediata, busca a la competencia.\n\nImplementamos una infraestructura comercial en WhatsApp que atiende en 5 segundos 24/7, califica el interés real del cliente y deriva a sus ejecutivos únicamente a los prospectos listos para cerrar, rentabilizando al máximo la pauta que ya tienen activa.\n\n¿Me permite compartirle un video o ficha de 2 minutos por aquí para que evalúen si les aportaría valor?`,
-      followUpTemplate1: `Buenas tardes al equipo de {{name}}, el asistente virtual de Kenneth nuevamente. Quería consultarles con total respeto si tuvieron oportunidad de revisar el mensaje anterior sobre la infraestructura en WhatsApp, o si prefieren que lo coordinemos más adelante. ¡Un saludo!`,
-      followUpTemplate2: `Hola al equipo de {{name}}, solo para no insistir y cerrar este contacto con respeto: si en algún momento desean blindar la conversión de sus prospectos en WhatsApp, quedo a su disposición por aquí. Saludos cordiales!`,
+      outreachTemplate: `Buenas tardes al equipo de {{name}}, un gusto saludarlos.\n\nLe escribe el asistente virtual de Kenneth Herrera en The Quant Partners.\n\nEn empresas de su sector en {{location}}, vemos que el gran cuello de botella comercial suele ser triple: no contar con un flujo continuo de prospectos calificados, tardar minutos en responder a quienes consultan, y perder ventas porque los clientes potenciales dejan en visto y nadie les hace seguimiento.\n\nImplementamos una infraestructura comercial completa con 4 agentes de IA que trabajan en paralelo: les inyectamos prospección activa continua de clientes de su rubro, atención inmediata en 5 segundos 24/7 con filtro de curiosos, seguimiento automático anti-ghosting a quienes dejan en visto, y sincronización para que sus asesores solo reciban citas listas para cerrar.\n\n¿Me permite compartirle un breve resumen ejecutivo por aquí para que evalúen si les aportaría valor en {{name}}?`,
+      outreachTemplateB: `Buenas tardes al equipo de {{name}}, un gusto saludarlos.\n\nLe escribe el asistente virtual de Kenneth Herrera en The Quant Partners.\n\nRevisando empresas de su sector en {{location}}, notamos que el 70% de las ventas potenciales se pierden por dos motivos: demoras al responder consultas y falta de seguimiento cuando un prospecto deja en visto.\n\nImplementamos un sistema con 4 agentes de IA en paralelo: inyección constante de prospectos de su mercado mediante prospección activa, respuesta en 5 segundos 24/7, seguimiento automático inteligente para revivir interesados y alertas directas a sus ejecutivos con citas listas para cerrar.\n\n¿Me permite compartirle una ficha o video de 2 minutos por aquí para que evalúen si les aportaría valor en {{name}}?`,
+      followUpTemplate1: `Buenas tardes al equipo de {{name}}, el asistente virtual de Kenneth nuevamente. Quería consultarles con total respeto si tuvieron oportunidad de revisar el mensaje anterior sobre los 4 agentes de IA comerciales, o si prefieren que lo coordinemos más adelante. ¡Un saludo!`,
+      followUpTemplate2: `Hola al equipo de {{name}}, solo para no insistir y cerrar este contacto con respeto: si en algún momento desean blindar su captación de clientes y seguimiento comercial en WhatsApp, quedo a su disposición por aquí. ¡Saludos cordiales!`,
       closingType: 'HUMAN_TAKEOVER',
       closingPayload: {
         notificationPhone: '51902105668'
       },
-      aiSystemPrompt: `Eres Kenneth Herrera de The Quant Partners (Lima, Perú). Hablas directamente en primera persona con directores, gerentes y propietarios de empresas de servicios en Perú por WhatsApp.
+      aiSystemPrompt: `Eres el asistente virtual de Kenneth Herrera en The Quant Partners (Lima, Perú). Hablas en representación de Kenneth con directores, gerentes y propietarios de empresas de servicios en Perú por WhatsApp.
 TONO: 100% humano, cercano, consultivo, ultra-breve (máximo 1 a 2 oraciones por mensaje).
 
 MISIÓN:
-Conversar de forma natural sobre la Infraestructura Comercial en WhatsApp (atención en 5s, precalificación de interesados y filtro de curiosos) y coordinar una breve sesión de 10 minutos por Meet.
+Conversar de forma natural sobre la Infraestructura Comercial de 4 Agentes de IA (Prospección Activa para flujo constante, Atención en 5s 24/7, Seguimiento Anti-Ghosting y Sincronización CRM) y coordinar una breve sesión de 10 minutos por Meet.
 
 REGLAS CONVERSACIONALES ESTRICTAS:
-1. CERO PLACEHOLDERS: ESTRICTAMENTE PROHIBIDO usar corchetes como [Tu Nombre], [Nombre], [Empresa]. Eres Kenneth Herrera.
-2. NO ENVIAR PARRAFADAS: Nunca envíes monólogos ni cartas formales. Responde corto como un chat de WhatsApp real.
-3. NO VENDER DE GOLPE: Primero atiende la consulta o saluda cordialmente antes de ofrecer la llamada.
+1. IDENTIDAD OBLIGATORIA: Eres el asistente virtual de Kenneth Herrera en The Quant Partners. NUNCA te hagas pasar por Kenneth en primera persona ("¡Hola! Te escribe el asistente virtual de Kenneth 🙌").
+2. CERO PLACEHOLDERS: ESTRICTAMENTE PROHIBIDO usar corchetes como [Tu Nombre], [Nombre], [Empresa].
+3. NO ENVIAR PARRAFADAS: Nunca envíes monólogos ni cartas formales. Responde corto como un chat de WhatsApp real.
+4. NO VENDER DE GOLPE: Primero atiende la consulta o saluda cordialmente antes de ofrecer la llamada.
+5. CORREO OFICIAL: partners@thequantpartners.com (ESTRICTAMENTE PROHIBIDO usar o mencionar kenneth@thequantpartners.com).
 
 RESPUESTAS CLAVE:
-1. SI PREGUNTAN DE QUÉ SE TRATA / CÓMO FUNCIONA:
-"¡Hola! Con gusto. Implementamos una infraestructura en WhatsApp que responde en 5 segundos 24/7 y filtra a los curiosos para que tu equipo solo atienda clientes calificados. ¿Ustedes reciben muchas consultas por WhatsApp actualmente?"
+1. SI PREGUNTAN DE QUÉ SE TRATA / CÓMO FUNCIONA / PIDEN FICHA:
+"¡Hola! Con gusto 🙌 Implementamos una infraestructura con 4 agentes de IA en paralelo: 1) Prospección activa de clientes de su rubro, 2) Atención en 5s 24/7 con filtro de curiosos, 3) Seguimiento automático anti-ghosting a quienes dejan en visto, y 4) Alertas listas para que sus vendedores solo entren a cerrar. ¿Te gustaría coordinar un Meet de 10 min para mostrártelo funcionando en pantalla?"
 
-2. SI PREGUNTAN SI HACEMOS O MANEJAMOS ANUNCIOS:
-"No gestionamos pauta ni anuncios. Nos especializamos 100% en la infraestructura de WhatsApp para que la inversión que ya hacen no se pierda por demoras en responder. ¿Tienen flujo constante de consultas por sus campañas?"
+2. SI PREGUNTAN SI HACEMOS O MANEJAMOS ANUNCIOS / CÓMO TRAEN CLIENTES:
+"Si ya invierten en pauta conectamos el sistema nativamente a Meta Ads para abaratar el costo por lead, pero nuestro diferencial clave es que además les inyectamos un Motor de Prospección Activa en su mercado para que tengan un flujo constante de clientes sin depender de si la pauta funciona o no 🙌 ¿Tienen flujo continuo de prospectos actualmente?"
 
 3. SI PREGUNTAN PRECIOS:
-"Tenemos planes accesibles según el volumen de consultas de tu empresa. ¿Te parece si coordinamos una videollada de 10 minutos por Meet esta semana para mostrarte el sistema en pantalla y cotizarte a la medida?"
+"Manejamos una tarifa plana de $450 a $800 USD/mes (o $850 a $1,500 en USA) según el volumen de prospección y conversaciones, mes a mes sin permanencia y con setup llave en mano en 48h. ¿Te parece si coordinamos una videollamada de 10 minutos por Meet esta semana para mostrarte el sistema en pantalla y cotizarte a la medida?"
 
 4. SI TIENEN INTERÉS O PIDEN AGENDAR:
-"Excelente, coordinemos una breve llamada de 10 minutos para revisar los detalles a tu medida. ¿Te viene bien esta semana?" -> [ACTION:QUALIFIED:infraestructura|inmediata|calificado]
+"Excelente, coordinemos una breve llamada de 10 minutos para revisar los detalles a tu medida. ¿Te viene bien esta semana?" -> [ACTION:QUALIFIED:infraestructura_4_agentes|inmediata|calificado]
 
-5. SI DICEN QUE NO LES INTERESA O ES CANAL MÉDICO/PRIVADO:
-"Entendido perfectamente y disculpa la molestia. ¡Que tengas un excelente día!" -> [ACTION:OPT_OUT:desinteres_o_canal_medico]
+5. SI DICEN QUE NO LES INTERESA O ES CANAL PRIVADO:
+"Entendido perfectamente y disculpa la molestia. ¡Que tengas un excelente día!" -> [ACTION:OPT_OUT:desinteres_o_canal_privado]
 
 LÍNEAS ROJAS:
-- NUNCA prometer ventas o números irreales ni dar asesoría médica o jurídica directa.
+- NUNCA prometer ventas mágicas ni dar asesoría médica o jurídica directa.
 - NUNCA enviar enlaces web en el primer mensaje.
+- ESTRICTAMENTE PROHIBIDO mencionar coste de transferencia por cita agendada en WhatsApp (as bajo la manga exclusivo de Kenneth en el Meet).
 - Mantener siempre respuestas ultra-cortas de 1 o 2 oraciones.`,
+      isActive: true,
+      type: 'OUTBOUND'
+    },
+    {
+      id: 'live-commerce-peru',
+      name: 'Asistente de Ventas con IA & Shalom para Live Shopping (TikTok / Instagram / FB)',
+      description: 'Asistente de alta velocidad para tiendas de Live Shopping en Perú. Responde catálogo, tallas y stock en 3s; tras confirmación de pago del dueño, emite la guía de envío en Shalom Pro automáticamente.',
+      targetPersona: 'Dueños de tiendas de ropa, calzado, accesorios, tecnología y cosméticos que transmiten en vivo por TikTok, Instagram o Facebook.',
+      apifyQueries: [
+        'tiendas de ropa gamarra lima',
+        'boutiques moda miraflores lima',
+        'importaciones celulares tablets lima',
+        'tiendas zapatillas calzado gamarra lima',
+        'distribuidora accesorios moda lima'
+      ],
+      targetLocations: ['Lima, Peru'],
+      outreachTemplate: `Buenas tardes al equipo de {{name}} 🛍️✨.\n\nLe escribe el asistente virtual de Kenneth Herrera en The Quant Partners.\n\nEstuvimos viendo el volumen comercial y de pedidos que generan en sus transmisiones en vivo 🔥.\n\nSin embargo, durante un Live es casi imposible responder a tiempo los 100 o 200 WhatsApps que caen en simultáneo, y se pierden muchas ventas porque el comprador se enfría si no le contestan en el acto.\n\nImplementamos un Asistente con IA para Lives que responde en 3 segundos con su stock, confirma tallas/colores y les transfiere al cliente listo cuando dice "ya quiero pagar" para que ustedes solo cobren por Yape y aseguren el dinero.\n\n¿Tienen transmisiones programadas esta semana? ¿Le gustaría que en su próximo Live el bot atienda a los curiosos mientras ustedes solo entran a cobrar?`,
+      followUpTemplate1: `Buenas tardes equipo de {{name}} ✨. Le escribe el asistente de Kenneth.\n\nSabemos que en las transmisiones se escapan entre 15 a 30 pedidos por no contestar en los primeros 3 minutos. ¿Pudieron revisar los planes para su próxima transmisión?`,
+      followUpTemplate2: `Último mensaje de seguimiento 🙌. Si ya tienen cubierto su equipo de atención inmediata en WhatsApp para sus transmisiones, no se preocupen. ¡Muchos éxitos en sus ventas!`,
+      closingType: 'HUMAN_TAKEOVER',
+      closingPayload: {
+        notificationPhone: '51902105668'
+      },
+      aiSystemPrompt: `Eres el asistente virtual de Kenneth Herrera en The Quant Partners (Lima, Perú).
+Hablas en representación de Kenneth con dueños de tiendas de ropa, calzado, moda y tecnología que realizan transmisiones de Live Shopping (TikTok Live, Instagram Live, Facebook Live).
+TONO: 100% humano, súper ágil, empático, emprendedor y conversacional (máximo 1 a 2 oraciones breves).
+
+OBJETIVO:
+Demostrarles cómo el Asistente de Live Shopping responde dudas de tallas/colores en 3 segundos y les genera guías automáticas con Shalom Pro cuando el comprador paga.
+
+LÍNEAS ROJAS:
+- NUNCA enviar enlaces en el primer mensaje.
+- El bot NO cobra directamente.
+- Invitar a un breve Meet de 10 min para ver la demo en vivo.`,
       isActive: true,
       type: 'OUTBOUND'
     }
@@ -214,6 +251,28 @@ LÍNEAS ROJAS:
       ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS meta_capi_token TEXT;
       ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS meta_test_event_code VARCHAR(50);
       ALTER TABLE campaign_settings ADD COLUMN IF NOT EXISTS manager_lead_alerts_enabled BOOLEAN DEFAULT true;
+
+      CREATE TABLE IF NOT EXISTS fleet_clients (
+        client_id VARCHAR(100) PRIMARY KEY,
+        company_name VARCHAR(255) NOT NULL,
+        niche VARCHAR(100),
+        status VARCHAR(50) NOT NULL DEFAULT 'ACTIVE',
+        deploy_target VARCHAR(50) NOT NULL DEFAULT 'railway',
+        dashboard_url VARCHAR(500),
+        admin_phone VARCHAR(50),
+        sales_reps JSONB NOT NULL DEFAULT '[]',
+        client_pin VARCHAR(20),
+        closing_mode VARCHAR(50),
+        service_name VARCHAR(255),
+        is_whatsapp_connected BOOLEAN DEFAULT false,
+        total_leads INT DEFAULT 0,
+        replied_leads INT DEFAULT 0,
+        qualified_leads INT DEFAULT 0,
+        meetings_booked INT DEFAULT 0,
+        last_heartbeat TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
     `);
 
     // Asegurar que el servicio base para Inbound General exista siempre
@@ -1082,6 +1141,88 @@ LÍNEAS ROJAS:
         lead.status = newStatus;
         lead.followUpCount = followUpCount;
         lead.lastOutreachAt = new Date().toISOString();
+        lead.lastMessageAt = new Date().toISOString();
+        lead.updatedAt = new Date().toISOString();
+        DbConnection.saveFallbackData(data);
+      }
+    }
+  }
+
+  /**
+   * Obtiene prospectos para seguimiento conversacional anti-ghosting.
+   * Filtra leads en REPLIED sin intervención humana activa, con silencio de al menos 24 horas y máx 7 días,
+   * y que no hayan recibido el toque de reenganche previo.
+   */
+  public static async getLeadsForConversationalFollowUp(serviceId?: string, limit: number = 1): Promise<Lead[]> {
+    const minHoursAgo = 24;
+    const maxHoursAgo = 168; // 7 días
+
+    if (DbConnection.isPg()) {
+      let query = `
+        SELECT * FROM leads 
+        WHERE status = 'REPLIED'
+          AND human_takeover_at IS NULL
+          AND COALESCE((custom_fields->>'conversational_followup_count')::int, 0) < 1
+          AND last_message_at IS NOT NULL
+          AND last_message_at <= NOW() - INTERVAL '24 hours'
+          AND last_message_at >= NOW() - INTERVAL '7 days'
+      `;
+      const params: any[] = [];
+      if (serviceId) {
+        query += ' AND service_id = $1';
+        params.push(serviceId);
+      }
+      query += ` ORDER BY last_message_at ASC LIMIT $${params.length + 1}`;
+      params.push(limit);
+
+      const res = await DbConnection.getPool().query(query, params);
+      return res.rows.map(r => OutreachRepo.mapLeadRow(r));
+    } else {
+      const data = DbConnection.getFallbackData();
+      const nowMs = Date.now();
+      const minDelayMs = minHoursAgo * 60 * 60 * 1000;
+      const maxDelayMs = maxHoursAgo * 60 * 60 * 1000;
+
+      return (data.leads || [])
+        .filter((l: Lead) => {
+          if (serviceId && l.serviceId !== serviceId) return false;
+          if (l.status !== 'REPLIED') return false;
+          if (l.humanTakeoverAt) return false;
+          const reCount = (l.customFields && l.customFields.conversational_followup_count) ? parseInt(l.customFields.conversational_followup_count, 10) : 0;
+          if (reCount >= 1) return false;
+
+          const lastTime = l.lastMessageAt ? new Date(l.lastMessageAt).getTime() : 0;
+          if (!lastTime) return false;
+          const diff = nowMs - lastTime;
+          return diff >= minDelayMs && diff <= maxDelayMs;
+        })
+        .slice(0, limit);
+    }
+  }
+
+  /**
+   * Actualiza el lead tras despachar seguimiento conversacional anti-ghosting
+   */
+  public static async updateLeadConversationalFollowUp(phone: string): Promise<void> {
+    const clean = phone.replace(/[^0-9]/g, '');
+    if (DbConnection.isPg()) {
+      await DbConnection.getPool().query(
+        `UPDATE leads SET 
+           custom_fields = custom_fields || '{"conversational_followup_count": 1, "conversational_followup_at": "' || NOW() || '"}'::jsonb,
+           last_message_at = NOW(),
+           updated_at = NOW() 
+         WHERE phone = $1`,
+        [clean]
+      );
+    } else {
+      const data = DbConnection.getFallbackData();
+      const lead = (data.leads || []).find((l: Lead) => l.phone === clean);
+      if (lead) {
+        lead.customFields = {
+          ...(lead.customFields || {}),
+          conversational_followup_count: 1,
+          conversational_followup_at: new Date().toISOString()
+        };
         lead.lastMessageAt = new Date().toISOString();
         lead.updatedAt = new Date().toISOString();
         DbConnection.saveFallbackData(data);

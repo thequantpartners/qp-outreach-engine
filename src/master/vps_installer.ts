@@ -81,10 +81,9 @@ services:
       retries: 5
 
   engine:
-    image: node:22-alpine
+    build: .
     container_name: qp-engine-${client.clientId}
     restart: always
-    working_dir: /app
     depends_on:
       postgres:
         condition: service_healthy
@@ -93,9 +92,7 @@ services:
     ports:
       - "${hostPort}:3100"
     volumes:
-      - .:/app
       - ./storage:/app/storage
-    command: sh -c "npm install --omit=dev && npm run build && npm start"
 
 volumes:
   qp_${client.clientId}_pgdata:
@@ -134,6 +131,16 @@ if [ "$(id -u)" != "0" ]; then
    exit 1
 fi
 
+# 1.1 Configurar Swap de 2GB si no existe (evita OOM en VPS de $4/mes con 1GB RAM)
+if [ $(free -m | awk '/^Swap:/ {print $2}') -eq 0 ]; then
+    echo "💾 Configurando swapfile de 2GB para optimizar memoria..."
+    fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048
+    chmod 600 /swapfile
+    mkswap /swapfile
+    swapon /swapfile
+    echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
 # 2. Instalar Docker y Docker Compose si no están presentes
 if ! command -v docker &> /dev/null; then
     echo "📦 Docker no detectado. Instalando Docker oficial..."
@@ -146,20 +153,18 @@ INSTALL_DIR="/opt/qp-outreach-${client.clientId}"
 echo "📂 Creando directorio de instalación en: $INSTALL_DIR"
 mkdir -p "$INSTALL_DIR/storage/baileys_auth"
 mkdir -p "$INSTALL_DIR/storage/assets"
-mkdir -p "$INSTALL_DIR/src"
-mkdir -p "$INSTALL_DIR/public"
 cd "$INSTALL_DIR"
 
 # 4. Clonar código base desacoplado desde GitHub oficial
 if [ ! -f "package.json" ]; then
     echo "📥 Descargando paquete base de QP Outreach Engine..."
     if command -v git &> /dev/null; then
-        git clone https://github.com/the-quant-partners/qp-outreach-engine.git temp_repo
-        cp -r temp_repo/* .
+        git clone --depth 1 https://github.com/thequantpartners/qp-outreach-engine.git temp_repo
+        cp -r temp_repo/. .
         rm -rf temp_repo
     else
         echo "📥 Descargando tarball vía curl..."
-        curl -fsSL https://github.com/the-quant-partners/qp-outreach-engine/archive/refs/heads/main.tar.gz | tar -xz --strip-components=1
+        curl -fsSL https://github.com/thequantpartners/qp-outreach-engine/archive/refs/heads/main.tar.gz | tar -xz --strip-components=1
     fi
 fi
 
@@ -174,6 +179,12 @@ echo "🐳 Generando docker-compose.yml con PostgreSQL dedicado..."
 cat << 'COMPOSE_EOF' > docker-compose.yml
 ${dockerCompose}
 COMPOSE_EOF
+
+# 6.1 Abrir puerto en firewall UFW si está activo
+if command -v ufw &> /dev/null && ufw status | grep -q "active"; then
+    echo "🛡️ Abriendo puerto ${hostPort} en firewall UFW..."
+    ufw allow ${hostPort}/tcp
+fi
 
 # 7. Levantar la infraestructura
 echo "🚀 Levantando contenedores de la instancia cliente..."

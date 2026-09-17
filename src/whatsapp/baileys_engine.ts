@@ -324,6 +324,11 @@ export class BaileysEngine {
           content?.videoMessage?.caption ||
           '';
 
+        // Si envió una imagen sin caption (ej. comprobante de pago Yape/Plin o foto del producto del live)
+        if (!incomingText.trim() && content?.imageMessage) {
+          incomingText = '📷 [Comprobante de pago o imagen del producto adjunta]';
+        }
+
         // Detección y transcripción autónoma de notas de voz / audios con Gemini 2.5 Flash
         if (!incomingText.trim() && content?.audioMessage) {
           try {
@@ -473,12 +478,250 @@ export class BaileysEngine {
           senderPhone = lead.phone;
         }
 
-        // 3.5. Analizar política de Opt-Out / Rechazo / Desinterés / Canal Médico / No Insistir
+        // 3.4. Detección Temprana de Correo Electrónico (Derivación por Email)
+        try {
+          const { EmailDispatcher } = await import('../email/email_dispatcher.js');
+          const extractedEmail = EmailDispatcher.extractEmailFromText(incomingText);
+          if (extractedEmail && !EmailDispatcher.hasAlreadyReceivedEmail(lead)) {
+            console.log(`📧 [EmailDispatcher] Correo detectado en mensaje de ${senderPhone}: "${extractedEmail}". Generando borrador híbrido...`);
+            await OutreachRepo.addChatMessage(senderPhone, 'user', incomingText);
+
+            try {
+              const { AutonomousPipeline } = await import('../pipeline/autonomous_pipeline.js');
+              AutonomousPipeline.recordLeadReply(senderPhone);
+            } catch {}
+
+            const draft = await EmailDispatcher.generateEmailDraft(lead, extractedEmail, incomingText);
+
+            // Responder inmediatamente al lead por WhatsApp
+            const leadAckMessage = `¡Excelente! 🙌 Ya le pasé los datos a Kenneth para enviarte la propuesta oficial a tu correo. En breve te estará llegando desde partners@thequantpartners.com 📧🤝`;
+            const jid = `${senderPhone}@s.whatsapp.net`;
+            await this.sock?.sendMessage(jid, { text: leadAckMessage });
+            await OutreachRepo.addChatMessage(senderPhone, 'assistant', leadAckMessage);
+
+            // Notificar a Kenneth para aprobación en WhatsApp
+            const adminPhone = (settings.adminWhatsAppPhone || process.env.ADMIN_WHATSAPP_PHONE || '51902105668').replace(/[^0-9]/g, '');
+            if (adminPhone) {
+              const approvalAlert = 
+                `📧 *NUEVO CORREO LISTO PARA APROBACIÓN*\n` +
+                `━━━━━━━━━━━━━━━━━━━━\n` +
+                `🏢 Empresa: *${lead.companyName}*\n` +
+                `📱 Teléfono: *+${senderPhone}*\n` +
+                `📬 Destinatario: *${extractedEmail}*\n` +
+                `📝 Asunto: *${draft.subject}*\n` +
+                `━━━━━━━━━━━━━━━━━━━━\n` +
+                `📄 *Vista Previa:*\n` +
+                `"${draft.text.substring(0, 260)}..."\n` +
+                `━━━━━━━━━━━━━━━━━━━━\n` +
+                `👉 *Para enviar:* Responde *aprobar*\n` +
+                `👉 *Para descartar:* Responde *cancelar*`;
+
+              await this.sock?.sendMessage(`${adminPhone}@s.whatsapp.net`, { text: approvalAlert });
+              console.log(`📢 [EmailDispatcher] Alerta de aprobación enviada a Kenneth (${adminPhone}).`);
+            }
+            continue;
+          }
+        } catch (emailErr: any) {
+          console.error('[BaileysEngine] Error procesando correo temprano:', emailErr.message);
+        }
+
+        // 3.45. Detección Temprana de Teléfono de Derivación (Referral Phone)
+        try {
+          const { PhoneExtractor } = await import('../utils/phone_extractor.js');
+          const referralPhone = PhoneExtractor.extractReferralPhone(incomingText, senderPhone);
+          if (referralPhone) {
+            console.log(`📞 [BaileysEngine] Teléfono de derivación detectado en mensaje de ${senderPhone}: "+${referralPhone}"`);
+            await OutreachRepo.addChatMessage(senderPhone, 'user', incomingText);
+
+            try {
+              const { AutonomousPipeline } = await import('../pipeline/autonomous_pipeline.js');
+              AutonomousPipeline.recordLeadReply(senderPhone);
+            } catch {}
+
+            // Responder agradeciendo a recepción
+            const ackMsg = `¡Muchas gracias por la información! 🙌 Nos comunicaremos directamente con ese número de parte de su equipo. ¡Que tengan un excelente día! 🤝`;
+            const jid = `${senderPhone}@s.whatsapp.net`;
+            await this.sock?.sendMessage(jid, { text: ackMsg });
+            await OutreachRepo.addChatMessage(senderPhone, 'assistant', ackMsg);
+
+            // Guardar el nuevo lead derivado en PostgreSQL
+            await OutreachRepo.saveLeadsFromScraper(lead.serviceId, [{
+              title: `${lead.companyName} (Contacto Directo)`,
+              phone: referralPhone,
+              phoneClean: referralPhone,
+              address: lead.address,
+              categoryName: lead.category,
+              website: lead.website
+            }]);
+
+            await OutreachRepo.updateLeadCustomFields(referralPhone, {
+              referredFromPhone: senderPhone,
+              referredCompanyName: lead.companyName,
+              referredSourceText: incomingText
+            });
+
+            await OutreachRepo.updateLeadCustomFields(senderPhone, {
+              referredToPhone: referralPhone,
+              redirectedAt: new Date().toISOString()
+            });
+
+            // Alertar a Kenneth al WhatsApp privado
+            const adminPhone = (settings.adminWhatsAppPhone || process.env.ADMIN_WHATSAPP_PHONE || '51902105668').replace(/[^0-9]/g, '');
+            if (adminPhone) {
+              const referralAlert = 
+                `🚨 *NUEVO CONTACTO DIRECTO DERIVADO (REFERRAL)*\n` +
+                `━━━━━━━━━━━━━━━━━━━━\n` +
+                `🏢 Empresa: *${lead.companyName}*\n` +
+                `📱 Recepción / Canal que derivó: *+${senderPhone}*\n` +
+                `📞 *Nuevo Número Directo:* *+${referralPhone}*\n` +
+                `━━━━━━━━━━━━━━━━━━━━\n` +
+                `💬 Mensaje recibido:\n` +
+                `"${incomingText.substring(0, 200)}"\n` +
+                `━━━━━━━━━━━━━━━━━━━━\n` +
+                `💡 *Acción:* El nuevo contacto ya fue guardado en el CRM para iniciar contacto referenciado.`;
+
+              await this.sock?.sendMessage(`${adminPhone}@s.whatsapp.net`, { text: referralAlert });
+              console.log(`📢 [BaileysEngine] Alerta de contacto derivado enviada a Kenneth (${adminPhone}).`);
+            }
+            continue;
+          }
+        } catch (phoneErr: any) {
+          console.error('[BaileysEngine] Error procesando teléfono derivado:', phoneErr.message);
+        }
+
+        // 3.48. Detección Temprana de Onboarding Shalom en Chat
+        try {
+          const isSetupCommand = incomingText.toLowerCase().startsWith('/setup-shalom');
+          const hasCredentials = incomingText.includes('@') && /(?:clave|pass|password|contraseña)/i.test(incomingText);
+          const isAwaitingOnboarding = lead.status === 'CLOSED_WON' || lead.customFields?.pendingShalomOnboarding;
+
+          if (isSetupCommand || hasCredentials || (isAwaitingOnboarding && incomingText.includes('@'))) {
+            const { ShalomChatOnboarding } = await import('../logistics/shalom_chat_onboarding.js');
+            const onbRes = await ShalomChatOnboarding.handleOnboardingMessage(senderPhone, incomingText);
+            if (onbRes.handled && onbRes.reply) {
+              console.log(`📦 [ShalomChatOnboarding] Mensaje de onboarding procesado para ${senderPhone}.`);
+              await OutreachRepo.addChatMessage(senderPhone, 'user', incomingText);
+
+              const jid = `${senderPhone}@s.whatsapp.net`;
+              await this.sock?.sendMessage(jid, { text: onbRes.reply });
+              await OutreachRepo.addChatMessage(senderPhone, 'assistant', onbRes.reply);
+
+              if (onbRes.alertKenneth) {
+                const adminPhone = (settings.adminWhatsAppPhone || process.env.ADMIN_WHATSAPP_PHONE || '51902105668').replace(/[^0-9]/g, '');
+                if (adminPhone) {
+                  await this.sock?.sendMessage(`${adminPhone}@s.whatsapp.net`, { text: onbRes.alertKenneth });
+                }
+              }
+              continue;
+            }
+          }
+        } catch (onbErr: any) {
+          console.error('[BaileysEngine] Error procesando onboarding Shalom:', onbErr.message);
+        }
+
+        // 3.49. Detección Temprana de Comprobante de Pago (Voucher / Yape / Plin / Transferencia)
+        try {
+          const isImageMessage = !!content?.imageMessage;
+          const isDocPdf = !!content?.documentMessage;
+          const lowerText = incomingText.toLowerCase();
+          const paymentKeywords = [
+            'yape', 'plin', 'transferencia', 'transfiri', 'comprobante', 
+            'voucher', 'constancia', 'deposito', 'ya pague', 'ya deposite', 
+            'ya transferi', 'pago realizado', 'adjunto el pago', 'pago listo'
+          ];
+          const hasPaymentKeyword = paymentKeywords.some(kw => lowerText.includes(kw));
+
+          // Si el usuario envía una imagen o documento PDF, o menciona palabras clave de pago
+          if ((isImageMessage || isDocPdf || hasPaymentKeyword) && lead.status !== 'CLOSED_WON') {
+            console.log(`💰 [BaileysEngine] Posible comprobante de pago detectado de ${senderPhone}. Registrando como PAYMENT_PENDING y alertando a Kenneth...`);
+            await OutreachRepo.addChatMessage(senderPhone, 'user', incomingText);
+
+            try {
+              const { AutonomousPipeline } = await import('../pipeline/autonomous_pipeline.js');
+              AutonomousPipeline.recordLeadReply(senderPhone);
+            } catch {}
+
+            await OutreachRepo.updateLeadStatus(senderPhone, 'PAYMENT_PENDING');
+            await OutreachRepo.updateLeadCustomFields(senderPhone, {
+              voucherReceivedAt: new Date().toISOString(),
+              voucherText: incomingText
+            });
+
+            // Confirmación instantánea al cliente
+            const ackPaymentMsg = 
+              `¡Muchas gracias! 🙌 Recibimos tu constancia de pago. Nuestro equipo lo está verificando en este momento; en unos breves minutos te confirmamos y te dejamos todo listo 🚀.`;
+            const jid = `${senderPhone}@s.whatsapp.net`;
+            await this.sock?.sendMessage(jid, { text: ackPaymentMsg });
+            await OutreachRepo.addChatMessage(senderPhone, 'assistant', ackPaymentMsg);
+
+            // Notificación prioritaria a Kenneth para validación humana
+            const adminPhone = (settings.adminWhatsAppPhone || process.env.ADMIN_WHATSAPP_PHONE || '51902105668').replace(/[^0-9]/g, '');
+            if (adminPhone) {
+              const paymentAlert = 
+                `🚨 *NUEVO COMPROBANTE DE PAGO RECIBIDO*\n` +
+                `━━━━━━━━━━━━━━━━━━━━\n` +
+                `🏢 *Cliente:* ${lead.companyName}\n` +
+                `📱 *Teléfono:* +${senderPhone}\n` +
+                `📝 *Detalle:* ${incomingText}\n` +
+                `🕒 *Hora:* ${new Date().toLocaleTimeString('es-PE')}\n` +
+                `━━━━━━━━━━━━━━━━━━━━\n` +
+                `👉 *Para aprobar:* Responde *aprobar pago ${senderPhone}* (o solo *aprobar pago*)\n` +
+                `👉 *Para rechazar:* Responde *rechazar pago ${senderPhone}*`;
+
+              await this.sock?.sendMessage(`${adminPhone}@s.whatsapp.net`, { text: paymentAlert });
+
+              // Si es mensaje con imagen, reenviar la imagen original a Kenneth
+              if (isImageMessage && this.sock) {
+                try {
+                  await this.sock.sendMessage(`${adminPhone}@s.whatsapp.net`, { forward: m });
+                } catch (fwdErr: any) {
+                  console.warn('[BaileysEngine] No se pudo reenviar la imagen del voucher a Kenneth:', fwdErr.message);
+                }
+              }
+            }
+            continue;
+          }
+        } catch (payErr: any) {
+          console.error('[BaileysEngine] Error procesando detección de pago:', payErr.message);
+        }
+
+        // 3.5. Analizar política de Opt-Out / Rechazo / Canal Médico / Redirección Amable
         const { RejectionDetector } = await import('../utils/rejection_detector.js');
         const rejection = RejectionDetector.analyze(incomingText);
 
+        // 3.5.1. Manejo de Redirección Amable (Canal de pacientes / citas / privado sin rechazo)
+        if (rejection.isChannelRedirect && rejection.suggestedRedirectAsk) {
+          console.log(`🔄 [BaileysEngine] Lead ${senderPhone} indicó canal exclusivo (${rejection.category}: ${rejection.reason}). Enviando solicitud amable de contacto directo...`);
+          await OutreachRepo.addChatMessage(senderPhone, 'user', incomingText);
+
+          try {
+            const { AutonomousPipeline } = await import('../pipeline/autonomous_pipeline.js');
+            AutonomousPipeline.recordLeadReply(senderPhone);
+          } catch {}
+
+          const alreadyAsked = lead.customFields?.redirectAskSent === true;
+          if (!alreadyAsked) {
+            try {
+              const jid = `${senderPhone}@s.whatsapp.net`;
+              await this.sock?.sendMessage(jid, { text: rejection.suggestedRedirectAsk });
+              await OutreachRepo.addChatMessage(senderPhone, 'assistant', rejection.suggestedRedirectAsk);
+              await OutreachRepo.updateLeadCustomFields(senderPhone, {
+                redirectAskSent: true,
+                channelRedirectReason: rejection.reason,
+                waitingReferralContact: true
+              });
+              await OutreachRepo.updateLeadStatus(senderPhone, 'REPLIED');
+              console.log(`🔄 [BaileysEngine] Pregunta de derivación enviada a ${senderPhone}: "${rejection.suggestedRedirectAsk}"`);
+            } catch (askErr: any) {
+              console.warn('[BaileysEngine] Error enviando pregunta de derivación:', askErr.message);
+            }
+          }
+          continue;
+        }
+
+        // 3.5.2. Rechazo Real / Opt-Out Terminal
         if (rejection.isRejection) {
-          console.log(`🛑 [BaileysEngine] Lead ${senderPhone} rechazó la propuesta o indicó canal exclusivo (${rejection.category}: ${rejection.reason}).`);
+          console.log(`🛑 [BaileysEngine] Lead ${senderPhone} rechazó la propuesta (${rejection.category}: ${rejection.reason}).`);
           await OutreachRepo.addChatMessage(senderPhone, 'user', incomingText);
 
           try {
@@ -488,7 +731,7 @@ export class BaileysEngine {
 
           const alreadyAcknowledged = lead.customFields?.rejectionAcknowledged === true || lead.status === 'CLOSED_LOST' || lead.status === 'OPT_OUT';
 
-          // Enviar exactamente 1 mensaje de despedida y disculpas educadas (si aún no se ha despedido)
+          // Enviar exactamente 1 mensaje de despedida y disculpas educadas
           if (!alreadyAcknowledged && rejection.suggestedSignoff) {
             try {
               const jid = `${senderPhone}@s.whatsapp.net`;
@@ -543,6 +786,14 @@ export class BaileysEngine {
           continue;
         }
 
+        // 3.59. Auto-Reactivación Inteligente post-Handoff (Ventana de 24 horas de silencio)
+        const { HandoffManager } = await import('../failover/handoff_manager.js');
+        const wasAutoReactivated = await HandoffManager.checkAutoReactivation(lead);
+        if (wasAutoReactivated) {
+          lead.status = 'REPLIED';
+          lead.humanTakeoverAt = undefined as any;
+        }
+
         // 3.6. Comprobar si el lead YA está en estado terminal o control humano (Rompe bucle de ping-pong)
         const isTerminalOrLocked = ['CLOSED_LOST', 'OPT_OUT', 'CLOSED_WON', 'HUMAN_TAKEOVER'].includes(lead.status) || !!lead.humanTakeoverAt;
         if (isTerminalOrLocked) {
@@ -571,6 +822,20 @@ export class BaileysEngine {
           lastCustomerMessageAt: new Date().toISOString()
         });
 
+        // 4.05. Detección Temprana de Solicitud de Humano / Frustración / Bucle de Repetición
+        const chatHistory = await OutreachRepo.getChatHistory(senderPhone, 6);
+        const convCheck = HandoffManager.checkConversationalTriggers(incomingText, chatHistory);
+        if (convCheck.shouldHandoff) {
+          await HandoffManager.triggerHandoff({
+            senderPhone,
+            reason: convCheck.reason || 'USER_REQUESTED_HUMAN',
+            reasonText: convCheck.reasonText || 'Solicitud de atención humana',
+            incomingText,
+            leadName: lead.companyName
+          });
+          continue;
+        }
+
         // Sincronizar etiqueta de WhatsApp a "💬 En Conversación"
         try {
           const { WhatsAppLabelManager } = await import('./label_manager.js');
@@ -583,52 +848,32 @@ export class BaileysEngine {
           AutonomousPipeline.recordLeadReply(senderPhone);
         } catch {}
 
-        // 4.05. Mapeo Automático de Correo Electrónico y Generación de Borrador para Aprobación
-        try {
-          const { EmailDispatcher } = await import('../email/email_dispatcher.js');
-          const extractedEmail = EmailDispatcher.extractEmailFromText(incomingText);
-          if (extractedEmail && !EmailDispatcher.hasAlreadyReceivedEmail(lead)) {
-            console.log(`📧 [EmailDispatcher] Correo detectado en mensaje de ${senderPhone}: "${extractedEmail}". Generando borrador híbrido...`);
-            const draft = await EmailDispatcher.generateEmailDraft(lead, extractedEmail, incomingText);
-
-            // 1. Responder inmediatamente al lead por WhatsApp con tono cálido como asistente virtual
-            const leadAckMessage = `¡Excelente! 🙌 Ya le pasé los datos a Kenneth para enviarte la propuesta oficial a tu correo. En breve te estará llegando desde partners@thequantpartners.com 📧🤝`;
-            const jid = `${senderPhone}@s.whatsapp.net`;
-            await this.sock?.sendMessage(jid, { text: leadAckMessage });
-            await OutreachRepo.addChatMessage(senderPhone, 'assistant', leadAckMessage);
-
-            // 2. Notificar inmediatamente a Kenneth para aprobación rápida en 1 clic
-            const adminPhone = (settings.adminWhatsAppPhone || process.env.ADMIN_WHATSAPP_PHONE || '51902105668').replace(/[^0-9]/g, '');
-            if (adminPhone) {
-              const approvalAlert = 
-                `📧 *NUEVO CORREO LISTO PARA APROBACIÓN*\n` +
-                `━━━━━━━━━━━━━━━━━━━━\n` +
-                `🏢 Empresa: *${lead.companyName}*\n` +
-                `📱 Teléfono: *+${senderPhone}*\n` +
-                `📬 Destinatario: *${extractedEmail}*\n` +
-                `📝 Asunto: *${draft.subject}*\n` +
-                `━━━━━━━━━━━━━━━━━━━━\n` +
-                `📄 *Vista Previa del Correo:*\n` +
-                `"${draft.text.substring(0, 260)}..."\n` +
-                `━━━━━━━━━━━━━━━━━━━━\n` +
-                `👉 *Para enviar ahora:* Responde *aprobar* (o *enviar correo*)\n` +
-                `👉 *Para descartar:* Responde *cancelar*`;
-
-              await this.sock?.sendMessage(`${adminPhone}@s.whatsapp.net`, { text: approvalAlert });
-              console.log(`📢 [EmailDispatcher] Alerta de aprobación enviada a Kenneth (${adminPhone}).`);
-            }
-
-            // Ya se procesó el correo y se confirmó al prospecto
-            continue;
-          }
-        } catch (emailErr: any) {
-          console.error('[BaileysEngine] Error procesando correo automático:', emailErr.message);
-        }
-
-        // 4.1. Evaluar si el AI Setter debe calificar y responder en 5s
+        // 4.1. Evaluar si el AI Setter debe calificar y responder en 5s (Protegido con Circuit Breaker de 12s)
         try {
           const { SetterEngine } = await import('../ai/setter_engine.js');
-          const setterRes = await SetterEngine.processMessage(lead, incomingText, matchedService);
+
+          // Circuit Breaker: Timeout estricto de 12 segundos
+          const timeoutPromise = new Promise<{ isTimeout: true }>((resolve) =>
+            setTimeout(() => resolve({ isTimeout: true }), 12000)
+          );
+
+          const setterPromise = SetterEngine.processMessage(lead, incomingText, matchedService);
+          const outcome = await Promise.race([setterPromise, timeoutPromise]);
+
+          if ('isTimeout' in outcome && outcome.isTimeout) {
+            console.warn(`⏱️ [BaileysEngine] Circuit Breaker: Timeout de 12s alcanzado en SetterEngine para +${senderPhone}. Ejecutando Handoff Graceful...`);
+            await HandoffManager.triggerHandoff({
+              senderPhone,
+              reason: 'TECHNICAL_TIMEOUT',
+              reasonText: 'El motor de IA excedió el tiempo límite de respuesta (12s)',
+              errorDetail: 'Timeout en llamada a proveedor LLM',
+              incomingText,
+              leadName: lead.companyName
+            });
+            continue;
+          }
+
+          const setterRes = outcome as any;
           if (setterRes.replyText && setterRes.replyText.trim().length > 0) {
             const jid = `${senderPhone}@s.whatsapp.net`;
             await this.sock?.sendMessage(jid, { text: setterRes.replyText });
@@ -640,7 +885,16 @@ export class BaileysEngine {
             continue;
           }
         } catch (setterErr: any) {
-          console.error('[BaileysEngine] Error ejecutando SetterEngine:', setterErr.message);
+          console.error('[BaileysEngine] Error crítico ejecutando SetterEngine:', setterErr.message);
+          await HandoffManager.triggerHandoff({
+            senderPhone,
+            reason: 'TECHNICAL_EXCEPTION',
+            reasonText: 'Excepción técnica no controlada en el motor de IA',
+            errorDetail: setterErr.message,
+            incomingText,
+            leadName: lead.companyName
+          });
+          continue;
         }
 
         // Transmitir al Dashboard en tiempo real
@@ -780,12 +1034,16 @@ export class BaileysEngine {
           m.message.documentWithCaptionMessage?.message || 
           m.message;
 
-        const text =
+        let text =
           content?.conversation ||
           content?.extendedTextMessage?.text ||
           content?.imageMessage?.caption ||
           content?.videoMessage?.caption ||
           '';
+
+        if (!text.trim() && content?.imageMessage) {
+          text = '📷 [Comprobante de pago o imagen del producto adjunta]';
+        }
 
         if (!text.trim()) continue;
 
@@ -802,6 +1060,13 @@ export class BaileysEngine {
    * Envía un mensaje individual con validación previa de número
    */
   public async send(telefono: string, mensaje: string): Promise<{ success: boolean; jid?: string; error?: string }> {
+    return this.sendMessage(telefono, mensaje);
+  }
+
+  /**
+   * Envía un mensaje individual con validación previa de número (alias sendMessage)
+   */
+  public async sendMessage(telefono: string, mensaje: string): Promise<{ success: boolean; jid?: string; error?: string }> {
     // Candado Anti-Mensajes Vacíos: eliminar caracteres invisibles/zero-width y validar longitud mínima
     const textoLimpio = (mensaje || '').replace(/[\u200B-\u200D\uFEFF\u200E\u200F\u00A0]/g, '').trim();
     if (!textoLimpio || textoLimpio.length < 15) {
@@ -1000,6 +1265,47 @@ export class BaileysEngine {
       return { success: true, jid };
     } catch (err: any) {
       console.error(`❌ [BaileysEngine] Error enviando imagen a ${telefono}:`, err.message);
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Envía una tarjeta de contacto interactiva (vCard) por WhatsApp para que el cliente la guarde con 1 clic
+   */
+  public async sendContactCard(
+    telefono: string,
+    contactName: string,
+    contactPhone: string,
+    orgName?: string
+  ): Promise<{ success: boolean; jid?: string; error?: string }> {
+    if (!this.sock || !this.isReady) {
+      return { success: false, error: 'WhatsApp no está conectado o autenticado.' };
+    }
+
+    try {
+      const limpio = telefono.replace(/[^0-9]/g, '');
+      const jid = `${limpio}@s.whatsapp.net`;
+      const cleanContactPhone = contactPhone.replace(/[^0-9]/g, '');
+
+      const vcard = 
+        'BEGIN:VCARD\n' +
+        'VERSION:3.0\n' +
+        `FN:${contactName}\n` +
+        (orgName ? `ORG:${orgName};\n` : '') +
+        `TEL;type=CELL;type=VOICE;waid=${cleanContactPhone}:+${cleanContactPhone}\n` +
+        'END:VCARD';
+
+      console.log(`[BaileysEngine] Despachando tarjeta de contacto "${contactName}" a ${limpio}...`);
+      await this.sock.sendMessage(jid, {
+        contacts: {
+          displayName: contactName,
+          contacts: [{ vcard }]
+        }
+      });
+      console.log(`✅ [BaileysEngine] Tarjeta de contacto "${contactName}" entregada con éxito a ${limpio}!`);
+      return { success: true, jid };
+    } catch (err: any) {
+      console.error(`❌ [BaileysEngine] Error enviando tarjeta de contacto a ${telefono}:`, err.message);
       return { success: false, error: err.message };
     }
   }

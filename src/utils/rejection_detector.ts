@@ -2,6 +2,8 @@
 // THE QUANT PARTNERS · REJECTION & OPT-OUT DETECTOR (Meta 2026 Anti-Ban)
 // =================================================================
 
+import { PhoneExtractor } from './phone_extractor.js';
+
 export type RejectionCategory =
   | 'EXPLICIT_OPTOUT'        // STOP, BAJA, CANCELAR, UNSUBSCRIBE
   | 'DISINTEREST'            // No me interesa, no gracias, por ahora no, ya tenemos proveedor
@@ -11,6 +13,8 @@ export type RejectionCategory =
 
 export interface RejectionAnalysis {
   isRejection: boolean;
+  isChannelRedirect?: boolean;
+  suggestedRedirectAsk?: string;
   category?: RejectionCategory;
   reason?: string;
   suggestedSignoff?: string;
@@ -103,9 +107,9 @@ export class RejectionDetector {
    * 5. Solicitud de no molestar / no contactar
    */
   private static readonly DO_NOT_DISTURB_PATTERNS: RegExp[] = [
-    /no\s+(vuelvan?|vuelvas?)\s+a\s+escribir/i,
-    /no\s+escriban?\s+m[aá]s/i,
-    /no\s+contactar/i,
+    /no\s+(?:(?:me|nos)\s+)?(?:vuelvan?|vuelvas?)\s+a\s+escribir/i,
+    /no\s+(?:(?:me|nos)\s+)?escriban?\s+m[aá]s/i,
+    /no\s+(?:(?:me|nos)\s+)?contact(?:ar|en|es)/i,
     /borr(a|en|ar)\s+(mi|este)\s+n[uú]mero/i,
     /elimin(a|en|ar)\s+de\s+su\s+base/i,
     /sacar\s+de\s+su\s+lista/i,
@@ -146,26 +150,35 @@ export class RejectionDetector {
       }
     }
 
-    // 3. Verificar canal exclusivo para pacientes / salud
+    // 2.5. Si el mensaje contiene un correo electrónico o teléfono, es una derivación activa (no rechazo)
+    const hasEmail = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(clean);
+    const hasPhone = PhoneExtractor.extractReferralPhone(clean) !== null;
+    if (hasEmail || hasPhone) {
+      return { isRejection: false };
+    }
+
+    // 3. Verificar canal exclusivo para pacientes / salud (Oportunidad de Redirección Amable)
     for (const pattern of this.PATIENT_CHANNEL_PATTERNS) {
       if (pattern.test(clean)) {
         return {
-          isRejection: true,
+          isRejection: false,
+          isChannelRedirect: true,
           category: 'WRONG_CHANNEL_PATIENTS',
           reason: `Canal exclusivo de pacientes / citas médicas: "${clean.substring(0, 60)}"`,
-          suggestedSignoff: 'Entendido y disculpas por la molestia en este canal de atención médica. Ya registramos la nota para no volver a escribirles por aquí. ¡Muchos éxitos y que tengan un excelente día!'
+          suggestedRedirectAsk: 'Entendido y mil disculpas por escribir a este canal de atención médica/citas 🙌 ¿Habrá algún correo o número directo de administración o gerencia con quien podamos compartirles la información brevemente? 🤝'
         };
       }
     }
 
-    // 4. Verificar canal privado o personal
+    // 4. Verificar canal privado o personal (Oportunidad de Redirección Amable)
     for (const pattern of this.PRIVATE_CHANNEL_PATTERNS) {
       if (pattern.test(clean)) {
         return {
-          isRejection: true,
+          isRejection: false,
+          isChannelRedirect: true,
           category: 'WRONG_CHANNEL_PRIVATE',
           reason: `Número personal o privado: "${clean.substring(0, 60)}"`,
-          suggestedSignoff: 'Entendido y mil disculpas por escribir a un número privado. Ya registramos la exclusión de nuestra base. ¡Que tenga un excelente día!'
+          suggestedRedirectAsk: 'Entendido y mil disculpas por escribir a este número personal 🙌 ¿Habrá algún correo o número directo de administración o gerencia con quien podamos compartirles la propuesta brevemente? 🤝'
         };
       }
     }

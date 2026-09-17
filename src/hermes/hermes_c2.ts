@@ -251,6 +251,335 @@ export class HermesC2 {
       return { handled: true, replyMessage: menuMsg, actionExecuted: 'HELP_MENU' };
     }
 
+    // 0.75. Aprobación y Validación de Pagos (Comprobantes / Vouchers / Yape / Plin / Transferencias)
+    if (
+      lower === 'aprobar pago' ||
+      lower.startsWith('aprobar pago') ||
+      lower === 'pago aprobado' ||
+      lower === 'validar pago' ||
+      lower.startsWith('/aprobar_pago')
+    ) {
+      const parts = cleanText.split(/\s+/);
+      const targetPhone = parts.find(p => /^\+?\d{9,15}$/.test(p))?.replace(/[^0-9]/g, '');
+
+      let lead: any = null;
+      if (targetPhone) {
+        lead = await OutreachRepo.getLeadByPhone(targetPhone);
+      } else {
+        const pendingLeads = await OutreachRepo.getLeads({ status: 'PAYMENT_PENDING', limit: 1 });
+        if (pendingLeads && pendingLeads.length > 0) {
+          lead = pendingLeads[0];
+        }
+      }
+
+      if (!lead) {
+        return {
+          handled: true,
+          replyMessage: '⚠️ No se encontró ningún prospecto con pago pendiente de verificación.\nSi deseas aprobar uno específico, escribe: *aprobar pago <teléfono>*.'
+        };
+      }
+
+      await OutreachRepo.updateLeadStatus(lead.phone, 'CLOSED_WON');
+      await OutreachRepo.updateLeadCustomFields(lead.phone, {
+        paymentVerifiedAt: new Date().toISOString(),
+        paymentStatus: 'VERIFIED',
+        pendingShalomOnboarding: true
+      });
+
+      const { ShalomChatOnboarding } = await import('../logistics/shalom_chat_onboarding.js');
+      const welcomeMsg = ShalomChatOnboarding.getOnboardingWelcomeMessage(lead.companyName);
+
+      try {
+        const { BaileysEngine } = await import('../whatsapp/baileys_engine.js');
+        await BaileysEngine.getInstance().sendMessage(lead.phone, welcomeMsg);
+        await OutreachRepo.addChatMessage(lead.phone, 'assistant', welcomeMsg);
+      } catch (sendErr: any) {
+        console.error('[HermesC2] Error enviando mensaje de bienvenida al cliente:', sendErr.message);
+      }
+
+      const reply = 
+        `✅ *PAGO VERIFICADO Y APROBADO EXITOSAMENTE*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `🏢 Cliente: *${lead.companyName}*\n` +
+        `📱 Teléfono: *+${lead.phone}*\n` +
+        `🕒 Aprobado: *${new Date().toLocaleTimeString('es-PE')}*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `🚀 Se despachó la bienvenida y solicitud de credenciales de Shalom Pro al WhatsApp del cliente.`;
+
+      return { handled: true, replyMessage: reply, actionExecuted: 'PAYMENT_APPROVED' };
+    }
+
+    if (
+      lower === 'rechazar pago' ||
+      lower.startsWith('rechazar pago') ||
+      lower === 'pago rechazado' ||
+      lower.startsWith('/rechazar_pago')
+    ) {
+      const parts = cleanText.split(/\s+/);
+      const targetPhone = parts.find(p => /^\+?\d{9,15}$/.test(p))?.replace(/[^0-9]/g, '');
+
+      let lead: any = null;
+      if (targetPhone) {
+        lead = await OutreachRepo.getLeadByPhone(targetPhone);
+      } else {
+        const pendingLeads = await OutreachRepo.getLeads({ status: 'PAYMENT_PENDING', limit: 1 });
+        if (pendingLeads && pendingLeads.length > 0) {
+          lead = pendingLeads[0];
+        }
+      }
+
+      if (!lead) {
+        return {
+          handled: true,
+          replyMessage: '⚠️ No se encontró ningún prospecto con pago pendiente para rechazar.'
+        };
+      }
+
+      await OutreachRepo.updateLeadStatus(lead.phone, 'HUMAN_TAKEOVER', {
+        humanTakeoverAt: new Date().toISOString()
+      });
+      await OutreachRepo.updateLeadCustomFields(lead.phone, {
+        paymentRejectedAt: new Date().toISOString(),
+        paymentStatus: 'REJECTED'
+      });
+
+      const rejectMsg = 
+        `Hola 🙌, estuvimos verificando el comprobante enviado pero no logramos validarlo en cuenta en este momento.\n\n` +
+        `Kenneth de The Quant Partners se pondrá en contacto directo contigo por aquí en unos minutos para coordinar los detalles personalmente 🤝.`;
+
+      try {
+        const { BaileysEngine } = await import('../whatsapp/baileys_engine.js');
+        await BaileysEngine.getInstance().sendMessage(lead.phone, rejectMsg);
+        await OutreachRepo.addChatMessage(lead.phone, 'assistant', rejectMsg);
+      } catch (sendErr: any) {
+        console.error('[HermesC2] Error enviando aviso de rechazo al cliente:', sendErr.message);
+      }
+
+      const reply = 
+        `🚨 *PAGO RECHAZADO & TAKEOVER HUMANO ACTIVADO*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `🏢 Cliente: *${lead.companyName}*\n` +
+        `📱 Teléfono: *+${lead.phone}*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `Se le avisó al cliente que te comunicarás personalmente. El bot de IA ha sido silenciado para este prospecto.`;
+
+      return { handled: true, replyMessage: reply, actionExecuted: 'PAYMENT_REJECTED' };
+    }
+
+    // 0.76. Emisión de Guías Shalom (/guia <teléfono>)
+    if (
+      lower === 'guia' ||
+      lower.startsWith('/guia') ||
+      lower.startsWith('guia ') ||
+      lower.startsWith('emitir guia') ||
+      lower.startsWith('generar guia')
+    ) {
+      const parts = cleanText.split(/\s+/);
+      const targetPhone = parts.find(p => /^\+?\d{9,15}$/.test(p))?.replace(/[^0-9]/g, '');
+
+      let lead: any = null;
+      if (targetPhone) {
+        lead = await OutreachRepo.getLeadByPhone(targetPhone);
+      } else {
+        const recentLeads = await OutreachRepo.getLeads({ limit: 10 });
+        lead = recentLeads.find(l => 
+          l.status === 'PAYMENT_PENDING' || 
+          l.status === 'CLOSED_WON' || 
+          l.customFields?.destinationAgency || 
+          l.customFields?.dni
+        );
+      }
+
+      if (!lead) {
+        return {
+          handled: true,
+          replyMessage: '⚠️ No se encontró ningún comprador o pedido pendiente de emisión de guía.\nPara emitir una guía específica escribe: */guia <teléfono>*.'
+        };
+      }
+
+      const address = (lead.address || lead.customFields?.address || '').toLowerCase();
+      const city = (lead.customFields?.city || lead.customFields?.destinationCity || '').toLowerCase();
+      const isLocalLima = 
+        city.includes('lima') || 
+        city.includes('callao') || 
+        address.includes('lima') || 
+        address.includes('callao') || 
+        address.includes('miraflores') || 
+        address.includes('san isidro') || 
+        address.includes('surco') ||
+        address.includes('los olivos');
+
+      if (isLocalLima && !lead.customFields?.destinationAgency) {
+        const localNotice = 
+          `ℹ️ *DESPACHO LOCAL DETECTADO (LIMA / CALLAO)*\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `👤 Cliente: *${lead.companyName}* (+${lead.phone})\n` +
+          `📍 Dirección: *${lead.address || lead.customFields?.address || 'Lima Metropolitana'}*\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `Este pedido corresponde a despacho local vía motorizado o contra-entrega (no requiere guía de encomienda Shalom provincial).`;
+        return { handled: true, replyMessage: localNotice, actionExecuted: 'SHALOM_LOCAL_LIMA' };
+      }
+
+      const settings = await OutreachRepo.getSettings();
+      const shalomCreds = settings.shalomCredentials;
+
+      if (!shalomCreds || !shalomCreds.email) {
+        return {
+          handled: true,
+          replyMessage: 
+            `⚠️ *Shalom Pro no está configurado aún.*\n\n` +
+            `Por favor configura tus accesos de Shalom Pro escribiendo:\n` +
+            `\`/setup-shalom correo@ejemplo.com tu_clave Gamarra\``
+        };
+      }
+
+      const { ShalomNativeClient } = await import('../logistics/shalom_native_client.js');
+      const { ShalomAgenciesCatalog } = await import('../logistics/shalom_agencies.js');
+
+      const agencyName = lead.customFields?.destinationAgency || lead.customFields?.agency || city || 'Arequipa';
+      const destinationAgency = ShalomAgenciesCatalog.findBestMatch(agencyName);
+
+      const orderResult = await ShalomNativeClient.createOrder(
+        { email: shalomCreds.email, password: shalomCreds.password || '' },
+        {
+          originTerminalId: shalomCreds.originAgencyId || 1,
+          destinyTerminalId: destinationAgency.id,
+          productId: 3,
+          quantity: 1,
+          payer: 'sender',
+          declaracionJurada: lead.customFields?.productDescription || 'Prendas / Productos Live Shopping',
+          receiver: {
+            documentType: 'DNI',
+            document: lead.customFields?.dni || '00000000',
+            name: lead.companyName || 'Comprador',
+            lastName: lead.customFields?.lastName || 'Cliente',
+            surName: '',
+            phone: lead.phone
+          },
+          pickupCode: Math.floor(1000 + Math.random() * 9000).toString()
+        }
+      );
+
+      if (!orderResult.success) {
+        return {
+          handled: true,
+          replyMessage: `❌ Error al emitir guía en Shalom: ${orderResult.error || 'Fallo de conexión'}`
+        };
+      }
+
+      await OutreachRepo.updateLeadCustomFields(lead.phone, {
+        shalomGuide: orderResult.guia,
+        shalomCode: orderResult.codigo,
+        shalomLabelPdf: orderResult.labelPdfUrl,
+        shalomDestinyAgency: destinationAgency.name,
+        shalomEmittedAt: new Date().toISOString()
+      });
+      await OutreachRepo.updateLeadStatus(lead.phone, 'CLOSED_WON');
+
+      try {
+        const buyerMsg = 
+          `📦 *¡Tu pedido ya está registrado en Shalom!* 🎉\n\n` +
+          `• *N° de Guía:* ${orderResult.guia}\n` +
+          `• *Código de Retiro:* ${orderResult.codigo}\n` +
+          `• *Agencia Destino:* ${destinationAgency.name} (${destinationAgency.department})\n` +
+          `• *Dirección Agencia:* ${destinationAgency.address}\n\n` +
+          `Puedes consultar el avance de tu paquete en https://shalom.pe con tu número de guía 🙌.`;
+
+        const { BaileysEngine } = await import('../whatsapp/baileys_engine.js');
+        await BaileysEngine.getInstance().sendMessage(lead.phone, buyerMsg);
+        await OutreachRepo.addChatMessage(lead.phone, 'assistant', buyerMsg);
+      } catch (buyerErr: any) {
+        console.warn('[HermesC2] No se pudo enviar notificación de tracking al comprador:', buyerErr.message);
+      }
+
+      const reply = 
+        `✅ *GUÍA SHALOM GENERADA EXITOSAMENTE*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `📦 *N° Guía:* *${orderResult.guia}*\n` +
+        `🔑 *Código:* *${orderResult.codigo}*\n` +
+        `🏢 *Agencia Destino:* *${destinationAgency.name}* (${destinationAgency.department})\n` +
+        `👤 *Comprador:* ${lead.companyName} (+${lead.phone})\n` +
+        `📄 *Rótulo PDF:* ${orderResult.labelPdfUrl || 'Generado'}\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `🚀 Se le envió automáticamente la notificación y tracking al comprador en su WhatsApp.`;
+
+      return { handled: true, replyMessage: reply, actionExecuted: 'SHALOM_GUIDE_CREATED' };
+    }
+
+    // 0.77. Control del Bot de IA / Reactivación post-Handoff (/bot on [tel], /bot off [tel], /bot status [tel])
+    if (
+      lower.startsWith('/bot') ||
+      lower.startsWith('/ia') ||
+      lower === 'bot on' ||
+      lower === 'bot off' ||
+      lower === 'ia on' ||
+      lower === 'ia off'
+    ) {
+      const parts = cleanText.split(/\s+/);
+      const action = (parts[1] || 'status').toLowerCase();
+      const targetPhone = parts.find(p => /^\+?\d{9,15}$/.test(p))?.replace(/[^0-9]/g, '');
+
+      let lead: any = null;
+      if (targetPhone) {
+        lead = await OutreachRepo.getLeadByPhone(targetPhone);
+      } else {
+        const recent = await OutreachRepo.getLeads({ limit: 10 });
+        lead = recent.find(l => l.status === 'HUMAN_TAKEOVER' || !!l.humanTakeoverAt);
+      }
+
+      if (!lead) {
+        return {
+          handled: true,
+          replyMessage: '⚠️ No se especificó ningún cliente o no hay prospectos recientes en control humano.\nUsa: */bot on <teléfono>* o */bot off <teléfono>*.'
+        };
+      }
+
+      if (action === 'on' || action === 'activar' || action === 'prender' || action === 'start') {
+        await OutreachRepo.updateLeadStatus(lead.phone, 'REPLIED', {
+          humanTakeoverAt: null
+        });
+        await OutreachRepo.updateLeadCustomFields(lead.phone, {
+          manualReactivationAt: new Date().toISOString()
+        });
+
+        const reply = 
+          `🤖 *BOT DE IA REACTIVADO CON ÉXITO*\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `👤 Cliente: *${lead.companyName}* (+${lead.phone})\n` +
+          `🟢 Estado: *IA Activa (Respondiendo en 5s)*\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `A partir del próximo mensaje que envíe el cliente, el bot volverá a atender automáticamente.`;
+        return { handled: true, replyMessage: reply, actionExecuted: 'BOT_REACTIVATED' };
+      }
+
+      if (action === 'off' || action === 'pausar' || action === 'apagar' || action === 'stop') {
+        await OutreachRepo.updateLeadStatus(lead.phone, 'HUMAN_TAKEOVER', {
+          humanTakeoverAt: new Date().toISOString()
+        });
+
+        const reply = 
+          `👤 *CONTROL HUMANO ACTIVADO (BOT SILENCIADO)*\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `👤 Cliente: *${lead.companyName}* (+${lead.phone})\n` +
+          `🔴 Estado: *Human Takeover (IA Silenciada)*\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `El bot no responderá a este cliente hasta que envíes */bot on ${lead.phone}* o pasen 24h.`;
+        return { handled: true, replyMessage: reply, actionExecuted: 'BOT_PAUSED' };
+      }
+
+      const isLocked = lead.status === 'HUMAN_TAKEOVER' || !!lead.humanTakeoverAt;
+      const statusMsg = 
+        `📊 *ESTADO DEL BOT PARA EL PROSPECTO*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `👤 Cliente: *${lead.companyName}* (+${lead.phone})\n` +
+        `🤖 Estado: *${isLocked ? '🔴 Silenciado (Control Humano)' : '🟢 Activo (IA Atendiendo)'}*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `Comandos rápidos:\n` +
+        `• */bot on ${lead.phone}* : Encender IA\n` +
+        `• */bot off ${lead.phone}* : Silenciar IA`;
+      return { handled: true, replyMessage: statusMsg, actionExecuted: 'BOT_STATUS' };
+    }
+
     // 0.8. Aprobación y Gestión de Correos Corporativos (Zoho Mailer)
     if (
       lower === 'aprobar' || 
@@ -259,7 +588,7 @@ export class HermesC2 {
       lower === 'enviar email' || 
       lower === 'si, envialo' || 
       lower === 'sí, envíalo' ||
-      lower.startsWith('/aprobar') ||
+      (lower.startsWith('/aprobar') && !lower.startsWith('/aprobar_pago') && !lower.startsWith('/aprobar pago')) ||
       lower.startsWith('/enviar_correo')
     ) {
       const parts = cleanText.split(/\s+/);
@@ -362,11 +691,13 @@ export class HermesC2 {
         `📢 *Campañas Activas:* ${activeOutbound.length} outbound (${services.length} registradas)\n\n` +
         `📊 *Métricas del Ghost CRM:*\n` +
         `• Total Prospectos: *${summary.totalLeads}*\n` +
-        `• Contactados: *${summary.outreachSent}*\n` +
+        `• Contactados en Frío: *${summary.outreachSent}*\n` +
         `• Respuestas Recibidas: *${summary.replied}*\n` +
         `• Leads Calificados: *${summary.qualified}*\n` +
         `• Citas Agendadas: *${summary.meetingScheduled}*\n` +
         `• Ventas Cerradas: *${summary.closedWon}*\n` +
+        `• Rechazos / Descartados: *${summary.closedLost}*\n` +
+        `• Requieren Seguimiento: *${(summary.dueConversationalFollowUp || 0) + (summary.dueColdFollowUp || 0)}* (${summary.dueConversationalFollowUp || 0} en visto / ${summary.dueColdFollowUp || 0} en frío)\n` +
         `• Conversiones Meta CAPI: *${summary.metaCapiEventsFired}*\n\n` +
         `💰 *Ingresos Registrados:*\n` +
         `• USD: *$${summary.totalRevenueUSD.toLocaleString()}*\n` +
@@ -389,8 +720,8 @@ export class HermesC2 {
       const lima = AutonomousPipeline.getLimaTime();
       const status = AutonomousPipeline.getStatus();
       let slotDesc = '🌙 Fuera de horario comercial (Outbound en pausa)';
-      if (status.currentSlot === 'USA_MORNING') {
-        slotDesc = '🇺🇸 *Bloque Mañanas USA* (Activo ahora)';
+      if (status.currentSlot === 'PERU_MORNING' || status.currentSlot === 'USA_MORNING') {
+        slotDesc = '🇵🇪 *Bloque Mañanas Perú* (Activo ahora)';
       } else if (status.currentSlot === 'LUNCH_PAUSE') {
         slotDesc = '🍽️ *Pausa de Almuerzo Anti-Bot* (Activo ahora)';
       } else if (status.currentSlot === 'PERU_AFTERNOON') {
@@ -402,15 +733,15 @@ export class HermesC2 {
         `━━━━━━━━━━━━━━━━━━━━\n` +
         `🕒 *Hora actual en Lima:* ${lima.timeStr} PET (UTC-5)\n` +
         `📍 *Bloque actual:* ${slotDesc}\n\n` +
-        `⏰ *RANGOS HORARIOS OUTBOUND (Prospección en Frío):*\n` +
-        `• 🇺🇸 *Mañanas USA (09:00 AM – 01:00 PM PET):*\n` +
-        `  ↳ Campañas para Estados Unidos (Realtors Florida/Texas, Abogados, etc.).\n` +
+        `⏰ *RANGOS HORARIOS OUTBOUND (Prospección en Frío - Todo el Perú):*\n` +
+        `• 🇵🇪 *Mañanas Perú (09:00 AM – 01:00 PM PET):*\n` +
+        `  ↳ Campañas para todo el Perú (Live Commerce TikTok/Instagram, tiendas moda/calzado/tech).\n` +
         `• 🍽️ *Pausa de Almuerzo (01:00 PM – 02:00 PM PET):*\n` +
         `  ↳ Cero envíos en frío. Pausa preventiva humana anti-bloqueo.\n` +
-        `• 🇵🇪 *Tardes Perú (02:00 PM – 06:30 PM PET):*\n` +
-        `  ↳ Campañas para Perú (Clínicas, Constructoras, WhatsApp B2B).\n` +
-        `• 🌙 *Pausa Nocturna (06:30 PM – 09:00 AM PET):*\n` +
-        `  ↳ Cero envíos en frío para evitar reportes de spam fuera de oficina.\n\n` +
+        `• 🇵🇪 *Tardes Perú (02:00 PM – 07:00 PM PET):*\n` +
+        `  ↳ Segundo bloque de prospección y scraping en todo el Perú (hasta las 19:00).\n` +
+        `• 🌙 *Pausa Nocturna (07:00 PM – 09:00 AM PET):*\n` +
+        `  ↳ Cero envíos en frío. Apagado nocturno y reporte de cierre a las 19:00. IA Inbound 24/7 activa.\n\n` +
         `⚡ *ATENCIÓN INBOUND (Setter IA 24/7):*\n` +
         `• *Activa 24/7 sin excepción.* Si cualquier prospecto responde de día, noche o fin de semana, la IA le atiende al instante en segundos.\n\n` +
         `🛡️ *CADENCIA Y PROTECCIÓN ANTI-BAN:*\n` +
@@ -720,6 +1051,9 @@ export class HermesC2 {
         `📅 *5. Citas Agendadas:* ${summary.meetingScheduled}\n` +
         `🏆 *6. Ventas Ganadas:* ${summary.closedWon}\n` +
         `🛑 *7. Rechazos / Opt-Out:* ${summary.closedLost}\n` +
+        `🔄 *8. Requieren Seguimiento:*\n` +
+        `   • Anti-Ghosting (>24h en visto): *${summary.dueConversationalFollowUp || 0}*\n` +
+        `   • En Frío (>48h sin respuesta): *${summary.dueColdFollowUp || 0}*\n` +
         `━━━━━━━━━━━━━━━━━━━━\n` +
         `💰 *Ingresos Totales:* *$${summary.totalRevenueUSD.toLocaleString()} USD* | *S/. ${summary.totalRevenuePEN.toLocaleString()} PEN*\n` +
         `📡 *Eventos Meta CAPI:* ${summary.metaCapiEventsFired} eventos offline sincronizados con el Pixel.\n\n` +
@@ -1365,7 +1699,7 @@ export class HermesC2 {
             `\`/provision "Nombre Empresa" nicho adminPhone "Nombre1:Tel1,Nombre2:Tel2"\`\n\n` +
             `*Ejemplo:*\n` +
             `\`/provision "Clínica Sonrisas" clinicas_salud 51999888777 "Dr. Carlos:51911122233,Dra. Maria:51944455566"\`\n\n` +
-            `*Nichos disponibles:* clinicas_salud, inmobiliarias, estudios_abogados, construccion_b2b, custom`;
+            `*Nichos disponibles:* clinicas_salud, inmobiliarias, estudios_abogados, construccion_b2b, live_commerce, custom`;
           return { handled: true, replyMessage: help, actionExecuted: 'PROVISION_HELP' };
         }
 
@@ -1455,16 +1789,19 @@ Hablas con el gerente comercial por WhatsApp con tono consultivo, respetuoso, co
 DATOS ACTUALES DEL EMBUDO DE VENTAS (GHOST CRM):
 - Total Prospectos: ${summary.totalLeads}
 - Prospectos Contactados: ${summary.outreachSent}
-- Respondieron: ${summary.replied}
+- Respondieron (Mostraron interés inicial): ${summary.replied}
 - Calificados por IA: ${summary.qualified}
 - Citas Agendadas: ${summary.meetingScheduled}
 - Ventas Cerradas: ${summary.closedWon}
+- Rechazos / No interesados / Opt-Out: ${summary.closedLost}
+- Leads que requieren seguimiento HOY: ${(summary.dueConversationalFollowUp || 0) + (summary.dueColdFollowUp || 0)} (${summary.dueConversationalFollowUp || 0} anti-ghosting en visto, ${summary.dueColdFollowUp || 0} en frío)
 - Ingresos USD: $${summary.totalRevenueUSD}
 - Ingresos PEN: S/. ${summary.totalRevenuePEN}
 - Sincronizaciones Meta CAPI: ${summary.metaCapiEventsFired}
 
 INSTRUCCIONES:
 - Responde de forma clara y directa (máximo 2 párrafos breves).
+- Si te preguntan por interesados, respuestas, rechazos o seguimientos pendientes, responde de inmediato con las cifras exactas del embudo.
 - Si te piden acciones, sugiéreles los comandos disponibles: /pipeline, /equipo, /vendedor nuevo, /vendedor baja, /setter, /setpixel, /alertas, /leads, /lead <tel>, /won <tel> <monto>, /status, /manual.
 - NUNCA menciones scraping, Outscraper, proxies ni costos de infraestructura técnica interna.`;
     } else {
@@ -1482,13 +1819,13 @@ INSTRUCCIONES:
       const pipelineStatus = AutonomousPipeline.getStatus();
       const limaTime = AutonomousPipeline.getLimaTime();
 
-      let slotDescription = 'Fuera de Horario (Pausa Nocturna 6:30 PM - 9:00 AM). Prospección saliente y scraping apagados; setter inbound 24/7 activo.';
-      if (pipelineStatus.currentSlot === 'USA_MORNING') {
-        slotDescription = 'Bloque Mañanas USA (9:00 AM - 1:00 PM). Prospección y scraping activos en Florida y Texas.';
+      let slotDescription = 'Fuera de Horario (Pausa Nocturna 7:00 PM - 9:00 AM). Prospección saliente y scraping apagados; setter inbound 24/7 activo.';
+      if (pipelineStatus.currentSlot === 'PERU_MORNING' || pipelineStatus.currentSlot === 'USA_MORNING') {
+        slotDescription = 'Bloque Mañanas Perú (9:00 AM - 1:00 PM). Prospección y scraping activos en todo el Perú.';
       } else if (pipelineStatus.currentSlot === 'LUNCH_PAUSE') {
         slotDescription = 'Pausa de Almuerzo Anti-Bot (1:00 PM - 2:00 PM). Envíos en frío y scraping pausados.';
       } else if (pipelineStatus.currentSlot === 'PERU_AFTERNOON') {
-        slotDescription = 'Bloque Tardes Perú (2:00 PM - 6:30 PM). Prospección y scraping activos en Lima y provincias.';
+        slotDescription = 'Bloque Tardes Perú (2:00 PM - 7:00 PM). Prospección y scraping activos en todo el Perú.';
       }
 
       const masterDoc = HermesC2.getMasterDocumentation();
@@ -1504,33 +1841,55 @@ HORA Y ESTADO EN VIVO DEL SISTEMA (ZONA OFICIAL LIMA, PERÚ - UTC-5):
 - Hora actual exacta: ${limaTime.timeStr} (PET)
 - Bloque horario en curso: ${slotDescription}
 - Motor de Prospección Autónomo: ${pipelineStatus.isRunning ? 'ACTIVO Y DESPACHANDO' : 'PAUSADO'}
-- Prospectos contactados hoy: ${pipelineStatus.sentToday} (Mañanas USA: ${pipelineStatus.sentMorning})
+- Prospectos contactados hoy: ${pipelineStatus.sentToday} (Mañanas: ${pipelineStatus.sentMorning})
 - Atención Inbound WhatsApp: ACTIVA 24/7 (nunca duerme)
 
 REGLAS DE HORARIOS Y SCRAPING (COMPRENSIÓN NATURAL DE OPERACIONES):
-1. BLOQUES COMERCIALES OFICIALES (PET):
-   - Mañanas USA (Florida / Texas): 9:00 AM a 1:00 PM (13:00).
+1. BLOQUES COMERCIALES OFICIALES (PET - TODO EL PERÚ):
+   - Mañanas Perú: 9:00 AM a 1:00 PM (13:00).
    - Pausa de Almuerzo Anti-Bot: 1:00 PM a 2:00 PM (14:00). Cero prospección en frío.
-   - Tardes Perú (Lima / Provincias): 2:00 PM a 6:30 PM (18:30).
-2. APAGADO EXACTO A LAS 18:30 (6:30 PM):
-   - A las 18:30 PET en punto, TODO el motor de prospección saliente y el scraping autónomo SE APAGAN por la noche hasta las 9:00 AM del día siguiente, y se despacha el reporte nocturno de cierre.
-   - Si Kenneth te pregunta algo como "¿en 1 minuto se pausa el scraper no?" cuando son las 18:29 o cerca de las 18:30, la respuesta es SÍ: a las 18:30 se detiene el outbound y el scraper por la noche.
+   - Tardes Perú: 2:00 PM a 7:00 PM (19:00).
+2. APAGADO EXACTO A LAS 19:00 (7:00 PM):
+   - A las 19:00 PET en punto, TODO el motor de prospección saliente y el scraping autónomo SE APAGAN por la noche hasta las 9:00 AM del día siguiente, y se despacha el reporte nocturno de cierre.
+   - Si Kenneth te pregunta si a las 19:00 se apaga el scraper u outbound, la respuesta es SÍ: a las 19:00 se detiene el outbound y el scraper por la noche.
 3. CÓMO OPERA EL SCRAPER DE OUTSCRAPER:
    - Se activa de forma autónoma ÚNICAMENTE si el buffer de prospectos de una campaña baja de 15 leads Y SIEMPRE dentro de las horas comerciales activas (nunca de noche ni en hora de almuerzo).
 
 DATOS ACTUALES DEL GHOST CRM:
 - Total Leads: ${summary.totalLeads}
 - Prospectos Contactados: ${summary.outreachSent}
-- Respondieron: ${summary.replied}
-- Calificados: ${summary.qualified}
+- Respondieron (Mostraron interés inicial): ${summary.replied}
+- Calificados por IA (Alta intención de compra / agendamiento): ${summary.qualified}
 - Citas Agendadas: ${summary.meetingScheduled}
-- Ventas Cerradas: ${summary.closedWon}
+- Ventas Cerradas (Ganadas): ${summary.closedWon}
+- Rechazos / No interesados / Opt-Out: ${summary.closedLost}
+- Leads que requieren seguimiento HOY:
+  * Seguimiento Anti-Ghosting (>24h sin contestar en chat activo): ${summary.dueConversationalFollowUp || 0}
+  * Seguimiento en frío (>48h sin responder primer mensaje): ${summary.dueColdFollowUp || 0}
+  * Total requiriendo seguimiento: ${(summary.dueConversationalFollowUp || 0) + (summary.dueColdFollowUp || 0)}
 - Ingresos USD: $${summary.totalRevenueUSD}
 - Ingresos PEN: S/. ${summary.totalRevenuePEN}
 - Eventos Meta CAPI Disparados: ${summary.metaCapiEventsFired}
 
 SALDOS Y CONSUMO EN TIEMPO REAL:${creditsPrompt}
 ${docPrompt}
+
+ARQUITECTURA DE 4 AGENTES DE IA EN PARALELO & ESTRATEGIA COMERCIAL:
+1. LOS 4 AGENTES OPERANDO EN PARALELO:
+   - Agente 1 (Prospección Activa): Mapeo y contacto continuo de prospectos calificados en Google Maps/Meta para inyectar flujo constante semana a semana.
+   - Agente 2 (Atención 24/7 en 5s con IA): Respuesta inmediata día y noche, precalificación de presupuesto e intención real, filtrado de curiosos.
+   - Agente 3 (Seguimiento Anti-Ghosting): Recontacto automático tras 24h a prospectos en REPLIED que dejaron de contestar a mitad de chat (recupera hasta un 40% de ventas).
+   - Agente 4 (Sincronización CRM & Alertas): Sus asesores reciben directo en WhatsApp las alertas listas para cerrar con el cliente listo.
+2. MATRIZ OFICIAL DE PRECIOS REGIONAL:
+   - PERÚ Y LATAM (+51):
+     * Mensualidad plana: $450 a $800 USD/mes según volumen de prospección y conversaciones.
+     * Setup / Instalación: Llave en mano en 48h ($350 - $500 USD en llamada de Meet, bonificable con pago trimestral).
+   - USA COMUNIDAD LATINA (+1 / Florida, Texas, etc.):
+     * Mensualidad plana: $850 a $1,500 USD/mes según volumen.
+     * Setup / Instalación: Llave en mano en 48h ($750 - $1,200 USD en llamada de Meet, bonificable con pago trimestral).
+   - AS BAJO LA MANGA DE KENNETH (COSTE DE TRANSFERENCIA / ÉXITO):
+     * $25 - $50 USD por cita calificada agendada.
+     * ESTRICTAMENTE PROHIBIDO mencionarlo de inicio en WhatsApp por el bot. Es tu carta ganadora exclusiva en el Meet si el cliente pide pagar por resultados.
 
 PERSONALIDAD Y TONO DE COMUNICACIÓN (CERO ACARTONAMIENTO):
 1. CERO FORMALISMOS ROBÓTICOS: NUNCA empieces con encabezados fríos de carta tipo "Kenneth," ni termines con "Saludos." o firmas burocráticas.
@@ -1540,6 +1899,12 @@ PERSONALIDAD Y TONO DE COMUNICACIÓN (CERO ACARTONAMIENTO):
    - Responde con sentido común a preguntas cotidianas teniendo en cuenta la hora actual (${limaTime.timeStr}) y el estado del negocio.
    - Si te preguntan si algo se pausa o arranca, evalúa la hora actual contra los horarios del sistema y responde claro.
    - Si te preguntan cómo vamos, dales un pulso rápido con métricas y saldo.
+   - Si Kenneth te pregunta cuántas personas interesadas tenemos, cuántos mostraron interés, cuántos nos rechazaron o cuántos requieren seguimiento:
+     * Mostraron interés / Respondieron (abrieron conversación en frío): ${summary.replied} prospectos.
+     * Calificados con alta intención de compra (listos para Meet / cierre): ${summary.qualified} prospectos.
+     * Rechazos / No interesados / Opt-Out: ${summary.closedLost} prospectos (descartados limpiamente sin insistir).
+     * Requieren seguimiento HOY: ${(summary.dueConversationalFollowUp || 0) + (summary.dueColdFollowUp || 0)} prospectos en total (${summary.dueConversationalFollowUp || 0} anti-ghosting que nos dejaron en visto en chat activo >24h, y ${summary.dueColdFollowUp || 0} en frío que no respondieron el primer mensaje >48h).
+     Responde siempre con estas cifras exactas, de forma conversacional y enérgica.
    - Si te piden comandos de acción (/status, /saldo, /pipeline, /pausa, /reanudar, /leads, /won, /provision), ejecútalos o indícales el comando rápido.
    - Si piden tocar código o git, recuérdale con buen humor que esas tareas de ingeniería las ejecuta Smith / Antigravity en la consola, mientras tú cuidas la operación en caliente por WhatsApp.`;
     }

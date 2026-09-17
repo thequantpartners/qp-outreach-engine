@@ -13,7 +13,8 @@ export type LeadStatus =
   | 'NO_RESPONSE'
   | 'HUMAN_TAKEOVER'
   | 'INVALID_PHONE'
-  | 'OPT_OUT';
+  | 'OPT_OUT'
+  | 'PAYMENT_PENDING';
 
 export type ClosingType = 'MEETING_LINK' | 'PAYMENT_INFO' | 'VALUE_ASSET' | 'HUMAN_TAKEOVER';
 
@@ -131,6 +132,12 @@ export interface CampaignSettings {
   managerLeadAlertsEnabled?: boolean;
   companyName?: string;
   publicUrl?: string;
+  shalomCredentials?: {
+    email: string;
+    password?: string;
+    originAgencyId: number;
+    originAgencyName: string;
+  };
 }
 
 export const SendMessageSchema = z.object({

@@ -65,12 +65,12 @@ flowchart TB
     subgraph Pipeline ["2. Orquestador Autónomo Anti-Ban"]
         PG --> AutoPipe["AutonomousPipeline (Monitor de Turnos)"]
         AutoPipe --> Turnos{"Bloque Activo (Hora Lima)"}
-        Turnos -- "09:00 - 13:00 PET" --> SlotUSA["🇺🇸 Outbound USA (Realtors / Abogados)"]
+        Turnos -- "09:00 - 13:00 PET" --> SlotPeruAM["🇵🇪 Outbound Perú Mañanas (Live Commerce / Tiendas)"]
         Turnos -- "13:00 - 14:00 PET" --> SlotLunch["🍽️ Pausa Almuerzo Anti-Bot (Cero Envíos)"]
-        Turnos -- "14:00 - 18:30 PET" --> SlotPeru["🇵🇪 Outbound Perú (Clínicas / Constructoras)"]
-        Turnos -- "18:30 - 09:00 PET" --> SlotNight["🌙 Pausa Nocturna (Outbound en Silencio)"]
-        SlotUSA --> Pacer["Cadencia Anti-Ban: Delays 180s-300s (Máx 35/día)"]
-        SlotPeru --> Pacer
+        Turnos -- "14:00 - 19:00 PET" --> SlotPeruPM["🇵🇪 Outbound Perú Tardes (Live Commerce / Tiendas)"]
+        Turnos -- "19:00 - 09:00 PET" --> SlotNight["🌙 Pausa Nocturna (Outbound en Silencio)"]
+        SlotPeruAM --> Pacer["Cadencia Anti-Ban: Delays 180s-300s (Máx 35/día)"]
+        SlotPeruPM --> Pacer
         Pacer --> CircuitBreaker{"¿10 mensajes seguidos\nsin respuesta?"}
         CircuitBreaker -- Sí --> Cooldown["🚨 Pausa Preventiva 45 min"]
         CircuitBreaker -- No --> WASend["Baileys v7 / Meta Cloud API Engine"]
@@ -82,7 +82,7 @@ flowchart TB
         RejectionCheck -- "Rechazo / No Interés" --> OptOut["Despedida Corta + [ACTION:OPT_OUT] (Silencio)"]
         RejectionCheck -- "Conversación Activa" --> SetterEngine["SetterEngine (Gemini 2.5 Flash)"]
         SetterEngine --> MultiQuestion{"¿Pregunta Precio / Cómo Funciona?"}
-        MultiQuestion -- Sí --> Transparente["Síntesis Limpia 2-3 Párrafos ($350-$600/mes)"]
+        MultiQuestion -- Sí --> Transparente["Síntesis 3 Viñetas ($450-$800 PE / $850-$1500 USA)"]
         MultiQuestion -- Conversión Real --> HandoffTag["[ACTION:TRANSFER_KENNETH / QUALIFIED]"]
         Transparente --> WaitConversion["Espera Intención de Conversión (No Califica)"]
     end

@@ -1,0 +1,42 @@
+{
+  "id": "live_commerce",
+  "nicheName": "Live Shopping & Ventas Flash (TikTok / Instagram / Facebook)",
+  "description": "Asistente de alta velocidad para tiendas y creadores que venden en transmisiones en vivo. Responde catálogo, tallas y precios en 3s. Cuando el comprador dice \"ya quiero pagar\", hace handoff al dueño para el cobro por Yape/banco.",
+  "recommendedClosingMode": "HUMAN_TAKEOVER",
+  "defaultApifyQueries": [
+    "tiendas de ropa gamarra lima",
+    "boutiques moda miraflores lima",
+    "importaciones celulares tablets lima",
+    "tiendas zapatillas calzado gamarra lima",
+    "distribuidora accesorios moda lima"
+  ],
+  "defaultTargetLocations": [
+    "Lima, Peru"
+  ],
+  "outreachTemplate": "Buenas tardes al equipo de {{name}} 🛍️✨.\n\nLe escribe el asistente virtual de Kenneth Herrera en The Quant Partners.\n\nEstuvimos viendo el volumen comercial y de pedidos que generan en sus transmisiones en vivo 🔥.\n\nSin embargo, durante un Live es casi imposible responder a tiempo los 100 o 200 WhatsApps que caen en simultáneo, y se pierden muchas ventas porque el comprador se enfría si no le contestan en el acto.\n\nImplementamos un Asistente con IA para Lives que responde en 3 segundos con su stock, confirma tallas/colores y les transfiere al cliente listo cuando dice \"ya quiero pagar\" para que ustedes solo cobren por Yape y aseguren el dinero.\n\n¿Tienen transmisiones programadas esta semana? ¿Le gustaría que en su próximo Live el bot atienda a los curiosos mientras ustedes solo entran a cobrar?",
+  "followUpTemplate1": "Buenas tardes equipo de {{name}} ✨. Le escribe el asistente de Kenneth.\n\nSabemos que en las transmisiones se escapan entre 15 a 30 pedidos por no contestar en los primeros 3 minutos. ¿Pudieron revisar los planes para su próxima transmisión?",
+  "followUpTemplate2": "Último mensaje de seguimiento 🙌. Si ya tienen cubierto su equipo de atención inmediata en WhatsApp para sus transmisiones, no se preocupen. ¡Muchos éxitos en sus ventas!",
+  "systemPromptTemplate": "Eres la Asistente de Ventas y Atención en Vivo de {{companyName}} 🛍️✨.\nHablas con clientes y seguidores que están viendo o acaban de ver la transmisión en vivo (TikTok / Instagram / Facebook Live).\nTu misión es brindar atención inmediata en segundos, responder dudas de productos, tallas, colores y precios reales, y transferir al cliente al dueño cuando esté listo para pagar.\n\nENERGÍA Y ESTILO CONVERSACIONAL:\n1. Tono 100% humano, súper dinámico, alegre, cálido y cercano (como una asesora de ventas experta). Usa de 1 a 2 emojis naturales por mensaje (✨, 🔥, 👗, 📦, 🙌, 👌, 💖).\n2. Respuestas ágiles y breves (máximo 1 a 2 oraciones). En los Lives la gente compra por emoción: no los aburras con textos largos.\n\nFLUJO DE ATENCIÓN Y CALIFICACIÓN:\n1. CAPTURA DEL PRODUCTO: Si el cliente escribe \"PROMO\", \"PRECIO\", \"QUIERO\" o menciona una prenda/artículo del Live, saluda con entusiasmo y pregúntale qué modelo, talla o color busca y su ciudad/distrito.\n2. INFORMACIÓN REAL Y PRECIOS: Brinda con total transparencia los precios, promociones activas del Live y condiciones de delivery según la base de conocimiento de la tienda.\n3. CONFIRMACIÓN DE PEDIDO: Valida la talla, color y disponibilidad del producto.\n\nREGLA INMUTABLE DE COBROS (EL BOT NO COBRA DIRECTAMENTE):\n- ESTRICTAMENTE PROHIBIDO que el bot solicite dinero, envíe números de Yape/Plin o cuentas bancarias.\n- El bot únicamente da información y califica el pedido.\n\nMOMENTO DEL HANDOFF AL DUEÑO ([ACTION:QUALIFIED]):\n- ÚNICAMENTE cuando el cliente indique intención de pago o cierre:\n  * \"Ya quiero pagar\", \"Cómo pago\", \"Pásame la cuenta\", \"Quiero comprarlo\", \"Lo quiero ya\", \"Sepáramelo\".\n- Responde con calidez inmediata:\n  \"¡Buenísimo! 🙌 Ya te tengo separado tu pedido. Te comunico de inmediato con el encargado por este mismo chat para que te brinde los datos de pago y coordine tu entrega. En un instante te escribe 🤝.\"\n- Y agrega al final el tag de transferencia:\n  [ACTION:QUALIFIED:pedido_listo_para_pago|producto_y_talla]\n- El bot se silenciará automáticamente para que el dueño tome el control del chat y efectúe el cobro.",
+  "typicalObjections": [
+    {
+      "objection": "¿Hacen envíos contra-entrega?",
+      "responseGuidance": "Contamos con opciones de delivery seguro. Al momento de coordinar el pago, nuestro encargado te confirmará si tu distrito aplica para contra-entrega o envío express."
+    },
+    {
+      "objection": "¿Cuánto cuesta el envío y cuánto demora en llegar?",
+      "responseGuidance": "El delivery en Lima toma de 24 a 48 horas (regularmente S/. 10 a S/. 15 según distrito). A provincias enviamos por Shalom u Olva Courier y llega en 24 a 72 horas con clave de rastreo."
+    },
+    {
+      "objection": "¿Tienen cambio de talla si no me queda?",
+      "responseGuidance": "¡Claro que sí! Tienes hasta 5 días para solicitar cambio de talla conservando las etiquetas y la prenda en perfecto estado. ¡Queremos que te quede impecable! ✨"
+    },
+    {
+      "objection": "¿Cómo sé que la compra es segura y no me van a estafar?",
+      "responseGuidance": "Totalmente entendible tu consulta 🙌. Somos una marca registrada con RUC activo, cientos de clientes satisfechos y cuentas oficiales a nombre de la empresa. Puedes revisar los testimonios destacados en nuestro perfil oficial."
+    },
+    {
+      "objection": "¿Tienen tienda física para ir a probarme?",
+      "responseGuidance": "Nos enfocamos en venta online directa de fábrica para darte estos precios de liquidación de Live, pero contamos con despacho seguro y garantía de cambio de talla."
+    }
+  ]
+}
