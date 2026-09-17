@@ -830,19 +830,8 @@ export class BaileysEngine {
           lastCustomerMessageAt: new Date().toISOString()
         });
 
-        // 4.05. Detección Temprana de Solicitud de Humano / Frustración / Bucle de Repetición
-        const chatHistory = await OutreachRepo.getChatHistory(senderPhone, 6);
-        const convCheck = HandoffManager.checkConversationalTriggers(incomingText, chatHistory);
-        if (convCheck.shouldHandoff) {
-          await HandoffManager.triggerHandoff({
-            senderPhone,
-            reason: convCheck.reason || 'USER_REQUESTED_HUMAN',
-            reasonText: convCheck.reasonText || 'Solicitud de atención humana',
-            incomingText,
-            leadName: lead.companyName
-          });
-          continue;
-        }
+        // 4.05. NOTA: Las respuestas conversacionales y calificación son manejadas 100% por SetterEngine.
+        // Se desactiva la intercepción temprana por palabras clave/repetición para permitir que la IA responda fluidamente.
 
         // Sincronizar etiqueta de WhatsApp a "💬 En Conversación"
         try {
