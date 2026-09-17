@@ -830,47 +830,50 @@ export class BaileysEngine {
           lastCustomerMessageAt: new Date().toISOString()
         });
 
-        // 4.05. NOTA: Las respuestas conversacionales y calificación son manejadas 100% por SetterEngine.
-        // Se desactiva la intercepción temprana por palabras clave/repetición para permitir que la IA responda fluidamente.
-
-        // Sincronizar etiqueta de WhatsApp a "💬 En Conversación"
+        // 4.05. Despacho Automatizado de Correos Corporativos (Zoho Mail) si el prospecto proporciona su email
         try {
-          const { WhatsAppLabelManager } = await import('./label_manager.js');
-          await WhatsAppLabelManager.syncLeadLabel(this.sock, senderPhone, 'REPLIED', lead.status);
-        } catch {}
+          const { EmailDispatcher } = await import('../email/email_dispatcher.js');
+          const extractedEmail = EmailDispatcher.extractEmailFromText(incomingText);
+          if (extractedEmail && !EmailDispatcher.hasAlreadyReceivedEmail(lead)) {
+            console.log(`📧 [EmailDispatcher] Correo detectado en mensaje de ${senderPhone}: "${extractedEmail}". Generando borrador híbrido...`);
+            const draft = await EmailDispatcher.generateEmailDraft(lead, extractedEmail, incomingText);
 
-        // Notificar al AutonomousPipeline que hubo respuesta (resetea contador del Circuit Breaker anti-ban)
-        try {
-          const { AutonomousPipeline } = await import('../pipeline/autonomous_pipeline.js');
-          AutonomousPipeline.recordLeadReply(senderPhone);
-        } catch {}
+            // 1. Responder inmediatamente al lead por WhatsApp con tono cálido como asistente virtual
+            const leadAckMessage = `¡Excelente! 🙌 Ya le pasé los datos a Kenneth para enviarte la propuesta oficial a tu correo. En breve te estará llegando desde partners@thequantpartners.com 📧🤝`;
+            const jid = `${senderPhone}@s.whatsapp.net`;
+            await this.sock?.sendMessage(jid, { text: leadAckMessage });
+            await OutreachRepo.addChatMessage(senderPhone, 'assistant', leadAckMessage);
 
-        // 4.1. Evaluar si el AI Setter debe calificar y responder en 5s (Protegido con Circuit Breaker de 12s)
-        try {
-          const { SetterEngine } = await import('../ai/setter_engine.js');
+            // 2. Notificar inmediatamente a Kenneth para aprobación rápida en 1 clic
+            const adminPhone = (settings.adminWhatsAppPhone || process.env.ADMIN_WHATSAPP_PHONE || '51902105668').replace(/[^0-9]/g, '');
+            if (adminPhone) {
+              const approvalAlert = 
+                `📧 *NUEVO CORREO LISTO PARA APROBACIÓN*\n` +
+                `━━━━━━━━━━━━━━━━━━━━\n` +
+                `🏢 Empresa: *${lead.companyName}*\n` +
+                `📱 Teléfono: *+${senderPhone}*\n` +
+                `📬 Destinatario: *${extractedEmail}*\n` +
+                `📝 Asunto: *${draft.subject}*\n` +
+                `━━━━━━━━━━━━━━━━━━━━\n` +
+                `📄 *Vista Previa del Correo:*\n` +
+                `"${draft.text.substring(0, 260)}..."\n` +
+                `━━━━━━━━━━━━━━━━━━━━\n` +
+                `👉 *Para enviar ahora:* Responde *aprobar* (o *enviar correo*)\n` +
+                `👉 *Para descartar:* Responde *cancelar*`;
 
-          // Circuit Breaker: Timeout estricto de 12 segundos
-          const timeoutPromise = new Promise<{ isTimeout: true }>((resolve) =>
-            setTimeout(() => resolve({ isTimeout: true }), 12000)
-          );
-
-          const setterPromise = SetterEngine.processMessage(lead, incomingText, matchedService);
-          const outcome = await Promise.race([setterPromise, timeoutPromise]);
-
-          if ('isTimeout' in outcome && outcome.isTimeout) {
-            console.warn(`⏱️ [BaileysEngine] Circuit Breaker: Timeout de 12s alcanzado en SetterEngine para +${senderPhone}. Ejecutando Handoff Graceful...`);
-            await HandoffManager.triggerHandoff({
-              senderPhone,
-              reason: 'TECHNICAL_TIMEOUT',
-              reasonText: 'El motor de IA excedió el tiempo límite de respuesta (12s)',
-              errorDetail: 'Timeout en llamada a proveedor LLM',
-              incomingText,
-              leadName: lead.companyName
-            });
+              await this.sock?.sendMessage(`${adminPhone}@s.whatsapp.net`, { text: approvalAlert });
+              console.log(`📢 [EmailDispatcher] Alerta de aprobación enviada a Kenneth (${adminPhone}).`);
+            }
             continue;
           }
+        } catch (emailErr: any) {
+          console.error('[BaileysEngine] Error procesando correo automático:', emailErr.message);
+        }
 
-          const setterRes = outcome as any;
+        // 4.1. Evaluar si el AI Setter debe calificar y responder en 5s
+        try {
+          const { SetterEngine } = await import('../ai/setter_engine.js');
+          const setterRes = await SetterEngine.processMessage(lead, incomingText, matchedService);
           if (setterRes.replyText && setterRes.replyText.trim().length > 0) {
             const jid = `${senderPhone}@s.whatsapp.net`;
             await this.sock?.sendMessage(jid, { text: setterRes.replyText });
@@ -882,41 +885,7 @@ export class BaileysEngine {
             continue;
           }
         } catch (setterErr: any) {
-          console.error('[BaileysEngine] Error crítico ejecutando SetterEngine:', setterErr.message);
-          await HandoffManager.triggerHandoff({
-            senderPhone,
-            reason: 'TECHNICAL_EXCEPTION',
-            reasonText: 'Excepción técnica no controlada en el motor de IA',
-            errorDetail: setterErr.message,
-            incomingText,
-            leadName: lead.companyName
-          });
-          continue;
-        }
-
-        // Transmitir al Dashboard en tiempo real
-        // 4.5. Comprobar si el prospecto está activando o avanzando en la DEMO interactiva de su nicho
-        const { InteractiveDemoEngine } = await import('../ai/demo_flow.js');
-        const demoRes = InteractiveDemoEngine.getStepResponse(lead, incomingText);
-
-        if (demoRes.shouldReply && demoRes.replyText) {
-          console.log(`🤖 [BaileysEngine] Despachando paso de DEMO interactiva (Paso ${demoRes.nextStep}) a ${lead.companyName} (${senderPhone})...`);
-          const jid = `${senderPhone}@s.whatsapp.net`;
-          await this.sock?.sendMessage(jid, { text: demoRes.replyText });
-          await OutreachRepo.addChatMessage(senderPhone, 'assistant', demoRes.replyText);
-          await OutreachRepo.updateLeadCustomFields(senderPhone, { demoStep: demoRes.nextStep });
-
-          if (demoRes.isCompleted) {
-            const alertCompleted = 
-              `🎯 *¡DEMO INTERACTIVA COMPLETADA POR PROSPECTO!*\n\n` +
-              `🏢 Empresa: *${lead.companyName}*\n` +
-              `📢 Campaña: *${lead.serviceName || lead.serviceId}*\n` +
-              `📱 Teléfono: *+${senderPhone}*\n\n` +
-              `🔥 El prospecto completó la simulación en WhatsApp. Ingresa al chat para cerrar la llamada o propuesta:\n` +
-              `👉 https://wa.me/${senderPhone}`;
-            await this.notifyAdmin(alertCompleted);
-          }
-          continue;
+          console.error('[BaileysEngine] Error ejecutando SetterEngine:', setterErr.message);
         }
 
         // 5. Comprobar si está fuera de horario comercial (SÓLO para prospectos Inbound desconocidos, NUNCA para campañas Outbound en caliente)
