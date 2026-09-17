@@ -13,6 +13,10 @@ import {
 dotenv.config();
 
 export class ApifyScraper {
+  public static get backupToken(): string | null {
+    return process.env.APIFY_BACKUP_TOKEN?.trim() || null;
+  }
+
   public static async getEffectiveToken(providedToken?: string): Promise<string> {
     if (providedToken && providedToken.trim().length > 0) {
       return providedToken.trim();
@@ -29,19 +33,23 @@ export class ApifyScraper {
     if (envToken && envToken.trim().length > 0) {
       return envToken.trim();
     }
+    const backup = ApifyScraper.backupToken;
+    if (backup) {
+      return backup;
+    }
     throw new Error(
-      'Falta configurar APIFY_TOKEN (en Configuración de la plataforma o en variable de entorno). Obtenlo en https://console.apify.com/account/integrations'
+      'Falta configurar APIFY_TOKEN o APIFY_BACKUP_TOKEN (en variables de entorno o configuración).'
     );
   }
 
   private static get token(): string {
-    const t = process.env.APIFY_TOKEN;
+    const t = process.env.APIFY_TOKEN || process.env.APIFY_BACKUP_TOKEN;
     if (!t) {
       throw new Error(
         'Falta configurar APIFY_TOKEN en las variables de entorno (.env). Obtenlo gratis en https://console.apify.com/account/integrations'
       );
     }
-    return t;
+    return t.trim();
   }
 
   /**
@@ -90,16 +98,28 @@ export class ApifyScraper {
    * Ejecutor común para actores de Apify con polling y manejo de timeouts
    */
   private static async runActorAndGetItems(actorId: string, input: any, label: string): Promise<any[]> {
-    const token = await this.getEffectiveToken();
+    let token = await this.getEffectiveToken();
     console.log(`[ApifyScraper] Iniciando actor "${actorId}" para [${label}]...`);
 
-    const runRes = await fetch(`https://api.apify.com/v2/acts/${actorId}/runs?token=${token}`, {
+    let runRes = await fetch(`https://api.apify.com/v2/acts/${actorId}/runs?token=${token}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input)
     });
 
-    const runJson: any = await runRes.json();
+    let runJson: any = await runRes.json();
+    const backup = ApifyScraper.backupToken;
+    if ((!runJson.data || !runJson.data.id) && backup && token !== backup) {
+      console.warn(`⚠️ [ApifyScraper] Fallo con token principal en Apify (HTTP ${runRes.status}). Reintentando automáticamente con token de respaldo...`);
+      token = backup;
+      runRes = await fetch(`https://api.apify.com/v2/acts/${actorId}/runs?token=${token}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input)
+      });
+      runJson = await runRes.json();
+    }
+
     if (!runJson.data || !runJson.data.id) {
       throw new Error(`Fallo al iniciar actor "${actorId}": ${JSON.stringify(runJson)}`);
     }
