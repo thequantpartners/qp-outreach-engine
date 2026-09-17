@@ -43,10 +43,11 @@ export class OutscraperScraper {
     if (region.toUpperCase() === 'PE') {
       if (clean.length === 9 && clean.startsWith('9')) {
         clean = `51${clean}`;
-      } else if (clean.startsWith('51') && clean.length === 11) {
-        // Correcto: 519XXXXXXXX
-      } else if (clean.length < 9) {
-        return null; // Teléfono incompleto o local sin código
+      } else if (clean.startsWith('519') && clean.length === 11) {
+        // Correcto: móvil peruano 519XXXXXXXX
+      } else {
+        // Es teléfono fijo (01...), incompleto o sin WhatsApp
+        return null;
       }
     }
 
@@ -125,6 +126,17 @@ export class OutscraperScraper {
         const phoneResult = this.sanitizePhone(item.phone, region);
         // Filtrado estricto en puerta: solo leads con teléfono sanitizable
         if (!phoneResult) continue;
+
+        // Filtro de nicho B2B: descartar salones de uñas, peluquerías y barberías
+        const itemCategory = (item.type || item.category || (item.subtypes ? item.subtypes.split(',')[0]?.trim() : '') || '').toLowerCase();
+        const itemName = (item.name || '').toLowerCase();
+        const excludedCategories = [
+          'uñas', 'nail', 'manicura', 'pedicura', 'peluquería', 'peluqueria', 
+          'barber', 'barbería', 'barberia', 'pestañas'
+        ];
+        if (excludedCategories.some(ex => itemCategory.includes(ex) || itemName.includes(ex))) {
+          continue; // Descartar salones de belleza y uñas no médicos
+        }
 
         validLeads.push({
           title: item.name,
