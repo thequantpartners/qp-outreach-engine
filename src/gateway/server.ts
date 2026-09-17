@@ -19,7 +19,8 @@ import {
   ImportLeadsRequestSchema,
   SendDocumentSchema,
   ConfigureSettingsSchema,
-  SalesRep
+  SalesRep,
+  LaunchColdEmailCampaignSchema
 } from '../types/index.js';
 import fs from 'fs';
 import path from 'path';
@@ -30,6 +31,8 @@ import { BlueprintsManager } from '../master/blueprints_manager.js';
 import { VpsInstaller } from '../master/vps_installer.js';
 import { OpenRouterCloser } from '../ai/openrouter_closer.js';
 import { SlaAlertManager } from '../whatsapp/sla_manager.js';
+import { ColdEmailScheduler } from '../email/cold_email_scheduler.js';
+import { ColdEmailIngestor } from '../email/cold_email_ingestor.js';
 
 dotenv.config();
 
@@ -2792,6 +2795,65 @@ app.post('/api/settings', authenticate, async (req: Request, res: Response) => {
   }
 });
 
+// --- RUTAS DE COLD EMAIL ENGINE (PERÚ + USA) ---
+app.post('/api/cold-email/launch', async (req: Request, res: Response) => {
+  const parseResult = LaunchColdEmailCampaignSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    res.status(400).json({ error: 'Parámetros inválidos', details: parseResult.error.format() });
+    return;
+  }
+
+  try {
+    const { niche, country, cityOrState, maxLeads, autoStart } = parseResult.data;
+    const result = await ColdEmailIngestor.ingestFromApollo({
+      niche,
+      country,
+      cityOrState,
+      maxLeads
+    });
+
+    if (autoStart) {
+      ColdEmailScheduler.start();
+    }
+
+    res.json({
+      success: true,
+      message: `Campaña iniciada para ${niche} (${country}): ${result.queuedCount} decisores encolados.`,
+      result,
+      schedulerStatus: ColdEmailScheduler.getStatus()
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/cold-email/status', (_req: Request, res: Response) => {
+  res.json({
+    success: true,
+    status: ColdEmailScheduler.getStatus()
+  });
+});
+
+app.get('/api/cold-email/leads', async (req: Request, res: Response) => {
+  try {
+    const status = req.query.status as string | undefined;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+    const leads = await OutreachRepo.listEmailCampaignLeads({ status, limit });
+    res.json({ success: true, count: leads.length, leads });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/cold-email/toggle', (req: Request, res: Response) => {
+  const { active } = req.body;
+  if (active) {
+    ColdEmailScheduler.start();
+  } else {
+    ColdEmailScheduler.stop();
+  }
+  res.json({ success: true, isRunning: active, status: ColdEmailScheduler.getStatus() });
+});
 
 // Iniciar servidor, base de datos, WhatsApp y Pipeline Autónomo
 app.listen(PORT, async () => {
@@ -2811,6 +2873,9 @@ app.listen(PORT, async () => {
 
   // 3. Iniciar Pipeline Continuo Autónomo
   AutonomousPipeline.start();
+
+  // 4. Iniciar Motor de Correos en Frío B2B (Perú + USA)
+  ColdEmailScheduler.start();
 
   // 4. Iniciar Emisor Silencioso de Heartbeat (Solo en Modo Cliente o si tiene MASTER_HEARTBEAT_URL)
   if (process.env.MODE === 'client' || process.env.MASTER_HEARTBEAT_URL) {

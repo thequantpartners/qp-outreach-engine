@@ -13,6 +13,8 @@ import { ServiceDefinition, ClosingType } from '../types/index.js';
 import { ClientRegistry } from '../master/client_registry.js';
 import { Deployer } from '../master/deployer.js';
 import { BlueprintsManager } from '../master/blueprints_manager.js';
+import { ColdEmailScheduler } from '../email/cold_email_scheduler.js';
+import { ColdEmailIngestor } from '../email/cold_email_ingestor.js';
 import type { Request, Response } from 'express';
 
 const TOOLS: Tool[] = [
@@ -565,6 +567,63 @@ const TOOLS: Tool[] = [
         is_autonomous_active: {
           type: 'boolean',
           description: 'Activar o pausar el despacho de mensajes en segundo plano'
+        }
+      }
+    }
+  },
+  {
+    name: 'launch_cold_email_campaign',
+    description: 'Inicia prospección B2B por correo frío para anunciantes de Meta Ads extraídos de Apollo (Perú y USA), con rotación de asuntos A/B/C y despacho en horarios ejecutivos.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        niche: {
+          type: 'string',
+          description: 'Nicho objetivo: "clinicas" | "educacion" | "inmobiliarias" | "legal"'
+        },
+        country: {
+          type: 'string',
+          enum: ['PE', 'US'],
+          description: 'País objetivo: PE (Perú) o US (Estados Unidos, mercado hispano)'
+        },
+        city_or_state: {
+          type: 'string',
+          description: 'Ciudad o Estado específico (ej. "Lima", "Miami", "Houston", "Dallas", "Orlando")'
+        },
+        max_leads: {
+          type: 'number',
+          description: 'Cantidad de decisores a extraer y encolar (default: 20)'
+        },
+        auto_start: {
+          type: 'boolean',
+          description: 'Si es true, activa de inmediato el despachador autónomo de correos (default: true)'
+        }
+      },
+      required: ['niche']
+    }
+  },
+  {
+    name: 'get_cold_email_status',
+    description: 'Consulta el estado en vivo del despachador de correos en frío, ventana horaria actual (mañana/tarde/fuera de horario), total enviados hoy y rotación de variantes A/B/C.',
+    inputSchema: {
+      type: 'object',
+      properties: {}
+    }
+  },
+  {
+    name: 'list_cold_email_leads',
+    description: 'Lista los prospectos y decisores encolados o contactados por correo corporativo en frío (Perú y USA).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          enum: ['QUEUED', 'SENT', 'FAILED'],
+          description: 'Filtrar por estado'
+        },
+        limit: {
+          type: 'number',
+          description: 'Límite de resultados (default: 50)'
         }
       }
     }
@@ -1543,6 +1602,68 @@ export class McpServerManager {
                 {
                   type: 'text',
                   text: JSON.stringify(health, null, 2)
+                }
+              ]
+            };
+          }
+
+          case 'launch_cold_email_campaign': {
+            const niche = String(args?.niche || 'clinicas');
+            const country = (String(args?.country || 'PE').toUpperCase()) as 'PE' | 'US';
+            const cityOrState = args?.city_or_state ? String(args?.city_or_state) : undefined;
+            const maxLeads = args?.max_leads ? Number(args?.max_leads) : 20;
+            const autoStart = args?.auto_start !== false;
+
+            const ingestResult = await ColdEmailIngestor.ingestFromApollo({
+              niche,
+              country,
+              cityOrState,
+              maxLeads
+            });
+
+            if (autoStart) {
+              ColdEmailScheduler.start();
+            }
+
+            const schedulerStatus = ColdEmailScheduler.getStatus();
+
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    success: true,
+                    message: `Campaña de correos en frío lanzada para "${niche}" en ${country}.`,
+                    ingestResult,
+                    schedulerStatus
+                  }, null, 2)
+                }
+              ]
+            };
+          }
+
+          case 'get_cold_email_status': {
+            const status = ColdEmailScheduler.getStatus();
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(status, null, 2)
+                }
+              ]
+            };
+          }
+
+          case 'list_cold_email_leads': {
+            const statusFilter = args?.status ? String(args.status) : undefined;
+            const limit = args?.limit ? Number(args.limit) : 50;
+            const leads = await OutreachRepo.listEmailCampaignLeads({ status: statusFilter, limit });
+
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({ count: leads.length, leads }, null, 2)
                 }
               ]
             };

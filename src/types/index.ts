@@ -499,3 +499,51 @@ export interface AudioTranscriptionResult {
   format?: 'ogg' | 'mp4' | 'wav' | 'mp3';
   error?: string;
 }
+
+// --- COLD EMAIL ENGINE (PERU + USA) ---
+export interface EmailCampaignLead {
+  id?: number;
+  email: string;
+  companyName: string;
+  contactName?: string;
+  firstName?: string;
+  title?: string;
+  industry?: string;
+  city?: string;
+  countryCode: 'PE' | 'US' | string;
+  source?: string;
+  status: 'QUEUED' | 'SENT' | 'FAILED' | 'REPLIED';
+  subjectVariant?: 'A' | 'B' | 'C';
+  messageId?: string;
+  errorMessage?: string;
+  sentAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ColdEmailCampaignStatus {
+  isRunning: boolean;
+  limaTime: string;
+  currentSlot: 'MORNING_WINDOW' | 'AFTERNOON_WINDOW' | 'OFF_HOURS' | 'WEEKEND';
+  sentToday: number;
+  maxDaily: number;
+  totalQueued: number;
+  totalSent: number;
+  lastSentAt: string | null;
+  activeVariants: {
+    variantA: number;
+    variantB: number;
+    variantC: number;
+  };
+}
+
+export const LaunchColdEmailCampaignSchema = z.object({
+  niche: z.string().describe("Nicho objetivo: 'clinicas' | 'educacion' | 'inmobiliarias' | 'legal'"),
+  country: z.enum(['PE', 'US']).default('PE').describe("País objetivo: PE (Perú) o US (Estados Unidos)"),
+  cityOrState: z.string().optional().describe("Ciudad o Estado específico (ej. 'Lima', 'Miami', 'Houston', 'Dallas')"),
+  maxLeads: z.number().min(5).max(100).default(20).describe("Cantidad de decisores a extraer y encolar"),
+  autoStart: z.boolean().default(true).describe("Si se debe activar inmediatamente el despachador")
+});
+
+export type LaunchColdEmailCampaignRequest = z.infer<typeof LaunchColdEmailCampaignSchema>;
+

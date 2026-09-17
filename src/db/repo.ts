@@ -7,7 +7,9 @@ import {
   CampaignSettings,
   ScrapedLead,
   SalesRep,
-  LeadSource
+  LeadSource,
+  EmailCampaignLead,
+  ColdEmailCampaignStatus
 } from '../types/index.js';
 
 export class OutreachRepo {
@@ -284,6 +286,26 @@ LÍNEAS ROJAS:
         qualified_leads INT DEFAULT 0,
         meetings_booked INT DEFAULT 0,
         last_heartbeat TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS email_campaign_leads (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        company_name VARCHAR(255) NOT NULL,
+        contact_name VARCHAR(255),
+        first_name VARCHAR(100),
+        title VARCHAR(150),
+        industry VARCHAR(100),
+        city VARCHAR(100),
+        country_code VARCHAR(10) DEFAULT 'PE',
+        source VARCHAR(50) DEFAULT 'meta_ads_apollo',
+        status VARCHAR(50) DEFAULT 'QUEUED',
+        subject_variant VARCHAR(5),
+        message_id VARCHAR(255),
+        error_message TEXT,
+        sent_at TIMESTAMP WITH TIME ZONE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
@@ -2751,5 +2773,140 @@ LÍNEAS ROJAS:
         activeChats: activeChats.slice(0, 35)
       };
     }
+  }
+
+  // --- COLD EMAIL ENGINE REPOSITORY METHODS ---
+  public static async queueEmailLead(lead: EmailCampaignLead): Promise<boolean> {
+    const cleanEmail = lead.email.toLowerCase().trim();
+    if (DbConnection.isPg()) {
+      try {
+        const pool = DbConnection.getPool();
+        const res = await pool.query(
+          `INSERT INTO email_campaign_leads 
+           (email, company_name, contact_name, first_name, title, industry, city, country_code, source, status, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'QUEUED', NOW(), NOW())
+           ON CONFLICT (email) DO NOTHING RETURNING id`,
+          [
+            cleanEmail,
+            lead.companyName,
+            lead.contactName || null,
+            lead.firstName || null,
+            lead.title || null,
+            lead.industry || null,
+            lead.city || null,
+            lead.countryCode || 'PE',
+            lead.source || 'meta_ads_apollo'
+          ]
+        );
+        return (res.rowCount ?? 0) > 0;
+      } catch (err: any) {
+        console.error('[OutreachRepo] Error encolando email lead:', err.message);
+        return false;
+      }
+    }
+    return false;
+  }
+
+  public static async queueEmailLeads(leads: EmailCampaignLead[]): Promise<{ queued: number; skipped: number }> {
+    let queued = 0;
+    let skipped = 0;
+    for (const l of leads) {
+      const ok = await OutreachRepo.queueEmailLead(l);
+      if (ok) queued++;
+      else skipped++;
+    }
+    return { queued, skipped };
+  }
+
+  public static async getNextQueuedEmailLead(): Promise<EmailCampaignLead | null> {
+    if (DbConnection.isPg()) {
+      const pool = DbConnection.getPool();
+      const res = await pool.query(`
+        SELECT * FROM email_campaign_leads 
+        WHERE status = 'QUEUED' 
+        ORDER BY id ASC 
+        LIMIT 1
+      `);
+      if (res.rows.length === 0) return null;
+      const r = res.rows[0];
+      return {
+        id: r.id,
+        email: r.email,
+        companyName: r.company_name,
+        contactName: r.contact_name,
+        firstName: r.first_name,
+        title: r.title,
+        industry: r.industry,
+        city: r.city,
+        countryCode: r.country_code,
+        source: r.source,
+        status: r.status,
+        subjectVariant: r.subject_variant,
+        messageId: r.message_id,
+        errorMessage: r.error_message,
+        sentAt: r.sent_at ? r.sent_at.toISOString() : undefined,
+        createdAt: r.created_at ? r.created_at.toISOString() : undefined,
+        updatedAt: r.updated_at ? r.updated_at.toISOString() : undefined
+      };
+    }
+    return null;
+  }
+
+  public static async markEmailLeadSent(id: number, messageId: string, variant: 'A' | 'B' | 'C'): Promise<void> {
+    if (DbConnection.isPg()) {
+      const pool = DbConnection.getPool();
+      await pool.query(`
+        UPDATE email_campaign_leads 
+        SET status = 'SENT', message_id = $1, subject_variant = $2, sent_at = NOW(), updated_at = NOW() 
+        WHERE id = $3
+      `, [messageId, variant, id]);
+    }
+  }
+
+  public static async markEmailLeadFailed(id: number, error: string): Promise<void> {
+    if (DbConnection.isPg()) {
+      const pool = DbConnection.getPool();
+      await pool.query(`
+        UPDATE email_campaign_leads 
+        SET status = 'FAILED', error_message = $1, updated_at = NOW() 
+        WHERE id = $2
+      `, [error, id]);
+    }
+  }
+
+  public static async listEmailCampaignLeads(filters?: { status?: string; limit?: number }): Promise<EmailCampaignLead[]> {
+    if (DbConnection.isPg()) {
+      const pool = DbConnection.getPool();
+      let query = 'SELECT * FROM email_campaign_leads';
+      const params: any[] = [];
+      if (filters?.status) {
+        query += ' WHERE status = $1';
+        params.push(filters.status);
+      }
+      query += ' ORDER BY id DESC LIMIT $' + (params.length + 1);
+      params.push(filters?.limit || 50);
+
+      const res = await pool.query(query, params);
+      return res.rows.map((r: any) => ({
+        id: r.id,
+        email: r.email,
+        companyName: r.company_name,
+        contactName: r.contact_name,
+        firstName: r.first_name,
+        title: r.title,
+        industry: r.industry,
+        city: r.city,
+        countryCode: r.country_code,
+        source: r.source,
+        status: r.status,
+        subjectVariant: r.subject_variant,
+        messageId: r.message_id,
+        errorMessage: r.error_message,
+        sentAt: r.sent_at ? r.sent_at.toISOString() : undefined,
+        createdAt: r.created_at ? r.created_at.toISOString() : undefined,
+        updatedAt: r.updated_at ? r.updated_at.toISOString() : undefined
+      }));
+    }
+    return [];
   }
 }
