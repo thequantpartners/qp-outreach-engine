@@ -794,8 +794,16 @@ export class BaileysEngine {
           lead.humanTakeoverAt = undefined as any;
         }
 
+        // 3.595. Auto-Reactivación de Leads Archivados/CLOSED_LOST si vuelven a consultar
+        if (lead.status === 'CLOSED_LOST') {
+          console.log(`🔥 [BaileysEngine] Lead ${senderPhone} estaba en CLOSED_LOST pero volvió a escribir: "${incomingText}". Reactivando automáticamente a REPLIED...`);
+          lead.status = 'REPLIED';
+          lead.humanTakeoverAt = undefined as any;
+          await OutreachRepo.updateLeadStatus(senderPhone, 'REPLIED');
+        }
+
         // 3.6. Comprobar si el lead YA está en estado terminal o control humano (Rompe bucle de ping-pong)
-        const isTerminalOrLocked = ['CLOSED_LOST', 'OPT_OUT', 'CLOSED_WON', 'HUMAN_TAKEOVER'].includes(lead.status) || !!lead.humanTakeoverAt;
+        const isTerminalOrLocked = ['OPT_OUT', 'CLOSED_WON', 'HUMAN_TAKEOVER'].includes(lead.status) || !!lead.humanTakeoverAt;
         if (isTerminalOrLocked) {
           console.log(`🔇 [BaileysEngine] Lead ${senderPhone} en estado terminal (${lead.status}) o control humano. Mensaje guardado en silencio sin respuesta.`);
           await OutreachRepo.addChatMessage(senderPhone, 'user', incomingText);
