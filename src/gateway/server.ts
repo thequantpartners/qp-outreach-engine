@@ -2869,6 +2869,80 @@ app.post('/api/cold-email/dispatch-now', async (req: Request, res: Response) => 
   }
 });
 
+app.get('/api/cold-email/stats', async (_req: Request, res: Response) => {
+  try {
+    const stats = await OutreachRepo.getEmailCampaignStats();
+    res.json({
+      success: true,
+      stats,
+      schedulerStatus: ColdEmailScheduler.getStatus()
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/webhooks/resend', async (req: Request, res: Response) => {
+  try {
+    const event = req.body;
+    console.log(`📨 [ResendWebhook] Evento recibido: ${event?.type}`);
+
+    if (event?.type === 'email.opened') {
+      const email = event.data?.to?.[0];
+      const messageId = event.data?.email_id;
+      if (email || messageId) {
+        await OutreachRepo.markEmailLeadOpened(email || messageId);
+        console.log(`👁️ [ResendWebhook] Correo abierto por: ${email || messageId}`);
+      }
+    } else if (event?.type === 'email.bounced') {
+      const email = event.data?.to?.[0];
+      if (email) {
+        const lead = (await OutreachRepo.listEmailCampaignLeads({ limit: 100 })).find(l => l.email.toLowerCase() === email.toLowerCase());
+        if (lead && lead.id) {
+          await OutreachRepo.markEmailLeadFailed(lead.id, 'Email bounced');
+        }
+      }
+    }
+
+    res.json({ received: true });
+  } catch (err: any) {
+    console.error('[ResendWebhook] Error procesando evento:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/webhooks/email-reply', async (req: Request, res: Response) => {
+  try {
+    const from = req.body.from || req.body.sender || '';
+    const subject = req.body.subject || '';
+
+    console.log(`💬 [EmailReplyWebhook] Respuesta entrante de: ${from} (Asunto: ${subject})`);
+    const emailMatch = from.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+    const fromEmail = emailMatch ? emailMatch[1].toLowerCase() : from.toLowerCase().trim();
+
+    const resLead = await OutreachRepo.markEmailLeadReplied(fromEmail);
+    if (resLead.success && resLead.lead) {
+      const alertMsg = 
+        `🚨 *¡NUEVA RESPUESTA DE CORREO DETECTADA!*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `🏢 Empresa: *${resLead.lead.companyName}*\n` +
+        `📧 De: *${resLead.lead.email}*\n` +
+        `📝 Asunto: *${subject}*\n` +
+        `🕒 Hora: *${new Date().toLocaleTimeString('es-PE')}*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `Kenneth, el prospecto contestó a tu correo de prospección. Revisa tu Zoho Mail para coordinar la videollamada de Meet 🚀🤝`;
+
+      await whatsapp.notifyAdmin(alertMsg);
+      res.json({ success: true, lead: resLead.lead });
+    } else {
+      res.json({ success: false, message: 'Lead no encontrado en la base de datos de correos' });
+    }
+  } catch (err: any) {
+    console.error('[EmailReplyWebhook] Error procesando respuesta:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Iniciar servidor, base de datos, WhatsApp y Pipeline Autónomo
 app.listen(PORT, async () => {
   console.log('================================================================');

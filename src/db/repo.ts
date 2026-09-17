@@ -9,6 +9,7 @@ import {
   SalesRep,
   LeadSource,
   EmailCampaignLead,
+  EmailCampaignStats,
   ColdEmailCampaignStatus
 } from '../types/index.js';
 
@@ -309,6 +310,10 @@ LÍNEAS ROJAS:
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
+
+      ALTER TABLE email_campaign_leads ADD COLUMN IF NOT EXISTS opened_at TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE email_campaign_leads ADD COLUMN IF NOT EXISTS clicked_at TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE email_campaign_leads ADD COLUMN IF NOT EXISTS replied_at TIMESTAMP WITH TIME ZONE;
     `);
 
     // Asegurar que el servicio base para Inbound General exista siempre
@@ -2902,11 +2907,175 @@ LÍNEAS ROJAS:
         subjectVariant: r.subject_variant,
         messageId: r.message_id,
         errorMessage: r.error_message,
+        openedAt: r.opened_at ? r.opened_at.toISOString() : undefined,
+        clickedAt: r.clicked_at ? r.clicked_at.toISOString() : undefined,
+        repliedAt: r.replied_at ? r.replied_at.toISOString() : undefined,
         sentAt: r.sent_at ? r.sent_at.toISOString() : undefined,
         createdAt: r.created_at ? r.created_at.toISOString() : undefined,
         updatedAt: r.updated_at ? r.updated_at.toISOString() : undefined
       }));
     }
     return [];
+  }
+
+  public static async getEmailCampaignStats(): Promise<EmailCampaignStats> {
+    const emptyStats: EmailCampaignStats = {
+      total: 0,
+      queued: 0,
+      sent: 0,
+      opened: 0,
+      replied: 0,
+      failed: 0,
+      sentToday: 0,
+      variantA: 0,
+      variantB: 0,
+      variantC: 0,
+      recentSent: [],
+      recentReplied: []
+    };
+
+    if (!DbConnection.isPg()) return emptyStats;
+    const pool = DbConnection.getPool();
+
+    try {
+      const countsRes = await pool.query(`
+        SELECT 
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE status = 'QUEUED') as queued,
+          COUNT(*) FILTER (WHERE status IN ('SENT', 'OPENED', 'CLICKED', 'REPLIED')) as sent,
+          COUNT(*) FILTER (WHERE status = 'OPENED' OR opened_at IS NOT NULL) as opened,
+          COUNT(*) FILTER (WHERE status = 'REPLIED' OR replied_at IS NOT NULL) as replied,
+          COUNT(*) FILTER (WHERE status = 'FAILED') as failed,
+          COUNT(*) FILTER (WHERE sent_at >= CURRENT_DATE) as sent_today,
+          COUNT(*) FILTER (WHERE subject_variant = 'A') as variant_a,
+          COUNT(*) FILTER (WHERE subject_variant = 'B') as variant_b,
+          COUNT(*) FILTER (WHERE subject_variant = 'C') as variant_c
+        FROM email_campaign_leads
+      `);
+
+      const c = countsRes.rows[0] || {};
+
+      const recentSentRes = await pool.query(`
+        SELECT * FROM email_campaign_leads 
+        WHERE status IN ('SENT', 'OPENED', 'CLICKED', 'REPLIED')
+        ORDER BY sent_at DESC NULLS LAST, updated_at DESC LIMIT 3
+      `);
+
+      const recentRepliedRes = await pool.query(`
+        SELECT * FROM email_campaign_leads 
+        WHERE status = 'REPLIED' OR replied_at IS NOT NULL
+        ORDER BY replied_at DESC NULLS LAST, updated_at DESC LIMIT 3
+      `);
+
+      const mapLead = (r: any): EmailCampaignLead => ({
+        id: r.id,
+        email: r.email,
+        companyName: r.company_name,
+        contactName: r.contact_name,
+        firstName: r.first_name,
+        title: r.title,
+        industry: r.industry,
+        city: r.city,
+        countryCode: r.country_code,
+        source: r.source,
+        status: r.status,
+        subjectVariant: r.subject_variant,
+        messageId: r.message_id,
+        errorMessage: r.error_message,
+        openedAt: r.opened_at ? r.opened_at.toISOString() : undefined,
+        clickedAt: r.clicked_at ? r.clicked_at.toISOString() : undefined,
+        repliedAt: r.replied_at ? r.replied_at.toISOString() : undefined,
+        sentAt: r.sent_at ? r.sent_at.toISOString() : undefined,
+        createdAt: r.created_at ? r.created_at.toISOString() : undefined,
+        updatedAt: r.updated_at ? r.updated_at.toISOString() : undefined
+      });
+
+      return {
+        total: parseInt(c.total || '0', 10),
+        queued: parseInt(c.queued || '0', 10),
+        sent: parseInt(c.sent || '0', 10),
+        opened: parseInt(c.opened || '0', 10),
+        replied: parseInt(c.replied || '0', 10),
+        failed: parseInt(c.failed || '0', 10),
+        sentToday: parseInt(c.sent_today || '0', 10),
+        variantA: parseInt(c.variant_a || '0', 10),
+        variantB: parseInt(c.variant_b || '0', 10),
+        variantC: parseInt(c.variant_c || '0', 10),
+        recentSent: recentSentRes.rows.map(mapLead),
+        recentReplied: recentRepliedRes.rows.map(mapLead)
+      };
+    } catch (err: any) {
+      console.error('[OutreachRepo] Error obteniendo estadísticas de correos:', err.message);
+      return emptyStats;
+    }
+  }
+
+  public static async markEmailLeadOpened(identifier: string): Promise<boolean> {
+    if (!DbConnection.isPg()) return false;
+    const pool = DbConnection.getPool();
+    try {
+      const res = await pool.query(`
+        UPDATE email_campaign_leads
+        SET 
+          status = CASE WHEN status = 'REPLIED' THEN 'REPLIED' ELSE 'OPENED' END,
+          opened_at = COALESCE(opened_at, NOW()),
+          updated_at = NOW()
+        WHERE email ILIKE $1 OR message_id = $1
+      `, [identifier.trim()]);
+      return (res.rowCount || 0) > 0;
+    } catch (err: any) {
+      console.error('[OutreachRepo] Error marcando lead como abierto:', err.message);
+      return false;
+    }
+  }
+
+  public static async markEmailLeadReplied(identifier: string, notes?: string): Promise<{ success: boolean; lead?: EmailCampaignLead }> {
+    if (!DbConnection.isPg()) return { success: false };
+    const pool = DbConnection.getPool();
+    try {
+      const clean = identifier.trim();
+      const findRes = await pool.query(`
+        SELECT * FROM email_campaign_leads
+        WHERE email ILIKE $1 OR company_name ILIKE $2
+        ORDER BY id DESC LIMIT 1
+      `, [`%${clean}%`, `%${clean}%`]);
+
+      if (findRes.rows.length === 0) {
+        return { success: false };
+      }
+
+      const lead = findRes.rows[0];
+      await pool.query(`
+        UPDATE email_campaign_leads
+        SET 
+          status = 'REPLIED',
+          replied_at = NOW(),
+          updated_at = NOW()
+        WHERE id = $1
+      `, [lead.id]);
+
+      return {
+        success: true,
+        lead: {
+          id: lead.id,
+          email: lead.email,
+          companyName: lead.company_name,
+          contactName: lead.contact_name,
+          firstName: lead.first_name,
+          title: lead.title,
+          industry: lead.industry,
+          city: lead.city,
+          countryCode: lead.country_code,
+          source: lead.source,
+          status: 'REPLIED',
+          subjectVariant: lead.subject_variant,
+          messageId: lead.message_id,
+          sentAt: lead.sent_at ? lead.sent_at.toISOString() : undefined
+        }
+      };
+    } catch (err: any) {
+      console.error('[OutreachRepo] Error registrando respuesta de lead:', err.message);
+      return { success: false };
+    }
   }
 }

@@ -512,13 +512,31 @@ export interface EmailCampaignLead {
   city?: string;
   countryCode: 'PE' | 'US' | string;
   source?: string;
-  status: 'QUEUED' | 'SENT' | 'FAILED' | 'REPLIED';
+  status: 'QUEUED' | 'SENT' | 'FAILED' | 'OPENED' | 'CLICKED' | 'REPLIED';
   subjectVariant?: 'A' | 'B' | 'C';
   messageId?: string;
   errorMessage?: string;
+  openedAt?: string;
+  clickedAt?: string;
+  repliedAt?: string;
   sentAt?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface EmailCampaignStats {
+  total: number;
+  queued: number;
+  sent: number;
+  opened: number;
+  replied: number;
+  failed: number;
+  sentToday: number;
+  variantA: number;
+  variantB: number;
+  variantC: number;
+  recentSent: EmailCampaignLead[];
+  recentReplied: EmailCampaignLead[];
 }
 
 export interface ColdEmailCampaignStatus {

@@ -544,6 +544,15 @@ export class HermesC2 {
         creditsSection += `• 🤖 OpenRouter: *$${credits.openrouter.remaining.toFixed(2)} USD* restante\n`;
       }
 
+      const emailStats = await OutreachRepo.getEmailCampaignStats();
+      const emailSection = 
+        `\n\n📧 *Correos Corporativos en Frío (B2B):*\n` +
+        `• Enviados Hoy: *${emailStats.sentToday} / 30*\n` +
+        `• Total Entregados: *${emailStats.sent}*\n` +
+        `• En Cola: *${emailStats.queued}*\n` +
+        `• 👁️ Aperturas: *${emailStats.opened}*\n` +
+        `• 💬 Respuestas: *${emailStats.replied}*`;
+
       const msg = 
         `🏛️ *HERMES C2 · ESTADO OPERATIVO*\n` +
         `━━━━━━━━━━━━━━━━━━━━\n` +
@@ -562,11 +571,126 @@ export class HermesC2 {
         `💰 *Ingresos Registrados:*\n` +
         `• USD: *$${summary.totalRevenueUSD.toLocaleString()}*\n` +
         `• PEN: *S/. ${summary.totalRevenuePEN.toLocaleString()}*` +
+        emailSection +
         creditsSection +
         `\n━━━━━━━━━━━━━━━━━━━━\n` +
         `💡 _Escribe /comandos para ver el catálogo completo._`;
 
       return { handled: true, replyMessage: msg, actionExecuted: 'STATUS_CHECK' };
+    }
+
+    // 1.44. Comando: /correos o /email o "¿cómo van los correos?" (Balance y Métricas Detalladas)
+    if (
+      lower.startsWith('/correo') ||
+      lower.startsWith('/email') ||
+      lower.startsWith('/cold-email') ||
+      lower === 'correos' ||
+      lower === 'emails' ||
+      lower.includes('cuantos correos') ||
+      lower.includes('cuántos correos') ||
+      lower.includes('como van los correos') ||
+      lower.includes('cómo van los correos') ||
+      lower.includes('metricas de correo') ||
+      lower.includes('métricas de correo') ||
+      lower.includes('estado de correos')
+    ) {
+      const emailStats = await OutreachRepo.getEmailCampaignStats();
+      const { ColdEmailScheduler } = await import('../email/cold_email_scheduler.js');
+      const schedulerStatus = ColdEmailScheduler.getStatus();
+      const lima = ColdEmailScheduler.getLimaTime();
+
+      let slotText = '🌙 Fuera de horario';
+      if (schedulerStatus.currentSlot === 'MORNING_WINDOW') slotText = '☀️ Ventana Mañana (09:00 - 11:30)';
+      else if (schedulerStatus.currentSlot === 'AFTERNOON_WINDOW') slotText = '🌤️ Ventana Tarde (14:30 - 16:30)';
+      else if (schedulerStatus.currentSlot === 'WEEKEND') slotText = '🏖️ Fin de Semana (Pausado)';
+
+      let recentSentText = '• Ninguno aún';
+      if (emailStats.recentSent.length > 0) {
+        recentSentText = emailStats.recentSent.map(l => 
+          `• ${l.companyName} (${l.email}) [Var. ${l.subjectVariant || 'A'}]`
+        ).join('\n');
+      }
+
+      let recentRepliedText = '• 0 respuestas registradas todavía';
+      if (emailStats.recentReplied.length > 0) {
+        recentRepliedText = emailStats.recentReplied.map(l =>
+          `• 🎯 *${l.companyName}* (${l.email})`
+        ).join('\n');
+      }
+
+      const replyMsg =
+        `📧 *HERMES C2 · BALANCE DE CORREOS EN FRÍO B2B*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `🕒 *Hora Lima:* ${lima.timeStr} PET (${slotText})\n` +
+        `🟢 *Servidor Cloud:* Railway (Despachador HTTPS Resend Activo)\n` +
+        `📬 *Remitente:* partners@thequantpartners.com\n\n` +
+        `📊 *Métricas del Embudo de Correo:*\n` +
+        `• Total Prospectos: *${emailStats.total}*\n` +
+        `• En Cola de Envío: *${emailStats.queued}*\n` +
+        `• Enviados Hoy: *${emailStats.sentToday} / 30*\n` +
+        `• Total Entregados Acumulado: *${emailStats.sent}*\n` +
+        `• 👁️ Aperturas Confirmadas: *${emailStats.opened}*\n` +
+        `• 💬 Respuestas Registradas: *${emailStats.replied}*\n` +
+        `• ⚠️ Fallidos / Rebotados: *${emailStats.failed}*\n\n` +
+        `🎯 *Rotación de Asuntos (A/B/C):*\n` +
+        `• Variante A (consulta anuncios): *${emailStats.variantA}*\n` +
+        `• Variante B (nombre + pauta activa): *${emailStats.variantB}*\n` +
+        `• Variante C (empresa + WhatsApp Meta): *${emailStats.variantC}*\n\n` +
+        `🏢 *Últimos Prospectos Contactados:*\n` +
+        recentSentText + '\n\n' +
+        `💬 *Respuestas Recientes:*\n` +
+        recentRepliedText + '\n' +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `💡 _Si te responde alguien a tu Zoho Mail, solo avísame:_\n` +
+        `*respondió <nombre de empresa o correo>*`;
+
+      return { handled: true, replyMessage: replyMsg, actionExecuted: 'EMAIL_STATUS_CHECK' };
+    }
+
+    // 1.445. Registro manual/asistido de respuesta por correo: "respondió X" o "me respondió X" o "/responde X"
+    if (
+      lower.startsWith('respondió') ||
+      lower.startsWith('respondio') ||
+      lower.startsWith('me respondió') ||
+      lower.startsWith('me respondio') ||
+      lower.startsWith('/responde') ||
+      lower.startsWith('/respuesta')
+    ) {
+      const cleanQuery = cleanText
+        .replace(/^\/responde\s*/i, '')
+        .replace(/^\/respuesta\s*/i, '')
+        .replace(/^me\s+respondi[oó]\s*/i, '')
+        .replace(/^respondi[oó]\s*/i, '')
+        .trim();
+
+      if (!cleanQuery) {
+        return {
+          handled: true,
+          replyMessage: '⚠️ Indica el nombre de la empresa o el correo que te respondió.\nEjemplo: *respondió Rebagliati* o *respondió informes@rebagliatidiplomados.edu.pe*.'
+        };
+      }
+
+      const res = await OutreachRepo.markEmailLeadReplied(cleanQuery);
+      if (res.success && res.lead) {
+        const replyMsg =
+          `🎯 *¡RESPUESTA DE CORREO REGISTRADA CON ÉXITO!*\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `🏢 Empresa: *${res.lead.companyName}*\n` +
+          `📧 Correo: *${res.lead.email}*\n` +
+          `👤 Cargo/Contacto: *${res.lead.title || res.lead.contactName || 'Tomador de Decisión'}*\n` +
+          `📍 Ubicación: *${res.lead.city || ''} (${res.lead.countryCode})*\n` +
+          `🕒 Registrado: *${new Date().toLocaleTimeString('es-PE')}*\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `💼 *Siguiente Paso Estratégico:*\n` +
+          `Contéstale desde tu Zoho Mail ofreciéndole los 10 min de Meet para mostrarle pantalla: "¿Le acomodaría mañana a las 11:00 AM o a las 4:00 PM?".`;
+
+        return { handled: true, replyMessage: replyMsg, actionExecuted: 'EMAIL_REPLY_RECORDED' };
+      } else {
+        return {
+          handled: true,
+          replyMessage: `⚠️ No encontré ningún prospecto en la base de datos de correos que coincida con "${cleanQuery}".\nVerifica el nombre de la empresa o escribe su correo exacto.`
+        };
+      }
     }
 
     // 1.45. Comando: /horarios o /horario o /schedule (Rangos de prospección y adquisición)
@@ -1848,19 +1972,25 @@ PERSONALIDAD Y TONO DE COMUNICACIÓN (CERO ACARTONAMIENTO):
    */
   public static async dispatchMorningBriefing(): Promise<void> {
     const summary = await GhostCRM.getFunnelSummary();
+    const emailStats = await OutreachRepo.getEmailCampaignStats();
     const message = 
       `🌅 *HERMES C2 · BRIEFING MATUTINO (9:00 AM)*\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
       `¡Buenos días Kenneth! El sistema de adquisición está activo y listo para la jornada.\n\n` +
-      `📊 *Resumen del Pipeline:*\n` +
+      `📊 *Resumen del Pipeline WhatsApp:*\n` +
       `• Leads en Seguimiento: *${summary.replied}*\n` +
       `• Leads Calificados: *${summary.qualified}*\n` +
       `• Citas Registradas: *${summary.meetingScheduled}*\n` +
       `• Ingresos Acumulados: *$${summary.totalRevenueUSD.toLocaleString()} USD*\n\n` +
+      `📧 *Outreach Correos en Frío:*\n` +
+      `• Enviados Totales: *${emailStats.sent}*\n` +
+      `• En Cola para Hoy: *${emailStats.queued}*\n` +
+      `• Respuestas Recibidas: *${emailStats.replied}*\n\n` +
       `🎯 *Plan del Día:*\n` +
-      `1. Prospección PyMEs Perú (Mañana: 9am - 1pm)\n` +
-      `2. Prospección SMBs USA Latina (Tarde: 2pm - 6pm)\n\n` +
-      `👉 _Escribe /status en cualquier momento para ver avances en vivo._`;
+      `1. Ventana Mañana Correos: 09:00 - 11:30 PET (15 envíos)\n` +
+      `2. Ventana Tarde Correos: 14:30 - 16:30 PET (15 envíos)\n` +
+      `3. Atención Inbound Setter: Activa 24/7 en 5s\n\n` +
+      `👉 _Escribe /correos o /status en cualquier momento para ver avances en vivo._`;
 
     await BaileysEngine.getInstance().notifyAdmin(message);
   }
@@ -1870,16 +2000,22 @@ PERSONALIDAD Y TONO DE COMUNICACIÓN (CERO ACARTONAMIENTO):
    */
   public static async dispatchEveningReport(): Promise<void> {
     const summary = await GhostCRM.getFunnelSummary();
+    const emailStats = await OutreachRepo.getEmailCampaignStats();
     const message = 
       `🌆 *HERMES C2 · REPORTE DE CIERRE (7:00 PM)*\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
       `Resumen de actividad comercial del día:\n\n` +
+      `📱 *WhatsApp Ghost CRM:*\n` +
       `• Prospectos Contactados: *${summary.outreachSent}*\n` +
       `• Nuevas Respuestas: *${summary.replied}*\n` +
       `• Calificados por AI Setter: *${summary.qualified}*\n` +
-      `• Ventas Cerradas: *${summary.closedWon}*\n` +
-      `• Eventos Meta CAPI Transmitidos: *${summary.metaCapiEventsFired}*\n\n` +
-      `💤 _El pipeline de envíos pausará automáticamente hasta las 9:00 AM de mañana._`;
+      `• Ventas Cerradas: *${summary.closedWon}*\n\n` +
+      `📧 *Correos en Frío B2B (Resend Cloud):*\n` +
+      `• Despachados Hoy: *${emailStats.sentToday}*\n` +
+      `• Total Entregados Acumulado: *${emailStats.sent}*\n` +
+      `• En Cola Pendientes: *${emailStats.queued}*\n` +
+      `• Aperturas: *${emailStats.opened}* | Respuestas: *${emailStats.replied}*\n\n` +
+      `💤 _El despachador en frío pausa hasta las 09:00 AM. Setter WhatsApp 24/7 activo._`;
 
     await BaileysEngine.getInstance().notifyAdmin(message);
   }
