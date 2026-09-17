@@ -17,6 +17,7 @@ export class AutonomousPipeline {
   private static lastScrapedLocation: string = '';
   private static lastScrapedService: string = '';
   private static lastScrapedCount: number = 0;
+  private static lastActionWasFollowUp: boolean = true; // Alternancia 50/50: inicializado en true para priorizar frío en el primer tick
 
   // Circuit Breaker Anti-Ban (Reglas Meta 2026: mitigación de unanswered message counter)
   private static consecutiveUnansweredOutreachCount: number = 0;
@@ -273,39 +274,7 @@ export class AutonomousPipeline {
       return;
     }
 
-    // 6. PRIORIDAD 1: Prospectos pendientes de Follow-Up (>48h sin respuesta) en la región activa
-    let followUpLead: any = null;
-    let followUpService: any = null;
-    for (const s of regionalServices) {
-      const due = await OutreachRepo.getLeadsForFollowUp(s.id, 1);
-      if (due.length > 0) {
-        followUpLead = due[0];
-        followUpService = s;
-        break;
-      }
-    }
-    if (followUpLead && followUpService) {
-      await this.dispatchFollowUp(followUpLead, followUpService, effectiveSettings, activeRegion);
-      return;
-    }
-
-    // 6.1 PRIORIDAD 1.1: Prospectos con ghosting en conversación (>24h sin respuesta en chat activo)
-    let reengageLead: any = null;
-    let reengageService: any = null;
-    for (const s of regionalServices) {
-      const dueReengage = await OutreachRepo.getLeadsForConversationalFollowUp(s.id, 1);
-      if (dueReengage.length > 0) {
-        reengageLead = dueReengage[0];
-        reengageService = s;
-        break;
-      }
-    }
-    if (reengageLead && reengageService) {
-      await this.dispatchConversationalFollowUp(reengageLead, reengageService, effectiveSettings, activeRegion);
-      return;
-    }
-
-    // 7. Monitorear buffer de prospectos no contactados por campaña activa en la región activa
+    // 6. Monitorear buffer de prospectos no contactados por campaña activa en la región activa
     const timeSinceLastScrape = Date.now() - this.lastScrapeTime;
     const scrapeCooldownMs = 5 * 60 * 1000; // 5 minutos para auto-alimentar la cola constantemente
     if (timeSinceLastScrape > scrapeCooldownMs) {
@@ -320,9 +289,10 @@ export class AutonomousPipeline {
       }
     }
 
-    // 8. PRIORIDAD 2: Siguiente nuevo lead en frío (con aislamiento estricto por campaña y región)
-    let leadsToContact: any[] = [];
-    let targetService: any = null;
+    // 7. Evaluar Cola A: Prospectos pendientes de prospección en frío (DISCOVERED)
+    let coldLeadCandidate: any = null;
+    let coldServiceCandidate: any = null;
+    let nextRoundRobinIndex = this.serviceRoundRobinIndex;
 
     const numServices = regionalServices.length;
     for (let i = 0; i < numServices; i++) {
@@ -330,20 +300,50 @@ export class AutonomousPipeline {
       const candidateService = regionalServices[idx];
       const found = await OutreachRepo.getLeadsForOutreach(candidateService.id, 1);
       if (found.length > 0) {
-        leadsToContact = found;
-        targetService = candidateService;
-        this.serviceRoundRobinIndex = (idx + 1) % numServices;
+        coldLeadCandidate = found[0];
+        coldServiceCandidate = candidateService;
+        nextRoundRobinIndex = (idx + 1) % numServices;
         break;
       }
     }
 
-    if (leadsToContact.length === 0) {
-      console.log(`⚠️ [AutonomousPipeline - ${activeRegion}] Cola de prospectos pendientes vacía para el bloque ${slotName}.`);
+    // 8. Evaluar Cola B: Seguimientos pendientes (>48h sin respuesta o >24h ghosting conversacional)
+    let followUpLead: any = null;
+    let followUpService: any = null;
+    let isConversationalFollowUp = false;
 
-      const timeSinceLastScrape = Date.now() - this.lastScrapeTime;
+    for (const s of regionalServices) {
+      const due = await OutreachRepo.getLeadsForFollowUp(s.id, 1);
+      if (due.length > 0) {
+        followUpLead = due[0];
+        followUpService = s;
+        break;
+      }
+    }
+
+    if (!followUpLead) {
+      for (const s of regionalServices) {
+        const dueReengage = await OutreachRepo.getLeadsForConversationalFollowUp(s.id, 1);
+        if (dueReengage.length > 0) {
+          followUpLead = dueReengage[0];
+          followUpService = s;
+          isConversationalFollowUp = true;
+          break;
+        }
+      }
+    }
+
+    // 9. Interleaving 50/50: Despacho alternado 1 a 1 entre prospección en frío y seguimiento
+    const hasCold = !!coldLeadCandidate;
+    const hasFollowUp = !!followUpLead;
+
+    if (!hasCold && !hasFollowUp) {
+      console.log(`⚠️ [AutonomousPipeline - ${activeRegion}] Cola de prospectos pendientes vacía (sin frío ni seguimientos) para el bloque ${slotName}.`);
+
+      const timeSinceScrape = Date.now() - this.lastScrapeTime;
       const emptyScrapeCooldownMs = 15 * 60 * 1000; // Cooldown de seguridad de 15 minutos para blindar saldo de Outscraper
 
-      if (timeSinceLastScrape > emptyScrapeCooldownMs) {
+      if (timeSinceScrape > emptyScrapeCooldownMs) {
         console.log(`🔄 [AutonomousPipeline - ${activeRegion}] Disparando recarga controlada desde Outscraper...`);
         for (const s of regionalServices) {
           if (s.apifyQueries && s.apifyQueries.length > 0) {
@@ -352,7 +352,7 @@ export class AutonomousPipeline {
           }
         }
       } else {
-        const remainingMin = Math.ceil((emptyScrapeCooldownMs - timeSinceLastScrape) / 60000);
+        const remainingMin = Math.ceil((emptyScrapeCooldownMs - timeSinceScrape) / 60000);
         console.log(`🛡️ [AutonomousPipeline] Cooldown de scraping activo (${remainingMin} min restantes) para blindar saldo de Outscraper.`);
       }
 
@@ -361,8 +361,38 @@ export class AutonomousPipeline {
       return;
     }
 
-    const lead = leadsToContact[0];
-    await this.dispatchLead(lead, targetService, effectiveSettings, activeRegion);
+    // Si ambos tienen prospectos disponibles, alternar estrictamente 1 a 1
+    let dispatchCold = false;
+    if (hasCold && hasFollowUp) {
+      if (this.lastActionWasFollowUp) {
+        dispatchCold = true;
+        console.log(`⚖️ [AutonomousPipeline - ${activeRegion}] Interleaving 50/50: Turno de NUEVO CONTACTO EN FRÍO (último despacho fue seguimiento).`);
+      } else {
+        dispatchCold = false;
+        console.log(`⚖️ [AutonomousPipeline - ${activeRegion}] Interleaving 50/50: Turno de SEGUIMIENTO (último despacho fue contacto en frío).`);
+      }
+    } else if (hasCold) {
+      dispatchCold = true;
+      console.log(`🚀 [AutonomousPipeline - ${activeRegion}] Cola de seguimientos al día. Despachando NUEVO CONTACTO EN FRÍO.`);
+    } else {
+      dispatchCold = false;
+      console.log(`🔁 [AutonomousPipeline - ${activeRegion}] Cola en frío al día o en recarga. Despachando SEGUIMIENTO.`);
+    }
+
+    if (dispatchCold) {
+      this.lastActionWasFollowUp = false;
+      this.serviceRoundRobinIndex = nextRoundRobinIndex;
+      await this.dispatchLead(coldLeadCandidate, coldServiceCandidate, effectiveSettings, activeRegion);
+      return;
+    } else {
+      this.lastActionWasFollowUp = true;
+      if (isConversationalFollowUp) {
+        await this.dispatchConversationalFollowUp(followUpLead, followUpService, effectiveSettings, activeRegion);
+      } else {
+        await this.dispatchFollowUp(followUpLead, followUpService, effectiveSettings, activeRegion);
+      }
+      return;
+    }
   }
 
   /**
@@ -426,7 +456,8 @@ export class AutonomousPipeline {
 
     if (result.success) {
       this.sentTodayCount++;
-      if (activeRegion === 'USA') {
+      const currentLima = AutonomousPipeline.getLimaTime();
+      if (currentLima.hour < 13) {
         this.sentMorningCount++;
       }
       await OutreachRepo.updateLeadFollowUp(lead.phone, nextCount);
@@ -466,7 +497,8 @@ export class AutonomousPipeline {
 
     if (result.success) {
       this.sentTodayCount++;
-      if (activeRegion === 'USA') {
+      const currentLima = AutonomousPipeline.getLimaTime();
+      if (currentLima.hour < 13) {
         this.sentMorningCount++;
       }
       await OutreachRepo.updateLeadConversationalFollowUp(lead.phone);
