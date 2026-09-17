@@ -80,14 +80,19 @@ Agrega esto a tu configuración MCP (`.cursor/mcp.json`, `claude_desktop_config.
 
 ---
 
-## 2.4. Protocolo Obligatorio para IAs: Desarrollo con SDD (Spec-Driven Development)
+## 2.4. Protocolo Obligatorio para IAs: Desarrollo con SDD y Despliegue en Producción (Definition of Done)
 > [!IMPORTANT]
-> **REGLA DE CONSTRUCCIÓN DE CÓDIGO (Antigravity, Cursor, Smith, Claude):**  
-> Ningún agente debe programar código a ciegas. Cualquier nueva feature, refactor, endpoint o integración debe seguir el ciclo SDD:
+> **REGLA DE CONSTRUCCIÓN Y DESPLIEGUE (Antigravity, Cursor, Smith, Claude):**  
+> Ningún agente debe dar una tarea por terminada si los cambios solo existen en el entorno local o en la base de datos. Cualquier nueva feature, refactor, ajuste de horarios, campaña o corrección debe completar obligatoriamente las 5 fases:
 > 1. **Fase 1 (The Spec):** Definir contratos de datos (TypeScript / Zod), firmas de endpoints, invariantes de negocio (reglas anti-ban) y edge cases antes de tocar archivos de código.
 > 2. **Fase 2 (Review Gate):** Presentar la spec sintética a Kenneth para validación rápida.
 > 3. **Fase 3 (Implementación):** Implementar de forma determinista respetando los contratos al 100%.
-> 4. **Fase 4 (Verificación):** Comprobar compilación estricta (`npm run build` / `tsc`), runtime validation y tests.
+> 4. **Fase 4 (Verificación Local):** Comprobar compilación estricta (`npm run build` / `tsc`), runtime validation y tests.
+> 5. **Fase 5 (Despliegue Cloud y Verificación en Railway - Invariante Innegociable):**
+>    - **Sincronización:** Ejecutar `git commit` y `git push origin main`.
+>    - **Despliegue:** Ejecutar `npx @railway/cli up --detach` (o verificar el build automático de GitHub).
+>    - **Verificación en Vivo:** Inspeccionar logs en vivo de Railway (`npx @railway/cli logs -n 30`) hasta confirmar estado `● Online (1/1 running)` y comprobar que el contenedor está ejecutando los ciclos en producción.
+>    - **PROHIBICIÓN ESTRICTA:** **ESTRICTAMENTE PROHIBIDO** reportar una tarea como "lista", "finalizada" o sugerir a Kenneth que la tarea concluyó si los cambios están únicamente en el entorno local. "Listo en local" **NO ES LISTO**.
 
 ---
 
@@ -421,4 +426,5 @@ async function notificarLeadCalificado(coachPhone: string, leadData: any) {
 | **2026-09-16** | Oferta & Pipeline | Arquitectura de 4 Agentes de IA en Paralelo (Prospección Activa, Atención en 5s, Seguimiento Anti-Ghosting y CRM). | Rango de inversión $450-$800 USD/mes; recontacto automático tras 24h de silencio en chat activo (`REPLIED`); cero prospectos en visto. |
 | **2026-09-16** | Live Commerce & Horarios | Extensión de horarios Perú (09:00-13:00 y 14:00-19:00) y activación de nicho Live Shopping / TikTok Live. | Corte exacto a las 19:00 PET; pipeline 100% enfocado en todo el Perú; cero cobros directos por bot. |
 | **2026-09-17** | `setter_engine.ts` & DB | Meta-Demo en Tiempo Real y Fórmula de Inversión por Resultados. | Si piden demo o cómo funciona: *"Ya estás viviendo la experiencia en tiempo real..."*; precio formulado como *"La inversión para lograr [X] es de tan solo [Y] al mes"*; cierre orientado a implementación en 48h y filtro anti-clientes tóxicos. |
+| **2026-09-17** | Pipeline & DevOps | Invariante Obligatorio de Despliegue en Producción (Definition of Done). | Prohibido cerrar tareas dejando cambios solo en local. Toda feature/ajuste exige Fase 5: git commit, git push, build de Railway y verificación de logs en vivo. |
 
