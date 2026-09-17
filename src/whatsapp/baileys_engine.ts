@@ -589,35 +589,6 @@ export class BaileysEngine {
           console.error('[BaileysEngine] Error procesando teléfono derivado:', phoneErr.message);
         }
 
-        // 3.48. Detección Temprana de Onboarding Shalom en Chat
-        try {
-          const isSetupCommand = incomingText.toLowerCase().startsWith('/setup-shalom');
-          const hasCredentials = incomingText.includes('@') && /(?:clave|pass|password|contraseña)/i.test(incomingText);
-          const isAwaitingOnboarding = lead.status === 'CLOSED_WON' || lead.customFields?.pendingShalomOnboarding;
-
-          if (isSetupCommand || hasCredentials || (isAwaitingOnboarding && incomingText.includes('@'))) {
-            const { ShalomChatOnboarding } = await import('../logistics/shalom_chat_onboarding.js');
-            const onbRes = await ShalomChatOnboarding.handleOnboardingMessage(senderPhone, incomingText);
-            if (onbRes.handled && onbRes.reply) {
-              console.log(`📦 [ShalomChatOnboarding] Mensaje de onboarding procesado para ${senderPhone}.`);
-              await OutreachRepo.addChatMessage(senderPhone, 'user', incomingText);
-
-              const jid = `${senderPhone}@s.whatsapp.net`;
-              await this.sock?.sendMessage(jid, { text: onbRes.reply });
-              await OutreachRepo.addChatMessage(senderPhone, 'assistant', onbRes.reply);
-
-              if (onbRes.alertKenneth) {
-                const adminPhone = (settings.adminWhatsAppPhone || process.env.ADMIN_WHATSAPP_PHONE || '51902105668').replace(/[^0-9]/g, '');
-                if (adminPhone) {
-                  await this.sock?.sendMessage(`${adminPhone}@s.whatsapp.net`, { text: onbRes.alertKenneth });
-                }
-              }
-              continue;
-            }
-          }
-        } catch (onbErr: any) {
-          console.error('[BaileysEngine] Error procesando onboarding Shalom:', onbErr.message);
-        }
 
         // 3.49. Detección Temprana de Comprobante de Pago (Voucher / Yape / Plin / Transferencia)
         try {

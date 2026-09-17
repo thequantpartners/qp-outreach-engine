@@ -282,12 +282,10 @@ export class HermesC2 {
       await OutreachRepo.updateLeadStatus(lead.phone, 'CLOSED_WON');
       await OutreachRepo.updateLeadCustomFields(lead.phone, {
         paymentVerifiedAt: new Date().toISOString(),
-        paymentStatus: 'VERIFIED',
-        pendingShalomOnboarding: true
+        paymentStatus: 'VERIFIED'
       });
 
-      const { ShalomChatOnboarding } = await import('../logistics/shalom_chat_onboarding.js');
-      const welcomeMsg = ShalomChatOnboarding.getOnboardingWelcomeMessage(lead.companyName);
+      const welcomeMsg = `¡Hola al equipo de ${lead.companyName}! 🙌 Le saluda Kenneth Herrera de The Quant Partners.\n\nConfirmamos la recepción de su comprobante. Nuestro equipo técnico ya está preparando la infraestructura de sus 4 Agentes de IA para iniciar el despliegue en las próximas 48 horas. ¡Bienvenidos a bordo! 🚀🤝`;
 
       try {
         const { BaileysEngine } = await import('../whatsapp/baileys_engine.js');
@@ -304,7 +302,7 @@ export class HermesC2 {
         `📱 Teléfono: *+${lead.phone}*\n` +
         `🕒 Aprobado: *${new Date().toLocaleTimeString('es-PE')}*\n` +
         `━━━━━━━━━━━━━━━━━━━━\n` +
-        `🚀 Se despachó la bienvenida y solicitud de credenciales de Shalom Pro al WhatsApp del cliente.`;
+        `🚀 Se despachó el mensaje de bienvenida institucional de The Quant Partners al WhatsApp del cliente.`;
 
       return { handled: true, replyMessage: reply, actionExecuted: 'PAYMENT_APPROVED' };
     }
@@ -366,145 +364,7 @@ export class HermesC2 {
       return { handled: true, replyMessage: reply, actionExecuted: 'PAYMENT_REJECTED' };
     }
 
-    // 0.76. Emisión de Guías Shalom (/guia <teléfono>)
-    if (
-      lower === 'guia' ||
-      lower.startsWith('/guia') ||
-      lower.startsWith('guia ') ||
-      lower.startsWith('emitir guia') ||
-      lower.startsWith('generar guia')
-    ) {
-      const parts = cleanText.split(/\s+/);
-      const targetPhone = parts.find(p => /^\+?\d{9,15}$/.test(p))?.replace(/[^0-9]/g, '');
 
-      let lead: any = null;
-      if (targetPhone) {
-        lead = await OutreachRepo.getLeadByPhone(targetPhone);
-      } else {
-        const recentLeads = await OutreachRepo.getLeads({ limit: 10 });
-        lead = recentLeads.find(l => 
-          l.status === 'PAYMENT_PENDING' || 
-          l.status === 'CLOSED_WON' || 
-          l.customFields?.destinationAgency || 
-          l.customFields?.dni
-        );
-      }
-
-      if (!lead) {
-        return {
-          handled: true,
-          replyMessage: '⚠️ No se encontró ningún comprador o pedido pendiente de emisión de guía.\nPara emitir una guía específica escribe: */guia <teléfono>*.'
-        };
-      }
-
-      const address = (lead.address || lead.customFields?.address || '').toLowerCase();
-      const city = (lead.customFields?.city || lead.customFields?.destinationCity || '').toLowerCase();
-      const isLocalLima = 
-        city.includes('lima') || 
-        city.includes('callao') || 
-        address.includes('lima') || 
-        address.includes('callao') || 
-        address.includes('miraflores') || 
-        address.includes('san isidro') || 
-        address.includes('surco') ||
-        address.includes('los olivos');
-
-      if (isLocalLima && !lead.customFields?.destinationAgency) {
-        const localNotice = 
-          `ℹ️ *DESPACHO LOCAL DETECTADO (LIMA / CALLAO)*\n` +
-          `━━━━━━━━━━━━━━━━━━━━\n` +
-          `👤 Cliente: *${lead.companyName}* (+${lead.phone})\n` +
-          `📍 Dirección: *${lead.address || lead.customFields?.address || 'Lima Metropolitana'}*\n` +
-          `━━━━━━━━━━━━━━━━━━━━\n` +
-          `Este pedido corresponde a despacho local vía motorizado o contra-entrega (no requiere guía de encomienda Shalom provincial).`;
-        return { handled: true, replyMessage: localNotice, actionExecuted: 'SHALOM_LOCAL_LIMA' };
-      }
-
-      const settings = await OutreachRepo.getSettings();
-      const shalomCreds = settings.shalomCredentials;
-
-      if (!shalomCreds || !shalomCreds.email) {
-        return {
-          handled: true,
-          replyMessage: 
-            `⚠️ *Shalom Pro no está configurado aún.*\n\n` +
-            `Por favor configura tus accesos de Shalom Pro escribiendo:\n` +
-            `\`/setup-shalom correo@ejemplo.com tu_clave Gamarra\``
-        };
-      }
-
-      const { ShalomNativeClient } = await import('../logistics/shalom_native_client.js');
-      const { ShalomAgenciesCatalog } = await import('../logistics/shalom_agencies.js');
-
-      const agencyName = lead.customFields?.destinationAgency || lead.customFields?.agency || city || 'Arequipa';
-      const destinationAgency = ShalomAgenciesCatalog.findBestMatch(agencyName);
-
-      const orderResult = await ShalomNativeClient.createOrder(
-        { email: shalomCreds.email, password: shalomCreds.password || '' },
-        {
-          originTerminalId: shalomCreds.originAgencyId || 1,
-          destinyTerminalId: destinationAgency.id,
-          productId: 3,
-          quantity: 1,
-          payer: 'sender',
-          declaracionJurada: lead.customFields?.productDescription || 'Prendas / Productos Live Shopping',
-          receiver: {
-            documentType: 'DNI',
-            document: lead.customFields?.dni || '00000000',
-            name: lead.companyName || 'Comprador',
-            lastName: lead.customFields?.lastName || 'Cliente',
-            surName: '',
-            phone: lead.phone
-          },
-          pickupCode: Math.floor(1000 + Math.random() * 9000).toString()
-        }
-      );
-
-      if (!orderResult.success) {
-        return {
-          handled: true,
-          replyMessage: `❌ Error al emitir guía en Shalom: ${orderResult.error || 'Fallo de conexión'}`
-        };
-      }
-
-      await OutreachRepo.updateLeadCustomFields(lead.phone, {
-        shalomGuide: orderResult.guia,
-        shalomCode: orderResult.codigo,
-        shalomLabelPdf: orderResult.labelPdfUrl,
-        shalomDestinyAgency: destinationAgency.name,
-        shalomEmittedAt: new Date().toISOString()
-      });
-      await OutreachRepo.updateLeadStatus(lead.phone, 'CLOSED_WON');
-
-      try {
-        const buyerMsg = 
-          `📦 *¡Tu pedido ya está registrado en Shalom!* 🎉\n\n` +
-          `• *N° de Guía:* ${orderResult.guia}\n` +
-          `• *Código de Retiro:* ${orderResult.codigo}\n` +
-          `• *Agencia Destino:* ${destinationAgency.name} (${destinationAgency.department})\n` +
-          `• *Dirección Agencia:* ${destinationAgency.address}\n\n` +
-          `Puedes consultar el avance de tu paquete en https://shalom.pe con tu número de guía 🙌.`;
-
-        const { BaileysEngine } = await import('../whatsapp/baileys_engine.js');
-        await BaileysEngine.getInstance().sendMessage(lead.phone, buyerMsg);
-        await OutreachRepo.addChatMessage(lead.phone, 'assistant', buyerMsg);
-      } catch (buyerErr: any) {
-        console.warn('[HermesC2] No se pudo enviar notificación de tracking al comprador:', buyerErr.message);
-      }
-
-      const reply = 
-        `✅ *GUÍA SHALOM GENERADA EXITOSAMENTE*\n` +
-        `━━━━━━━━━━━━━━━━━━━━\n` +
-        `📦 *N° Guía:* *${orderResult.guia}*\n` +
-        `🔑 *Código:* *${orderResult.codigo}*\n` +
-        `🏢 *Agencia Destino:* *${destinationAgency.name}* (${destinationAgency.department})\n` +
-        `👤 *Comprador:* ${lead.companyName} (+${lead.phone})\n` +
-        `📄 *Rótulo PDF:* ${orderResult.labelPdfUrl || 'Generado'}\n` +
-        `━━━━━━━━━━━━━━━━━━━━\n` +
-        `🚀 Se le envió automáticamente la notificación y tracking al comprador en su WhatsApp.`;
-
-      return { handled: true, replyMessage: reply, actionExecuted: 'SHALOM_GUIDE_CREATED' };
-    }
 
     // 0.77. Control del Bot de IA / Reactivación post-Handoff (/bot on [tel], /bot off [tel], /bot status [tel])
     if (
