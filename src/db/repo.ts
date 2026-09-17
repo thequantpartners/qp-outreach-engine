@@ -1206,13 +1206,17 @@ LÍNEAS ROJAS:
   public static async updateLeadConversationalFollowUp(phone: string): Promise<void> {
     const clean = phone.replace(/[^0-9]/g, '');
     if (DbConnection.isPg()) {
+      const payload = JSON.stringify({
+        conversational_followup_count: 1,
+        conversational_followup_at: new Date().toISOString()
+      });
       await DbConnection.getPool().query(
         `UPDATE leads SET 
-           custom_fields = custom_fields || '{"conversational_followup_count": 1, "conversational_followup_at": "' || NOW() || '"}'::jsonb,
+           custom_fields = COALESCE(custom_fields, '{}'::jsonb) || $2::jsonb,
            last_message_at = NOW(),
            updated_at = NOW() 
          WHERE phone = $1`,
-        [clean]
+        [clean, payload]
       );
     } else {
       const data = DbConnection.getFallbackData();
