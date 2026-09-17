@@ -23,28 +23,33 @@ export interface SendEmailResult {
 export class ZohoMailer {
   private static transporter: Transporter | null = null;
 
-  public static getTransporter(): Transporter {
-    if (this.transporter) return this.transporter;
-
+  public static createTransporter(portToUse: number): Transporter {
     const user = process.env.ZOHO_MAIL_USER;
     const pass = process.env.ZOHO_MAIL_PASS;
     const host = process.env.ZOHO_MAIL_HOST || 'smtp.zoho.com';
-    const port = parseInt(process.env.ZOHO_MAIL_PORT || '465', 10);
 
     if (!user || !pass) {
       throw new Error('Faltan configurar ZOHO_MAIL_USER y ZOHO_MAIL_PASS en las variables de entorno (.env).');
     }
 
-    this.transporter = nodemailer.createTransport({
+    return nodemailer.createTransport({
       host,
-      port,
-      secure: port === 465,
+      port: portToUse,
+      secure: portToUse === 465,
       auth: {
         user,
         pass
-      }
+      },
+      connectionTimeout: 12000,
+      greetingTimeout: 12000,
+      socketTimeout: 18000
     });
+  }
 
+  public static getTransporter(): Transporter {
+    if (this.transporter) return this.transporter;
+    const port = parseInt(process.env.ZOHO_MAIL_PORT || '587', 10);
+    this.transporter = this.createTransporter(port);
     return this.transporter;
   }
 
@@ -54,39 +59,65 @@ export class ZohoMailer {
       await transporter.verify();
       return true;
     } catch (err: any) {
-      console.error('[ZohoMailer] Error verificando conexión SMTP:', err.message);
-      return false;
+      console.warn(`[ZohoMailer] Falló verificación con puerto primario (${err.message}), probando alternativo...`);
+      try {
+        const primaryPort = parseInt(process.env.ZOHO_MAIL_PORT || '587', 10);
+        const altPort = primaryPort === 465 ? 587 : 465;
+        const alt = this.createTransporter(altPort);
+        await alt.verify();
+        this.transporter = alt;
+        return true;
+      } catch (err2: any) {
+        console.error('[ZohoMailer] Error verificando conexión SMTP con ambos puertos:', err2.message);
+        return false;
+      }
     }
   }
 
   public static async sendEmail(opts: SendEmailOptions): Promise<SendEmailResult> {
+    const user = process.env.ZOHO_MAIL_USER!;
+    const fromName = opts.fromName || 'Kenneth Herrera · The Quant Partners';
+    const primaryPort = parseInt(process.env.ZOHO_MAIL_PORT || '587', 10);
+
+    const mailOptions = {
+      from: `"${fromName}" <${user}>`,
+      to: opts.to,
+      subject: opts.subject,
+      text: opts.text,
+      html: opts.html,
+      replyTo: opts.replyTo || user,
+      cc: opts.cc,
+      bcc: opts.bcc
+    };
+
     try {
       const transporter = this.getTransporter();
-      const user = process.env.ZOHO_MAIL_USER!;
-      const fromName = opts.fromName || 'Kenneth Herrera · The Quant Partners';
-
-      const info = await transporter.sendMail({
-        from: `"${fromName}" <${user}>`,
-        to: opts.to,
-        subject: opts.subject,
-        text: opts.text,
-        html: opts.html,
-        replyTo: opts.replyTo || user,
-        cc: opts.cc,
-        bcc: opts.bcc
-      });
-
-      console.log(`[ZohoMailer] Correo enviado exitosamente a ${opts.to}. MessageId: ${info.messageId}`);
+      const info = await transporter.sendMail(mailOptions);
+      console.log(`[ZohoMailer] Correo enviado exitosamente a ${opts.to} (puerto ${primaryPort}). MessageId: ${info.messageId}`);
       return {
         success: true,
         messageId: info.messageId
       };
     } catch (err: any) {
-      console.error('[ZohoMailer] Error al enviar correo:', err.message);
-      return {
-        success: false,
-        error: err.message
-      };
+      const altPort = primaryPort === 465 ? 587 : 465;
+      console.warn(`[ZohoMailer] Error enviando correo por puerto ${primaryPort} (${err.message}). Reintentando por puerto alternativo ${altPort}...`);
+      try {
+        const altTransporter = this.createTransporter(altPort);
+        const info = await altTransporter.sendMail(mailOptions);
+        console.log(`[ZohoMailer] ✅ Correo enviado exitosamente usando puerto alternativo ${altPort}. MessageId: ${info.messageId}`);
+        // Cachear el transporte que sí funcionó
+        this.transporter = altTransporter;
+        return {
+          success: true,
+          messageId: info.messageId
+        };
+      } catch (altErr: any) {
+        console.error('[ZohoMailer] Error al enviar correo con ambos puertos:', altErr.message);
+        return {
+          success: false,
+          error: altErr.message
+        };
+      }
     }
   }
 
