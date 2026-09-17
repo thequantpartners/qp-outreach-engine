@@ -2855,6 +2855,20 @@ app.post('/api/cold-email/toggle', (req: Request, res: Response) => {
   res.json({ success: true, isRunning: active, status: ColdEmailScheduler.getStatus() });
 });
 
+app.post('/api/cold-email/dispatch-now', async (req: Request, res: Response) => {
+  try {
+    const force = req.body.force === true;
+    const result = await ColdEmailScheduler.dispatchNextNow(force);
+    res.json({
+      success: result.success,
+      result,
+      status: ColdEmailScheduler.getStatus()
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Iniciar servidor, base de datos, WhatsApp y Pipeline Autónomo
 app.listen(PORT, async () => {
   console.log('================================================================');

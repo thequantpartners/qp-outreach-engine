@@ -627,6 +627,19 @@ const TOOLS: Tool[] = [
         }
       }
     }
+  },
+  {
+    name: 'dispatch_cold_email_now',
+    description: 'Despacha de inmediato el siguiente correo en frío de la cola a tomadores de decisión en Perú o USA vía Resend API.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        force: {
+          type: 'boolean',
+          description: 'Si es true, fuerza el envío incluso si estamos fuera de la ventana horaria de oro (default: true)'
+        }
+      }
+    }
   }
 ];
 
@@ -1664,6 +1677,23 @@ export class McpServerManager {
                 {
                   type: 'text',
                   text: JSON.stringify({ count: leads.length, leads }, null, 2)
+                }
+              ]
+            };
+          }
+
+          case 'dispatch_cold_email_now': {
+            const force = args?.force !== false;
+            const result = await ColdEmailScheduler.dispatchNextNow(force);
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    success: result.success,
+                    result,
+                    status: ColdEmailScheduler.getStatus()
+                  }, null, 2)
                 }
               ]
             };

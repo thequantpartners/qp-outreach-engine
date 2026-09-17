@@ -115,6 +115,77 @@ export class ColdEmailScheduler {
     }, delayMs);
   }
 
+  /**
+   * Despacha de inmediato el siguiente prospecto en cola (manual o programado)
+   */
+  public static async dispatchNextNow(force: boolean = false): Promise<{
+    success: boolean;
+    lead?: EmailCampaignLead;
+    variant?: 'A' | 'B' | 'C';
+    messageId?: string;
+    error?: string;
+  }> {
+    const slot = this.getCurrentSlot();
+    if (!force && (slot === 'WEEKEND' || slot === 'OFF_HOURS')) {
+      return {
+        success: false,
+        error: `Fuera de ventana de oro (${slot}). Use force: true para forzar el despacho inmediato.`
+      };
+    }
+
+    const lead = await OutreachRepo.getNextQueuedEmailLead();
+    if (!lead) {
+      return {
+        success: false,
+        error: 'No hay prospectos con correo corporativo en cola (QUEUED).'
+      };
+    }
+
+    const variants: ('A' | 'B' | 'C')[] = ['A', 'B', 'C'];
+    const variant = variants[this.variantRotationIndex % 3];
+    this.variantRotationIndex++;
+
+    const emailContent = ColdEmailGenerator.generate(lead, variant);
+    console.log(`📨 [ColdEmailScheduler] Despachando correo a ${lead.email} (${lead.companyName}) [Variante ${variant}]...`);
+
+    const sendResult = await ZohoMailer.sendEmail({
+      to: lead.email,
+      subject: emailContent.subject,
+      text: emailContent.text,
+      html: emailContent.html,
+      fromName: 'Kenneth Herrera · The Quant Partners'
+    });
+
+    if (sendResult.success) {
+      this.lastSentAt = Date.now();
+      this.sentTodayCount++;
+      if (slot === 'MORNING_WINDOW') this.sentMorningCount++;
+      if (slot === 'AFTERNOON_WINDOW') this.sentAfternoonCount++;
+
+      if (variant === 'A') this.variantStats.variantA++;
+      else if (variant === 'B') this.variantStats.variantB++;
+      else if (variant === 'C') this.variantStats.variantC++;
+
+      await OutreachRepo.markEmailLeadSent(lead.id!, sendResult.messageId || 'sent', variant);
+      console.log(`✅ [ColdEmailScheduler] Correo entregado exitosamente a ${lead.email} (Id: ${sendResult.messageId}). Total hoy: ${this.sentTodayCount}/${this.MAX_DAILY_EMAILS}`);
+      return {
+        success: true,
+        lead,
+        variant,
+        messageId: sendResult.messageId
+      };
+    } else {
+      await OutreachRepo.markEmailLeadFailed(lead.id!, sendResult.error || 'Despacho fallido');
+      console.error(`❌ [ColdEmailScheduler] Falló despacho a ${lead.email}: ${sendResult.error}`);
+      return {
+        success: false,
+        lead,
+        variant,
+        error: sendResult.error
+      };
+    }
+  }
+
   private static async tick(): Promise<void> {
     if (!this.isRunning) return;
 
