@@ -26,6 +26,8 @@
 | **WhatsApp Saliente** | `+51 924 464 410` (Business) | Número oficial conectado en Baileys para prospección en frío y atención setter. |
 | **WhatsApp Admin** | `+51 902 105 668` (Kenneth) | Canal privado para alertas críticas de cierre, takeover humano y aprobación de correos. |
 | **Zoho SMTP Gateway** | `smtp.zoho.com:465` (SSL) | Despacho de emails ejecutivos tras aprobación de Kenneth (`partners@thequantpartners.com`). |
+| **Telegram Alertas** | `@qp_outreach_bot` (`7114541039`) | Canal paralelo de infraestructura Coolify (despliegues, backups R2, disco y caídas VPS). |
+| **Cloudflare R2 Storage** | Bucket `qp-backups-prod` (WNAM) | Almacenamiento S3 desacoplado para backups diarios de PostgreSQL (03:00 AM, retención 30 días, coste $0). |
 
 ---
 
@@ -414,6 +416,19 @@ async function notificarLeadCalificado(coachPhone: string, leadData: any) {
 - **Capacidades:** Consciencia temporal en vivo de la hora de Lima (PET), detección de bloque horario en curso, métricas en caliente de Ghost CRM y balance de créditos (Outscraper / OpenRouter).
 - **Personalidad:** 100% humano, energía de socio co-fundador 🤝🚀, sin formalismos rígidos (*"Kenneth,"*, *"Saludos."*).
 
+### 7.3. Sistema de Backups Cloudflare R2 y Alertas Multicanal (Coolify)
+- **Backups en Cloudflare R2 (`qp-backups-prod`):**
+  - Driver S3 desacoplado (`https://784592a7ae395f163fea8ece52cb385a.r2.cloudflarestorage.com`).
+  - Tarea programada diaria a las 03:00 AM (`0 3 * * *`) respaldando la base de datos `qp_outreach`.
+  - Política de retención: rotación automática de 30 copias (1 mes de snapshots históricos).
+  - Costo operativo: $0.00 permanente (consumo <7 MB sobre los 10,000 MB gratuitos).
+- **Alertas a WhatsApp Admin (`+51 902 105 668`):**
+  - Receptor en `POST /api/webhooks/coolify` conectado con `whatsapp.notifyAdmin()`.
+  - Notifica en tiempo real: despliegues exitosos/fallidos, salud del contenedor, alertas de disco y backups.
+- **Alertas a Telegram Bot (`@qp_outreach_bot`):**
+  - Token del bot y Chat ID (`7114541039`) encriptados en `TelegramNotificationSettings` de Coolify.
+  - Alertas críticas automáticas en paralelo para Kenneth ante caídas del VPS o eventos del sistema.
+
 ---
 
 ## 8. Bitácora Sintética de Decisiones Arquitectónicas (Changelog 2026)
@@ -430,4 +445,7 @@ async function notificarLeadCalificado(coachPhone: string, leadData: any) {
 | **2026-09-17** | `setter_engine.ts` & DB | Meta-Demo en Tiempo Real y Fórmula de Inversión por Resultados. | Si piden demo o cómo funciona: *"Ya estás viviendo la experiencia en tiempo real..."*; precio formulado como *"La inversión para lograr [X] es de tan solo [Y] al mes"*; cierre orientado a implementación en 48h y filtro anti-clientes tóxicos. |
 | **2026-09-17** | Pipeline & DevOps | Invariante Obligatorio de Despliegue en Producción (Definition of Done). | Prohibido cerrar tareas dejando cambios solo en local. Toda feature/ajuste exige Fase 5: git commit, git push, build de Railway y verificación de logs en vivo. |
 | **2026-09-18** | Infraestructura Cloud | Migración Total de Railway a Contabo VPS + Coolify PaaS (`89.117.49.92`). | Eliminación de costos variables por minuto. PostgreSQL propio local migrado con 776 leads y 1058 chats, persistencia de Baileys en volumen Docker, dominios `gateway.thequantpartners.com` y `coolify.thequantpartners.com` con SSL Let's Encrypt y driver nativo Coolify para aprovisionar clientes satélite. |
+| **2026-09-18** | `setter_engine.ts` & DB | Purga Total de Google Meet y Blindaje Anti-Monosílabos. | Eliminación radical de menciones a Meet/Zoom en todo el engine. Guardrail programático (`isVagueOrMonosyllable`) que bloquea transferencias y calificaciones ante monosílabos ("Si", "Ok", "Ya") y exige respuesta sustantiva. |
+| **2026-09-18** | Coolify & Cloudflare R2 | Backups Automáticos en Cloudflare R2 y Alertas Multicanal (WhatsApp & Telegram). | S3 Cloudflare R2 (`qp-backups-prod`) configurado con dump diario a las 03:00 AM (retención 30 días, $0.00). Webhook de Coolify integrado a WhatsApp (`51902105668`) y bot de Telegram (`@qp_outreach_bot`, ID `7114541039`) con alertas paralelas en vivo. |
+
 
