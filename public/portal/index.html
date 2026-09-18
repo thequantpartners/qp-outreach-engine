@@ -233,13 +233,31 @@
       document.getElementById('wonModal').classList.remove('hidden');
     }
 
+    function getAuthPin() {
+      const urlParams = new URLSearchParams(window.location.search);
+      let pin = urlParams.get('pin') || localStorage.getItem('qp_portal_pin');
+      if (!pin) {
+        pin = prompt('🔒 Acceso Protegido · Ingrese el PIN de seguridad:');
+        if (pin) localStorage.setItem('qp_portal_pin', pin.trim());
+      }
+      return pin ? pin.trim() : '';
+    }
+
     function closeWonModal() {
       document.getElementById('wonModal').classList.add('hidden');
     }
 
     async function fetchPortalData() {
       try {
-        const resp = await fetch('/api/portal/data');
+        const pin = getAuthPin();
+        const resp = await fetch(`/api/portal/data?pin=${encodeURIComponent(pin)}`, {
+          headers: { 'x-client-pin': pin }
+        });
+        if (resp.status === 401) {
+          localStorage.removeItem('qp_portal_pin');
+          alert('PIN incorrecto o no autorizado. Acceso denegado.');
+          return;
+        }
         if (!resp.ok) throw new Error('Error al cargar datos');
         const data = await resp.json();
 
@@ -334,9 +352,10 @@
       const currency = document.getElementById('wonCurrency').value;
 
       try {
-        const resp = await fetch('/api/portal/record-sale', {
+        const pin = getAuthPin();
+        const resp = await fetch(`/api/portal/record-sale?pin=${encodeURIComponent(pin)}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-client-pin': pin },
           body: JSON.stringify({ phone, amount, currency })
         });
 

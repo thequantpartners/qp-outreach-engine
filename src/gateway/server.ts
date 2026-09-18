@@ -85,8 +85,8 @@ app.get('/portal', (_req: Request, res: Response) => {
   res.sendFile(path.join(publicPortalDir, 'index.html'));
 });
 
-// Endpoints de datos del Portal de Cliente
-app.get('/api/portal/data', async (_req: Request, res: Response) => {
+// Endpoints de datos del Portal de Cliente (Protegidos con PIN de acceso)
+app.get('/api/portal/data', authenticateClientPin, async (_req: Request, res: Response) => {
   try {
     const { GhostCRM } = await import('../crm/ghost_crm.js');
     const summary = await GhostCRM.getFunnelSummary();
@@ -113,7 +113,7 @@ app.get('/api/portal/data', async (_req: Request, res: Response) => {
   }
 });
 
-app.post('/api/portal/record-sale', async (req: Request, res: Response) => {
+app.post('/api/portal/record-sale', authenticateClientPin, async (req: Request, res: Response) => {
   try {
     const { phone, amount, currency } = req.body;
     if (!phone || !amount) {
@@ -2755,6 +2755,14 @@ app.post('/api/webhooks/cal', async (req: Request, res: Response) => {
 // 17.5. Webhook de Alertas Coolify (Despliegues, Contenedores, Disco del VPS -> WhatsApp Kenneth)
 app.post('/api/webhooks/coolify', async (req: Request, res: Response) => {
   try {
+    const authSecret = req.query.secret || req.headers['x-coolify-secret'] || req.headers['x-api-key'];
+    const expectedSecret = process.env.COOLIFY_WEBHOOK_SECRET || process.env.API_SECRET_KEY || 'qp_coolify_alert_2026';
+    if (authSecret !== expectedSecret) {
+      console.warn('⚠️ [Webhook Coolify] Acceso no autorizado bloqueado desde IP:', req.ip);
+      res.status(401).json({ error: 'Acceso no autorizado al webhook de infraestructura' });
+      return;
+    }
+
     const payload = req.body || {};
     console.log('📥 [Webhook Coolify] Notificación recibida:', JSON.stringify(payload).slice(0, 300));
 
