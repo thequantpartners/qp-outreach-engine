@@ -52,8 +52,8 @@ REGLA DE CALIFICACIÓN ESTRICTA Y ANTI-FALSOS POSITIVOS (INNEGOCIABLE):
 - ÚNICAMENTE se considera calificado cuando den un volumen real (+80 a 100 consultas/mes) o confirmen que quieren iniciar tras conocer el precio y el adelanto de S/. 500.
 
 COMPUERTA DE RESPUESTA:
-1. SI PREGUNTAN DE QUÉ TRATA O PIDEN INFO:
-"¡Excelente! 🙌 En resumen: el Setter atiende al instante y precalifica consultas (24/7), y el Reactivador les escribe de forma inteligente a todos los que los dejaron en visto para no perder ventas.
+1. SI PREGUNTAN DE QUÉ TRATA, PIDEN INFO, O RESPONDEN CON SALUDO / "¿EN QUÉ PODEMOS AYUDARTE?" / "¿CÓMO PUEDO AYUDARTE?":
+"¡Hola! 👋 Les escribo porque implementamos 2 agentes de IA en WhatsApp: el Setter que atiende y precalifica consultas al instante (24/7), y el Reactivador que recupera pacientes que los dejaron en visto para no perder ventas.
 Para ver si su volumen califica a la infraestructura, ¿cuántas consultas o prospectos reciben al mes aproximadamente por su WhatsApp?"
 
 2. SI CONFIRMAN BUEN VOLUMEN (+80 a 100 consultas/mes):
@@ -79,10 +79,9 @@ Y agrega al final: [ACTION:TRANSFER_KENNETH:rubro_o_empresa|horario_o_inmediato|
 5. SI DICEN QUE NO LES INTERESA O ES NÚMERO PRIVADO:
 "Entendido perfectamente y muchas gracias por su tiempo. ¡Muchos éxitos en su empresa! 🙌" -> [ACTION:OPT_OUT:no_interesado]
 
-6. SI CONVERSAS CON OTRO BOT O ASISTENTE VIRTUAL (BOT-TO-BOT LOOP DEFENSE):
-Si el interlocutor es un chatbot/asistente virtual o pregunta si deseas que te transfiera con un asesor/humano:
-"¡Sí, por favor! 🙌 Te agradecería mucho que me transfieras con el asesor o encargado para coordinar directamente. Quedo muy atento por aquí, ¡muchas gracias! 🤝"
-Y agrega al final: [ACTION:TRANSFER_KENNETH:otro_bot_detectado|inmediato|transferencia_humano]`;
+6. SI ES AUTO-RESPUESTA DE FUERA DE HORARIO ("no estamos en horario de atención", "deja tu mensaje"):
+"Buenas tardes. Dejo por aquí el mensaje con mucho gusto: les escribía porque implementamos una infraestructura de IA en WhatsApp que atiende en 5 segundos y reactiva pacientes que dejaron en visto. Quedamos atentos cuando retomen actividades mañana para coordinar 🙌."
+(ESTRICTAMENTE PROHIBIDO agregar etiquetas de acción o calificar).`;
   }
 
   /**
@@ -127,10 +126,20 @@ Y agrega al final: [ACTION:TRANSFER_KENNETH:otro_bot_detectado|inmediato|transfe
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '');
 
+    // 1. Guardrail estricto: Si es un mensaje automático de horario de atención o ausencia, NUNCA es interés sustantivo
+    if (/\b(horario\s+de\s+atenci[oó]n|fuera\s+de\s+horario|no\s+estamos\s+en\s+horario|deja\s+tu\s+mensaje)\b/i.test(text)) {
+      return false;
+    }
+
+    // 2. Guardrail estricto: Si es un saludo automático estándar de bienvenida, NUNCA es interés sustantivo
+    if (/gracias\s+por\s+escribir\s+a/i.test(text) && /c[oó]mo\s+(?:puedo|podemos)\s+ayudarte/i.test(text)) {
+      return false;
+    }
+
     // Indicios de volumen numérico (ej: 50, 100, 200 consultas)
     const hasVolumeNumber = /\b(\d{2,4})\b/.test(combined);
     // Indicios de horario de llamada o llamada directa
-    const hasCallIntent = /\b(llamar|llamame|llamada|llamenme|marcar|horario|manana|tarde|noche|hora|horas|inmediato|ahora|ahorita|hoy|numero|telefono|fono|celular)\b/i.test(combined);
+    const hasCallIntent = /\b(llamar|llamame|llamada|llamenme|marcar)\b/i.test(combined);
     // Indicios de pregunta sobre confianza/equipo o pago
     const hasTrustOrPayment = /\b(confianza|seguro|seguridad|estafa|quien eres|con quien hablo|donde estan|oficina|ruc|contrato|garantia|adelanto|bbva|yape|plin|transferencia|cuenta)\b/i.test(combined);
 
