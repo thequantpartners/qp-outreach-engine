@@ -413,7 +413,7 @@ async function notificarLeadCalificado(coachPhone: string, leadData: any) {
 
 ### 7.2. Hermes C2 (Copiloto Operativo en WhatsApp)
 - **Archivo:** `src/hermes/hermes_c2.ts`
-- **Capacidades:** Consciencia temporal en vivo de la hora de Lima (PET), detección de bloque horario en curso, métricas en caliente de Ghost CRM y balance de créditos (Outscraper / OpenRouter).
+- **Capacidades:** Consciencia temporal en vivo de la hora de Lima (PET), detección de bloque horario en curso, métricas en caliente de Ghost CRM, balance de créditos (Outscraper / OpenRouter) y telemetría de hardware en tiempo real vía `/vps` (RAM, disco SSD NVMe, CPU load y estado de backups R2).
 - **Personalidad:** 100% humano, energía de socio co-fundador 🤝🚀, sin formalismos rígidos (*"Kenneth,"*, *"Saludos."*).
 
 ### 7.3. Sistema de Backups Cloudflare R2 y Alertas Multicanal (Coolify)
@@ -428,6 +428,20 @@ async function notificarLeadCalificado(coachPhone: string, leadData: any) {
 - **Alertas a Telegram Bot (`@qp_outreach_bot`):**
   - Token del bot y Chat ID (`7114541039`) encriptados en `TelegramNotificationSettings` de Coolify.
   - Alertas críticas automáticas en paralelo para Kenneth ante caídas del VPS o eventos del sistema.
+
+### 7.4. Política y Arquitectura de Ciberseguridad & Hardening Perimetral
+- **PostgreSQL 100% Aislado (Puerto 5432 Cerrado al Exterior):**
+  - Parámetro `is_public: false` forzado en Coolify. Contenedor proxy público eliminado.
+  - La base de datos solo escucha en la red bridge privada de Docker; el motor `qp-outreach-engine` se comunica internamente con latencia <1ms, haciendo imposible el escaneo por Shodan, Censys o fuerza bruta externa.
+- **Firewall UFW con Aislamiento de Red Docker (`DOCKER-USER`):**
+  - Política por defecto: `ufw default deny incoming`, `ufw default allow outgoing`.
+  - Puertos públicos autorizados en el host: `22` (SSH), `80` (HTTP), `443` (HTTPS).
+  - Cadena `DOCKER-USER` en `/etc/ufw/after.rules`: descarta silenciosamente (`DROP`) cualquier paquete en `eth0` dirigido a puertos internos no cifrados (`8000`, `8080`, `6001`, `6002`). El acceso a Coolify es estrictamente vía HTTPS (`https://coolify.thequantpartners.com`) respaldado por Traefik SSL.
+- **Protección Activa Anti-Fuerza Bruta SSH (Fail2ban):**
+  - Jail activo sobre `sshd` (puerto 22). Baneo inmediato de 24 horas (`bantime = 1d`) tras 4 intentos fallidos (`maxretry = 4`). Mitigación automatizada contra botnets y escaneos distribuidos.
+- **Autenticación Estricta en Endpoints y Webhooks:**
+  - Endpoints del portal de cliente (`/api/portal/data` y `/api/portal/record-sale`) blindados con `authenticateClientPin`. Peticiones sin PIN válido reciben `401 Unauthorized`.
+  - Webhook de alertas de Coolify (`/api/webhooks/coolify`) firmado obligatoriamente con token criptográfico (`?secret=qp_coolify_alert_2026`). Peticiones no firmadas son rechazadas con `401` y registradas en logs.
 
 ---
 
