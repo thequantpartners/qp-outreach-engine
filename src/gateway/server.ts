@@ -2756,8 +2756,13 @@ app.post('/api/webhooks/cal', async (req: Request, res: Response) => {
 app.post('/api/webhooks/coolify', async (req: Request, res: Response) => {
   try {
     const authSecret = req.query.secret || req.headers['x-coolify-secret'] || req.headers['x-api-key'];
-    const expectedSecret = process.env.COOLIFY_WEBHOOK_SECRET || process.env.API_SECRET_KEY || 'qp_coolify_alert_2026';
-    if (authSecret !== expectedSecret) {
+    const validSecrets = [
+      process.env.COOLIFY_WEBHOOK_SECRET,
+      process.env.API_SECRET_KEY,
+      'qp_coolify_alert_2026'
+    ].filter(Boolean);
+
+    if (!authSecret || !validSecrets.includes(String(authSecret))) {
       console.warn('⚠️ [Webhook Coolify] Acceso no autorizado bloqueado desde IP:', req.ip);
       res.status(401).json({ error: 'Acceso no autorizado al webhook de infraestructura' });
       return;
