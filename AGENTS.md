@@ -443,6 +443,18 @@ async function notificarLeadCalificado(coachPhone: string, leadData: any) {
   - Endpoints del portal de cliente (`/api/portal/data` y `/api/portal/record-sale`) blindados con `authenticateClientPin`. Peticiones sin PIN válido reciben `401 Unauthorized`.
   - Webhook de alertas de Coolify (`/api/webhooks/coolify`) firmado obligatoriamente con token criptográfico (`?secret=qp_coolify_alert_2026`). Peticiones no firmadas son rechazadas con `401` y registradas en logs.
 
+### 7.5. Motor Autónomo de Warm Referrals (Derivación Inteligente en Caliente)
+- **Módulo Principal:** `src/referral/warm_referral_engine.ts`.
+- **Objetivo:** Captura y prospección autónoma cuando un lead inicial (recepcionista, secretaria o asesora comercial, ej. Ciudad Belleza Medical) indica que no toma decisiones de gerencia y deriva a la persona encargada.
+- **Flujo Operativo de 4 Pasos:**
+  1. **Detección Multicanal:** Detecta tanto tarjetas de contacto nativas de WhatsApp (`vCard` / `proto.IContactMessage`) como números telefónicos en texto plano (`PhoneExtractor`).
+  2. **Pregunta Inteligente de Nombre:** Si el lead solo proporcionó el número telefónico o un cargo genérico (*"la encargada"*, *"el jefe"*, *"la doctora"*), el bot agradece y solicita educadamente el nombre del tomador de decisión (*"¡Excelente! Muchas gracias por el contacto 🙌 ¿Podrías indicarme el nombre de la persona encargada para dirigirme con el debido respeto? 🤝"*).
+  3. **Persistencia de Estado Pendiente:** Guarda temporalmente `pendingReferralPhone` y `pendingReferralRole` en `custom_fields` del lead derivador en PostgreSQL. Al recibir el nombre en el siguiente mensaje, lo sanitiza eliminando títulos y prefijos.
+  4. **Despacho Cálido Inmediato (Opción 1):**
+     - Registra al nuevo contacto en `leads` con `source: 'warm_referral'`, enlazando los metadatos de quién lo derivó.
+     - Simula tipeo natural por 3 segundos y despacha la plantilla de prospección cálida en 2 pasos (cero links, personalizada con hora local de Lima, nombre del encargado y empresa).
+     - Alerta de inmediato a Kenneth Herrera a su WhatsApp privado (`+51 902 105 668`) con la ficha del referido y vista previa del mensaje despachado.
+
 ---
 
 ## 8. Bitácora Sintética de Decisiones Arquitectónicas (Changelog 2026)
@@ -462,5 +474,7 @@ async function notificarLeadCalificado(coachPhone: string, leadData: any) {
 | **2026-09-18** | `setter_engine.ts` & DB | Purga Total de Google Meet y Blindaje Anti-Monosílabos. | Eliminación radical de menciones a Meet/Zoom en todo el engine. Guardrail programático (`isVagueOrMonosyllable`) que bloquea transferencias y calificaciones ante monosílabos ("Si", "Ok", "Ya") y exige respuesta sustantiva. |
 | **2026-09-18** | Coolify & Cloudflare R2 | Backups Automáticos en Cloudflare R2 y Alertas Multicanal (WhatsApp & Telegram). | S3 Cloudflare R2 (`qp-backups-prod`) configurado con dump diario a las 03:00 AM (retención 30 días, $0.00). Webhook de Coolify integrado a WhatsApp (`51902105668`) y bot de Telegram (`@qp_outreach_bot`, ID `7114541039`) con alertas paralelas en vivo. |
 | **2026-09-18** | Ciberseguridad & Hardening | Blindaje Perimetral VPS (UFW + Fail2ban + Aislamiento Docker + API Auth). | Puerto PostgreSQL 5432 despublicado de internet (100% privado en Docker). Firewall UFW activo con cadena DOCKER-USER restringida a 80/443 (puerto 8000 bloqueado al exterior). Fail2ban activo en SSH mitigando botnets en tiempo real. Endpoints `/api/portal/*` blindados con PIN de cliente y webhook Coolify protegido con token secreto. |
+| **2026-09-18** | `referral/` & `baileys_engine.ts` | Motor Autónomo de Warm Referrals (Derivación Inteligente en Caliente). | Detección de vCards y números referidos en texto. Si falta el nombre, el bot pregunta educadamente por la persona encargada, persiste en PostgreSQL y despacha automáticamente la prospección cálida (Opción 1 consultiva) alertando a Kenneth por WhatsApp en tiempo real. |
+
 
 

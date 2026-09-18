@@ -270,41 +270,31 @@ app.post('/api/webhook/whatsapp', async (req: Request, res: Response) => {
           console.error('[MetaWebhook] Error en email temprano:', emErr.message);
         }
 
-        // Detección Temprana de Teléfono de Derivación (Referral Phone)
+        // Detección Temprana de Teléfono de Derivación (Warm Referral Engine)
         try {
-          const { PhoneExtractor } = await import('../utils/phone_extractor.js');
-          const referralPhone = PhoneExtractor.extractReferralPhone(text, rawPhone);
-          if (referralPhone) {
-            console.log(`📞 [MetaWebhook] Teléfono derivado detectado en ${rawPhone}: "+${referralPhone}"`);
+          const { WarmReferralEngine } = await import('../referral/warm_referral_engine.js');
+          const metaSockAdapter = {
+            sendMessage: async (jid: string, content: { text: string }) => {
+              const targetPhone = jid.replace(/@[^]+$/, '').replace(/[^0-9]/g, '');
+              const { MetaCloudEngine } = await import('../whatsapp/meta_cloud_engine.js');
+              return await MetaCloudEngine.sendTextMessage(targetPhone, content.text);
+            },
+            sendPresenceUpdate: async () => {}
+          };
+
+          const referralResult = await WarmReferralEngine.processInboundReferral({
+            lead,
+            senderPhone: rawPhone,
+            incomingText: text,
+            sock: metaSockAdapter
+          });
+
+          if (referralResult.handled) {
             await OutreachRepo.addChatMessage(rawPhone, 'user', text);
-            const ackMsg = `¡Muchas gracias por la información! 🙌 Nos comunicaremos directamente con ese número de parte de su equipo. ¡Que tengan un excelente día! 🤝`;
-            const { MetaCloudEngine } = await import('../whatsapp/meta_cloud_engine.js');
-            await MetaCloudEngine.sendTextMessage(rawPhone, ackMsg);
-            await OutreachRepo.addChatMessage(rawPhone, 'assistant', ackMsg);
-
-            await OutreachRepo.saveLeadsFromScraper(lead.serviceId, [{
-              title: `${lead.companyName} (Contacto Directo)`,
-              phone: referralPhone,
-              phoneClean: referralPhone,
-              address: lead.address,
-              categoryName: lead.category,
-              website: lead.website
-            }]);
-
-            await OutreachRepo.updateLeadCustomFields(referralPhone, {
-              referredFromPhone: rawPhone,
-              referredCompanyName: lead.companyName,
-              referredSourceText: text
-            });
-
-            await OutreachRepo.updateLeadCustomFields(rawPhone, {
-              referredToPhone: referralPhone,
-              redirectedAt: new Date().toISOString()
-            });
             continue;
           }
         } catch (phErr: any) {
-          console.error('[MetaWebhook] Error en teléfono derivado:', phErr.message);
+          console.error('[MetaWebhook] Error en WarmReferralEngine:', phErr.message);
         }
 
         // Cumplimiento estricto de política Meta y Blindaje Anti-Insistencia / Redirección Amable

@@ -183,7 +183,7 @@ export interface StartCampaignResponse {
   createdAt: string;
 }
 
-export type LeadSource = 'google_maps' | 'meta_ads' | 'instagram' | 'apollo_b2b' | 'google_search' | 'csv_import' | 'direct_whatsapp';
+export type LeadSource = 'google_maps' | 'meta_ads' | 'instagram' | 'apollo_b2b' | 'google_search' | 'csv_import' | 'direct_whatsapp' | 'warm_referral';
 
 export const ScrapeGoogleMapsSchema = z.object({
   query: z.string().describe("Término de búsqueda (ej. proveedores medicos, clinicas, gimnasios)"),

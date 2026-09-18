@@ -329,6 +329,13 @@ export class BaileysEngine {
           incomingText = '📷 [Comprobante de pago o imagen del producto adjunta]';
         }
 
+        // Si envió una tarjeta de contacto (vCard / contactMessage)
+        if (!incomingText.trim() && (content?.contactMessage || content?.contactsArrayMessage)) {
+          const cMsg = content.contactMessage || (content.contactsArrayMessage?.contacts && content.contactsArrayMessage.contacts[0]);
+          const cName = cMsg?.displayName || 'Contacto';
+          incomingText = `👤 [Tarjeta de contacto adjunta: ${cName}]`;
+        }
+
         // Detección y transcripción autónoma de notas de voz / audios con Gemini 2.5 Flash
         if (!incomingText.trim() && content?.audioMessage) {
           try {
@@ -525,68 +532,28 @@ export class BaileysEngine {
           console.error('[BaileysEngine] Error procesando correo temprano:', emailErr.message);
         }
 
-        // 3.45. Detección Temprana de Teléfono de Derivación (Referral Phone)
+        // 3.45. Motor Autónomo de Warm Referrals (Derivación Inteligente en Caliente)
         try {
-          const { PhoneExtractor } = await import('../utils/phone_extractor.js');
-          const referralPhone = PhoneExtractor.extractReferralPhone(incomingText, senderPhone);
-          if (referralPhone) {
-            console.log(`📞 [BaileysEngine] Teléfono de derivación detectado en mensaje de ${senderPhone}: "+${referralPhone}"`);
-            await OutreachRepo.addChatMessage(senderPhone, 'user', incomingText);
+          const { WarmReferralEngine } = await import('../referral/warm_referral_engine.js');
+          const referralResult = await WarmReferralEngine.processInboundReferral({
+            lead,
+            senderPhone,
+            incomingText,
+            content,
+            sock: this.sock,
+            outgoingEngineMsgIds: BaileysEngine.outgoingEngineMsgIds
+          });
 
+          if (referralResult.handled) {
+            await OutreachRepo.addChatMessage(senderPhone, 'user', incomingText);
             try {
               const { AutonomousPipeline } = await import('../pipeline/autonomous_pipeline.js');
               AutonomousPipeline.recordLeadReply(senderPhone);
             } catch {}
-
-            // Responder agradeciendo a recepción
-            const ackMsg = `¡Muchas gracias por la información! 🙌 Nos comunicaremos directamente con ese número de parte de su equipo. ¡Que tengan un excelente día! 🤝`;
-            const jid = `${senderPhone}@s.whatsapp.net`;
-            await this.sock?.sendMessage(jid, { text: ackMsg });
-            await OutreachRepo.addChatMessage(senderPhone, 'assistant', ackMsg);
-
-            // Guardar el nuevo lead derivado en PostgreSQL
-            await OutreachRepo.saveLeadsFromScraper(lead.serviceId, [{
-              title: `${lead.companyName} (Contacto Directo)`,
-              phone: referralPhone,
-              phoneClean: referralPhone,
-              address: lead.address,
-              categoryName: lead.category,
-              website: lead.website
-            }]);
-
-            await OutreachRepo.updateLeadCustomFields(referralPhone, {
-              referredFromPhone: senderPhone,
-              referredCompanyName: lead.companyName,
-              referredSourceText: incomingText
-            });
-
-            await OutreachRepo.updateLeadCustomFields(senderPhone, {
-              referredToPhone: referralPhone,
-              redirectedAt: new Date().toISOString()
-            });
-
-            // Alertar a Kenneth al WhatsApp privado
-            const adminPhone = (settings.adminWhatsAppPhone || process.env.ADMIN_WHATSAPP_PHONE || '51902105668').replace(/[^0-9]/g, '');
-            if (adminPhone) {
-              const referralAlert = 
-                `🚨 *NUEVO CONTACTO DIRECTO DERIVADO (REFERRAL)*\n` +
-                `━━━━━━━━━━━━━━━━━━━━\n` +
-                `🏢 Empresa: *${lead.companyName}*\n` +
-                `📱 Recepción / Canal que derivó: *+${senderPhone}*\n` +
-                `📞 *Nuevo Número Directo:* *+${referralPhone}*\n` +
-                `━━━━━━━━━━━━━━━━━━━━\n` +
-                `💬 Mensaje recibido:\n` +
-                `"${incomingText.substring(0, 200)}"\n` +
-                `━━━━━━━━━━━━━━━━━━━━\n` +
-                `💡 *Acción:* El nuevo contacto ya fue guardado en el CRM para iniciar contacto referenciado.`;
-
-              await this.sock?.sendMessage(`${adminPhone}@s.whatsapp.net`, { text: referralAlert });
-              console.log(`📢 [BaileysEngine] Alerta de contacto derivado enviada a Kenneth (${adminPhone}).`);
-            }
             continue;
           }
-        } catch (phoneErr: any) {
-          console.error('[BaileysEngine] Error procesando teléfono derivado:', phoneErr.message);
+        } catch (referralErr: any) {
+          console.error('[BaileysEngine] Error en WarmReferralEngine:', referralErr.message);
         }
 
 
