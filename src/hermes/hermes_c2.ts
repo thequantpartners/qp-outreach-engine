@@ -622,7 +622,7 @@ export class HermesC2 {
         `📧 *HERMES C2 · BALANCE DE CORREOS EN FRÍO B2B*\n` +
         `━━━━━━━━━━━━━━━━━━━━\n` +
         `🕒 *Hora Lima:* ${lima.timeStr} PET (${slotText})\n` +
-        `🟢 *Servidor Cloud:* Railway (Despachador HTTPS Resend Activo)\n` +
+        `🟢 *Servidor Cloud:* Contabo VPS / Coolify (Despachador HTTPS Resend Activo)\n` +
         `📬 *Remitente:* partners@thequantpartners.com\n\n` +
         `📊 *Métricas del Embudo de Correo:*\n` +
         `• Total Prospectos: *${emailStats.total}*\n` +
@@ -1712,7 +1712,7 @@ export class HermesC2 {
           deployTarget: 'vps'
         });
 
-        const masterBase = process.env.PUBLIC_URL || 'https://gateway-production-2264.up.railway.app';
+        const masterBase = process.env.PUBLIC_URL || 'https://gateway.thequantpartners.com';
         const installUrl = `${masterBase.startsWith('http') ? masterBase : 'https://' + masterBase}/api/install/${provisionResult.clientId}/${provisionResult.clientPin}`;
 
         const successMsg = 

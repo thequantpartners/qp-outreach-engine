@@ -33,13 +33,13 @@
 
 Cualquier IA puede conectarse a este microservicio mediante el estándar oficial MCP sin escribir código HTTP.
 
-### 2.1. Conexión Remota en Railway (Transporte SSE)
+### 2.1. Conexión Remota en Producción (Transporte SSE)
 Agrega esto a tu configuración MCP (`.cursor/mcp.json`, `claude_desktop_config.json`, etc.):
 ```json
 {
   "mcpServers": {
     "qp-outreach": {
-      "url": "https://gateway-production-2264.up.railway.app/sse"
+      "url": "https://gateway.thequantpartners.com/sse"
     }
   }
 }
@@ -90,10 +90,10 @@ Agrega esto a tu configuración MCP (`.cursor/mcp.json`, `claude_desktop_config.
 > 2. **Fase 2 (Review Gate):** Presentar la spec sintética a Kenneth para validación rápida.
 > 3. **Fase 3 (Implementación):** Implementar de forma determinista respetando los contratos al 100%.
 > 4. **Fase 4 (Verificación Local):** Comprobar compilación estricta (`npm run build` / `tsc`), runtime validation y tests.
-> 5. **Fase 5 (Despliegue Cloud y Verificación en Railway - Invariante Innegociable):**
+> 5. **Fase 5 (Despliegue Cloud y Verificación en Producción - Invariante Innegociable):**  
 >    - **Sincronización:** Ejecutar `git commit` y `git push origin main`.
->    - **Despliegue:** Ejecutar `npx @railway/cli up --detach` (o verificar el build automático de GitHub).
->    - **Verificación en Vivo:** Inspeccionar logs en vivo de Railway (`npx @railway/cli logs -n 30`) hasta confirmar estado `● Online (1/1 running)` y comprobar que el contenedor está ejecutando los ciclos en producción.
+>    - **Despliegue en Coolify / VPS:** Despliegue automático en Coolify o verificación del webhook de GitHub.
+>    - **Verificación en Vivo:** Inspeccionar el endpoint de producción (`https://gateway.thequantpartners.com/api/status` o logs del contenedor Docker en el VPS `89.117.49.92`) hasta confirmar estado `isWhatsAppReady: true` y comprobar que el contenedor está ejecutando los ciclos en producción.
 >    - **PROHIBICIÓN ESTRICTA:** **ESTRICTAMENTE PROHIBIDO** reportar una tarea como "lista", "finalizada" o sugerir a Kenneth que la tarea concluyó si los cambios están únicamente en el entorno local. "Listo en local" **NO ES LISTO**.
 
 ---
@@ -429,4 +429,5 @@ async function notificarLeadCalificado(coachPhone: string, leadData: any) {
 | **2026-09-16** | Live Commerce & Horarios | Extensión de horarios Perú (09:00-13:00 y 14:00-19:00) y activación de nicho Live Shopping / TikTok Live. | Corte exacto a las 19:00 PET; pipeline 100% enfocado en todo el Perú; cero cobros directos por bot. |
 | **2026-09-17** | `setter_engine.ts` & DB | Meta-Demo en Tiempo Real y Fórmula de Inversión por Resultados. | Si piden demo o cómo funciona: *"Ya estás viviendo la experiencia en tiempo real..."*; precio formulado como *"La inversión para lograr [X] es de tan solo [Y] al mes"*; cierre orientado a implementación en 48h y filtro anti-clientes tóxicos. |
 | **2026-09-17** | Pipeline & DevOps | Invariante Obligatorio de Despliegue en Producción (Definition of Done). | Prohibido cerrar tareas dejando cambios solo en local. Toda feature/ajuste exige Fase 5: git commit, git push, build de Railway y verificación de logs en vivo. |
+| **2026-09-18** | Infraestructura Cloud | Migración Total de Railway a Contabo VPS + Coolify PaaS (`89.117.49.92`). | Eliminación de costos variables por minuto. PostgreSQL propio local migrado con 776 leads y 1058 chats, persistencia de Baileys en volumen Docker, dominios `gateway.thequantpartners.com` y `coolify.thequantpartners.com` con SSL Let's Encrypt y driver nativo Coolify para aprovisionar clientes satélite. |
 

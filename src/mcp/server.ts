@@ -792,9 +792,9 @@ export class McpServerManager {
             const stats = await OutreachRepo.getStats();
             let pipeStatus = AutonomousPipeline.getStatus();
 
-            // Si el motor local no está listo, consultar el nodo cloud en Railway
+            // Si el motor local no está listo, consultar el nodo cloud en Contabo VPS
             if (!waStatus.isReady) {
-              const remoteUrl = process.env.GATEWAY_URL || 'https://gateway-production-2264.up.railway.app';
+              const remoteUrl = process.env.GATEWAY_URL || 'https://gateway.thequantpartners.com';
               try {
                 const res = await fetch(`${remoteUrl}/api/status`, {
                   headers: { 'x-api-key': process.env.API_SECRET_KEY || 'qp-master-secret-2026' }
@@ -1026,7 +1026,7 @@ export class McpServerManager {
             if (wa.getStatus().isReady) {
               result = await wa.sendManualReply(to, message);
             } else {
-              const remoteUrl = process.env.GATEWAY_URL || 'https://gateway-production-2264.up.railway.app';
+              const remoteUrl = process.env.GATEWAY_URL || 'https://gateway.thequantpartners.com';
               try {
                 const res = await fetch(`${remoteUrl}/api/send`, {
                   method: 'POST',
@@ -1373,7 +1373,7 @@ export class McpServerManager {
             let qr = wa.getLatestQr();
 
             if (!status.isReady && !qr) {
-              const remoteUrl = process.env.GATEWAY_URL || 'https://gateway-production-2264.up.railway.app';
+              const remoteUrl = process.env.GATEWAY_URL || 'https://gateway.thequantpartners.com';
               try {
                 const res = await fetch(`${remoteUrl}/api/qr`, {
                   headers: { 'x-api-key': process.env.API_SECRET_KEY || 'qp-master-secret-2026' }
@@ -1396,7 +1396,7 @@ export class McpServerManager {
                     isReady: status.isReady,
                     hasQr: status.hasQr,
                     qr: qr,
-                    qrImageUrl: qr ? `${process.env.GATEWAY_URL || 'https://gateway-production-2264.up.railway.app'}/qr` : null,
+                    qrImageUrl: qr ? `${process.env.GATEWAY_URL || 'https://gateway.thequantpartners.com'}/qr` : null,
                     message: status.isReady
                       ? 'WhatsApp está actualmente CONECTADO y listo para despachar.'
                       : status.hasQr

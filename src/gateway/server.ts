@@ -142,7 +142,7 @@ app.get('/api/install/:clientId/:token', async (req: Request, res: Response) => 
 
     const masterBase = process.env.PUBLIC_URL
       ? (process.env.PUBLIC_URL.startsWith('http') ? process.env.PUBLIC_URL : `https://${process.env.PUBLIC_URL}`)
-      : `https://${req.headers.host || 'gateway-production-2264.up.railway.app'}`;
+      : `https://${req.headers.host || 'gateway.thequantpartners.com'}`;
     const masterHeartbeatUrl = `${masterBase}/api/master/heartbeat`;
     const script = VpsInstaller.generateInstallScript(client, masterHeartbeatUrl);
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
