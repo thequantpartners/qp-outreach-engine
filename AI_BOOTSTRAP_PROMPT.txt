@@ -1,0 +1,32 @@
+======================================================================
+  🤖 CÓMO INSTALAR ESTE SISTEMA CON TU INTELIGENCIA ARTIFICIAL (1 CLIC)
+======================================================================
+
+No necesitas saber programar ni configurar servidores.
+Tu IA de cabecera (Claude Code, Cursor, Antigravity o ChatGPT) lo instalará por ti.
+
+----------------------------------------------------------------------
+PASO 1:
+Abre tu asistente de IA favorito:
+- Si usas Claude Code, abre tu terminal en esta carpeta.
+- Si usas Cursor, Antigravity o VS Code, abre esta carpeta en el editor.
+- Si usas ChatGPT o Claude en el navegador, arrastra esta carpeta a la conversación.
+
+----------------------------------------------------------------------
+PASO 2:
+Copia y pega este mensaje exacto en tu IA:
+
+"Actúa como mi Ingeniero DevOps Senior. Lee atentamente el archivo 
+AGENT_INSTALL_SPEC.md ubicado en esta carpeta y guíame paso a paso 
+o ejecuta los comandos necesarios para dejar este sistema comercial 
+completamente instalado y funcionando en mi computadora."
+
+----------------------------------------------------------------------
+PASO 3:
+Tu IA te hará 3 a 4 preguntas sobre tu negocio (si vendes a personas o 
+a empresas, tu nombre y tu teléfono) y ella sola generará la configuración 
+y levantará el sistema en tu máquina.
+
+Al finalizar, te dará el enlace directo para que escanees el código QR 
+con tu WhatsApp y comiences a vender en automático. 🚀
+======================================================================

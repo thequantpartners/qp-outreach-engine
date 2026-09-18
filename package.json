@@ -14,7 +14,8 @@
     "cli": "tsx src/cli/index.ts",
     "mcp": "tsx src/cli/index.ts mcp",
     "test:whatsapp": "tsx src/whatsapp/baileys_engine.ts",
-    "test:engine": "tsx test_engine.ts"
+    "test:engine": "tsx test_engine.ts",
+    "package:agent": "tsx scripts/export_virgin_package.ts"
   },
   "keywords": [
     "whatsapp-gateway",
