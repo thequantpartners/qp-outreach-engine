@@ -9,6 +9,7 @@ import {
 import { ClientRegistry } from './client_registry.js';
 import { BlueprintsManager } from './blueprints_manager.js';
 import { VpsInstaller } from './vps_installer.js';
+import { CoolifyDriver } from './coolify_driver.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,7 +22,7 @@ export interface ProvisionResult {
   companyName: string;
   clientPin: string;
   dashboardUrl: string;
-  deployTarget: 'railway' | 'vps';
+  deployTarget: 'railway' | 'vps' | 'coolify';
   status: 'ACTIVE' | 'PROVISIONING' | 'ERROR';
   configDir: string;
   salesRepsCount: number;
@@ -29,6 +30,7 @@ export interface ProvisionResult {
   installCommand?: string;
   railwayDeployUrl?: string;
   railwayCliCommand?: string;
+  coolifyAppUuid?: string;
 }
 
 export class Deployer {
@@ -94,7 +96,7 @@ export class Deployer {
   public static async provisionClient(req: ProvisionClientRequest): Promise<ProvisionResult> {
     const clientId = req.clientId || this.generateSlug(req.companyName);
     const clientPin = req.clientPin || this.generatePin();
-    const deployTarget = req.deployTarget || 'railway';
+    const deployTarget = req.deployTarget || (CoolifyDriver.isConfigured() ? 'coolify' : 'vps');
 
     console.log(`🚀 [Deployer] Aprovisionando cliente: "${req.companyName}" (${clientId}) [Destino: ${deployTarget}]...`);
 
@@ -115,19 +117,20 @@ export class Deployer {
     // 3. Determinar URLs maestras y del satélite
     const masterBaseUrl = process.env.PUBLIC_URL
       ? (process.env.PUBLIC_URL.startsWith('http') ? process.env.PUBLIC_URL : `https://${process.env.PUBLIC_URL}`)
-      : `http://localhost:${process.env.PORT || 3100}`;
+      : `https://gateway.thequantpartners.com`;
     const masterHeartbeatUrl = `${masterBaseUrl}/api/master/heartbeat`;
 
-    const dashboardDomain = deployTarget === 'railway'
-      ? `${clientId}.up.railway.app`
-      : `${clientId}.thequantpartners.pe`;
+    let dashboardDomain = `${clientId}.thequantpartners.com`;
+    if (deployTarget === 'railway') {
+      dashboardDomain = `${clientId}.up.railway.app`;
+    }
     const dashboardUrl = `https://${dashboardDomain}/dashboard`;
 
     // 4. Registrar en el catálogo maestro
     const clientRecord: FleetClientRecord = {
       clientId,
       companyName: req.companyName,
-      niche: req.niche,
+      niche: req.niche || 'custom',
       status: 'ACTIVE',
       deployTarget,
       dashboardUrl,
@@ -158,8 +161,16 @@ export class Deployer {
 
     let railwayDeployUrl: string | undefined;
     let railwayCliCommand: string | undefined;
+    let coolifyAppUuid: string | undefined;
 
-    if (deployTarget === 'railway') {
+    if (deployTarget === 'coolify') {
+      console.log(`🐳 [Deployer] Aprovisionando instancia satélite en Coolify...`);
+      const coolifyRes = await CoolifyDriver.provisionClient(clientRecord, masterHeartbeatUrl);
+      coolifyAppUuid = coolifyRes.appUuid;
+      if (!coolifyRes.success) {
+        console.warn(`⚠️ [Deployer] Fallo en Coolify API (${coolifyRes.error}). Los scripts locales quedaron listos como fallback.`);
+      }
+    } else if (deployTarget === 'railway') {
       const railwayToken = process.env.RAILWAY_API_TOKEN;
       if (railwayToken) {
         console.log(`⚡ [Deployer] Detectado RAILWAY_API_TOKEN. Creando proyecto en Railway API...`);
@@ -181,6 +192,13 @@ export class Deployer {
     console.log(`🔑 PIN de Acceso: ${clientPin}`);
     console.log(`🌐 Dashboard URL: ${dashboardUrl}`);
 
+    let message = `Cliente "${req.companyName}" aprovisionado en Coolify. URL: ${dashboardUrl} | PIN: ${clientPin}`;
+    if (deployTarget === 'vps') {
+      message = `Cliente "${req.companyName}" listo para VPS dedicado. Ejecuta en el servidor: ${installCommand}`;
+    } else if (deployTarget === 'railway') {
+      message = `Cliente "${req.companyName}" aprovisionado para Railway. PIN de acceso: ${clientPin}`;
+    }
+
     return {
       success: true,
       clientId,
@@ -194,9 +212,8 @@ export class Deployer {
       installCommand,
       railwayDeployUrl,
       railwayCliCommand,
-      message: deployTarget === 'vps'
-        ? `Cliente "${req.companyName}" listo para VPS. Ejecuta en el servidor: ${installCommand}`
-        : `Cliente "${req.companyName}" aprovisionado para Railway. PIN de acceso: ${clientPin}`
+      coolifyAppUuid,
+      message
     };
   }
 

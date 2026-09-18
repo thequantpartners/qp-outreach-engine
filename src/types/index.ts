@@ -346,7 +346,7 @@ export interface FleetClientRecord {
   companyName: string;
   niche: string;
   status: 'PROVISIONING' | 'ACTIVE' | 'PAUSED' | 'DISCONNECTED' | 'ERROR';
-  deployTarget: 'railway' | 'vps';
+  deployTarget: 'railway' | 'vps' | 'coolify';
   dashboardUrl: string;
   adminPhone: string;
   salesReps: SalesRepConfig[];
@@ -438,7 +438,7 @@ export const ProvisionClientSchema = z.object({
   closingMode: z.enum(['MEETING_LINK', 'PHONE_HANDOFF', 'HYBRID_SMART']).default('HYBRID_SMART').optional(),
   meetingUrl: z.string().optional().describe("URL de Cal.com si el cliente usa agendamiento en calendario"),
   serviceName: z.string().optional().describe("Nombre de la oferta o solución a prospectar"),
-  deployTarget: z.enum(['railway', 'vps']).default('railway').optional(),
+  deployTarget: z.enum(['coolify', 'vps', 'railway']).default('coolify').optional(),
   clientPin: z.string().optional().describe("PIN de 4 dígitos para que el cliente acceda a su dashboard (si se omite se genera uno)"),
   clientId: z.string().optional().describe("Slug identificador único (si se omite se genera desde companyName)")
 });
@@ -454,7 +454,7 @@ export const CloneClientSchema = z.object({
     phone: z.string()
   })).min(1).describe("Lista de nuevos vendedores para Round-Robin"),
   newClientPin: z.string().optional().describe("Nuevo PIN de acceso"),
-  deployTarget: z.enum(['railway', 'vps']).default('railway')
+  deployTarget: z.enum(['coolify', 'vps', 'railway']).default('coolify')
 });
 
 export type CloneClientRequest = z.infer<typeof CloneClientSchema>;
