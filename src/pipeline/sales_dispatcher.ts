@@ -59,22 +59,25 @@ export class SalesDispatcher {
     const compName = lead.companyName || 'Contacto Comercial';
     const cName = campaignName || lead.serviceName || lead.serviceId || 'Prospección Directa';
 
+    const isImmediate = urgencyLabel.toLowerCase().includes('inmediat') || urgencyLabel.toLowerCase().includes('ahora') || urgencyLabel.toLowerCase().includes('ya');
+    const scheduleDisplay = isImmediate ? '🔥 INMEDIATO / LLAMAR AHORA MISMO' : urgencyLabel;
+
     const alertMessage = 
-      `🚨 *NUEVO LEAD CALIFICADO - ASIGNADO A TI*\n` +
+      `🚨 *PROSPECTO CALIFICADO PIDE LLAMADA DE CIERRE*\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
       `👤 *Prospecto:* ${compName}\n` +
-      `📱 *WhatsApp:* wa.me/${cleanPhone}\n` +
-      `🏢 *Campaña:* ${cName}\n\n` +
-      `📋 *Diagnóstico y Calificación:*\n` +
-      `• *Necesidad:* ${needLabel}\n` +
-      `• *Urgencia:* ${urgencyLabel}\n` +
-      `• *Presupuesto:* ${budgetLabel}\n\n` +
-      `💬 *Último mensaje:*\n` +
+      `📱 *WhatsApp:* wa.me/${cleanPhone} (+${cleanPhone})\n` +
+      `🏢 *Rubro / Campaña:* ${cName}\n\n` +
+      `📋 *Ficha de Calificación:*\n` +
+      `• *Volumen / Necesidad:* ${needLabel}\n` +
+      `• *⏰ Horario para Llamar:* ${scheduleDisplay}\n` +
+      `• *🎯 Motivo / Objeción:* ${budgetLabel}\n\n` +
+      `💬 *Último mensaje del prospecto:*\n` +
       `"${lastMsgSnippet}"\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
-      `👉 *Haz clic en el enlace para abrir el chat y cerrar la venta:*\n` +
+      `👉 *Haz clic para abrir el chat o llamar:*\n` +
       `https://wa.me/${cleanPhone}\n` +
-      `⚡ _La IA ha sido silenciada en esta conversación._`;
+      `⚡ _La IA ha sido silenciada en esta conversación para tu llamada._`;
 
     // 4. Despachar mensaje privado al WhatsApp del vendedor o al Administrador
     try {
