@@ -482,7 +482,7 @@ export class AutonomousPipeline {
     const provider = settings.whatsappProvider || 'direct_qr';
     const company = lead.companyName ? lead.companyName.trim() : '';
     const greeting = company ? `¡Hola al equipo de ${company}! 🙌` : '¡Hola! 🙌';
-    const message = `${greeting} Te escribe brevemente el asistente virtual de Kenneth. Quería consultarles si tuvieron oportunidad de revisar lo que conversamos ayer, o si les gustaría que coordinemos una videollamada de 10 min por Meet esta semana para mostrárselo funcionando en pantalla 🤝`;
+    const message = `${greeting} Te escribe el asistente virtual de Kenneth. Quería consultarles con total aprecio si tuvieron oportunidad de revisar lo que conversamos ayer, o si les gustaría verificar si su volumen de WhatsApp califica a la infraestructura comercial 🙌`;
 
     console.log(`🔔 [AutonomousPipeline - ${activeRegion || 'ANTI-GHOSTING'}] Despachando seguimiento anti-ghosting a ${lead.companyName} (${lead.phone})...`);
     let result: { success: boolean; error?: string };

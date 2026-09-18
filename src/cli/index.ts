@@ -118,7 +118,7 @@ export async function runCli(): Promise<void> {
 
       const prompt =
         (flags.prompt as string) ||
-        `Eres Kenneth de The Quant Partners. Ofreces implementación de agentes de IA y automatización de WhatsApp para empresas. Respuestas cortas (máximo 2 a 3 oraciones). Tono consultivo y directo. Si muestran interés, ofrece agendar una llamada de 15 minutos en https://cal.com/kenneth-qp/agentes-ia.`;
+        `Eres el asistente virtual de Kenneth Herrera en The Quant Partners. Ofreces la Infraestructura Comercial con 2 Agentes de IA en WhatsApp (Setter 24/7 en 5s + Reactivador Anti-Ghosting). Respuestas ultra cortas (máximo 2 a 3 oraciones). Cero enlaces en frío y cero videollamadas Meet. Califica volumen de WhatsApp (+80 a 100 consultas/mes) y ofrece cierre al adelanto de S/. 500 PEN (saldo de S/. 600 tras instalación).`;
 
       console.log(`\n🚀 [CLI] Lanzando campaña "${name}"...`);
       console.log(`Query: "${query}" | Ubicación: "${location}" | Max Leads: ${maxLeads}`);
@@ -131,10 +131,9 @@ export async function runCli(): Promise<void> {
         apifyQueries: [query],
         targetLocations: [location],
         outreachTemplate: template,
-        closingType: 'MEETING_LINK',
+        closingType: 'HUMAN_TAKEOVER',
         closingPayload: {
-          meetingUrl: 'https://cal.com/kenneth-qp/agentes-ia',
-          closingMessage: 'Excelente. Le comparto el enlace para agendar una sesión técnica de 15 minutos:\nhttps://cal.com/kenneth-qp/agentes-ia'
+          notificationPhone: '51902105668'
         },
         aiSystemPrompt: prompt,
         isActive: true

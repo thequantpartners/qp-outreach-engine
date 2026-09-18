@@ -2930,7 +2930,7 @@ app.post('/api/webhooks/email-reply', async (req: Request, res: Response) => {
         `📝 Asunto: *${subject}*\n` +
         `🕒 Hora: *${new Date().toLocaleTimeString('es-PE')}*\n` +
         `━━━━━━━━━━━━━━━━━━━━\n` +
-        `Kenneth, el prospecto contestó a tu correo de prospección. Revisa tu Zoho Mail para coordinar la videollamada de Meet 🚀🤝`;
+        `Kenneth, el prospecto contestó a tu correo de prospección. Revisa tu Zoho Mail para responderle y avanzar con la propuesta 🚀🤝`;
 
       await whatsapp.notifyAdmin(alertMsg);
       res.json({ success: true, lead: resLead.lead });

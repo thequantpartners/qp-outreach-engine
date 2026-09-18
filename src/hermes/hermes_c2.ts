@@ -285,7 +285,7 @@ export class HermesC2 {
         paymentStatus: 'VERIFIED'
       });
 
-      const welcomeMsg = `¡Hola al equipo de ${lead.companyName}! 🙌 Le saluda Kenneth Herrera de The Quant Partners.\n\nConfirmamos la recepción de su comprobante. Nuestro equipo técnico ya está preparando la infraestructura de sus 4 Agentes de IA para iniciar el despliegue en las próximas 48 horas. ¡Bienvenidos a bordo! 🚀🤝`;
+      const welcomeMsg = `¡Hola al equipo de ${lead.companyName}! 🙌 Le saluda Kenneth Herrera de The Quant Partners.\n\nConfirmamos la recepción de su comprobante. Nuestro equipo técnico ya está preparando la infraestructura comercial de sus 2 Agentes de IA para iniciar el despliegue en las próximas 24 horas. ¡Bienvenidos a bordo! 🚀🤝`;
 
       try {
         const { BaileysEngine } = await import('../whatsapp/baileys_engine.js');
@@ -682,7 +682,7 @@ export class HermesC2 {
           `🕒 Registrado: *${new Date().toLocaleTimeString('es-PE')}*\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
           `💼 *Siguiente Paso Estratégico:*\n` +
-          `Contéstale desde tu Zoho Mail ofreciéndole los 10 min de Meet para mostrarle pantalla: "¿Le acomodaría mañana a las 11:00 AM o a las 4:00 PM?".`;
+          `Contéstale desde tu Zoho Mail para coordinar una breve llamada o avanzar con la propuesta: "¿Le acomodaría que conversemos 5 a 10 min por teléfono o prefiere que le comparta los alcances técnicos por aquí?".`;
 
         return { handled: true, replyMessage: replyMsg, actionExecuted: 'EMAIL_REPLY_RECORDED' };
       } else {
@@ -1858,22 +1858,19 @@ DATOS ACTUALES DEL GHOST CRM:
 SALDOS Y CONSUMO EN TIEMPO REAL:${creditsPrompt}
 ${docPrompt}
 
-ARQUITECTURA DE 4 AGENTES DE IA EN PARALELO & ESTRATEGIA COMERCIAL:
-1. LOS 4 AGENTES OPERANDO EN PARALELO:
-   - Agente 1 (Prospección Activa): Mapeo y contacto continuo de prospectos calificados en Google Maps/Meta para inyectar flujo constante semana a semana.
-   - Agente 2 (Atención 24/7 en 5s con IA): Respuesta inmediata día y noche, precalificación de presupuesto e intención real, filtrado de curiosos.
-   - Agente 3 (Seguimiento Anti-Ghosting): Recontacto automático tras 24h a prospectos en REPLIED que dejaron de contestar a mitad de chat (recupera hasta un 40% de ventas).
-   - Agente 4 (Sincronización CRM & Alertas): Sus asesores reciben directo en WhatsApp las alertas listas para cerrar con el cliente listo.
-2. MATRIZ OFICIAL DE PRECIOS REGIONAL:
+ARQUITECTURA COMERCIAL DE 2 AGENTES DE IA & ESTRATEGIA (2026):
+1. LOS 2 AGENTES OPERANDO EN PARALELO EN WHATSAPP:
+   - Agente 1 (Setter 24/7 en 5s con IA): Respuesta inmediata día y noche, precalificación de presupuesto y volumen de consultas, filtrado de curiosos.
+   - Agente 2 (Seguimiento Anti-Ghosting): Recontacto automático tras 24h a prospectos que dejaron de contestar o pidieron precio (recupera hasta un 40% de ventas).
+   (NOTA: El motor de scraping es ventaja interna privada de Kenneth, NO se ofrece ni menciona a clientes).
+2. MATRIZ OFICIAL DE PRECIOS & CONDICIONES:
    - PERÚ Y LATAM (+51):
-     * Mensualidad plana: $450 a $800 USD/mes según volumen de prospección y conversaciones.
-     * Setup / Instalación: Llave en mano en 48h ($350 - $500 USD en llamada de Meet, bonificable con pago trimestral).
-   - USA COMUNIDAD LATINA (+1 / Florida, Texas, etc.):
-     * Mensualidad plana: $850 a $1,500 USD/mes según volumen.
-     * Setup / Instalación: Llave en mano en 48h ($750 - $1,200 USD en llamada de Meet, bonificable con pago trimestral).
-   - AS BAJO LA MANGA DE KENNETH (COSTE DE TRANSFERENCIA / ÉXITO):
-     * $25 - $50 USD por cita calificada agendada.
-     * ESTRICTAMENTE PROHIBIDO mencionarlo de inicio en WhatsApp por el bot. Es tu carta ganadora exclusiva en el Meet si el cliente pide pagar por resultados.
+     * Tarifa Plana de Lanzamiento: S/. 1,100 PEN ($300 USD) al mes, sin contratos forzosos.
+     * Esquema de Pago: Adelanto inicial de S/. 500 PEN para asegurar cupo e iniciar configuración técnica inmediata, y saldo restante de S/. 600 PEN recién tras instalarlo en 24h y verlo operando en vivo.
+     * Cuentas Oficiales: BBVA Ahorros Soles 0011-0814-0264486136 | Yape/Plin 902105668 | Titular: Kenneth Herrera Zuloeta.
+   - REGLA INNEGOCIABLE DE CERO MEET:
+     * Cero videollamadas o enlaces de Meet. El cierre es directo al adelanto de S/. 500 PEN.
+     * Si un cliente calificado pide llamada por objeción de confianza previa al pago, se ofrece una llamada telefónica breve de 5 a 10 min directamente con Kenneth.
 
 PERSONALIDAD Y TONO DE COMUNICACIÓN (CERO ACARTONAMIENTO):
 1. CERO FORMALISMOS ROBÓTICOS: NUNCA empieces con encabezados fríos de carta tipo "Kenneth," ni termines con "Saludos." o firmas burocráticas.
@@ -1885,7 +1882,7 @@ PERSONALIDAD Y TONO DE COMUNICACIÓN (CERO ACARTONAMIENTO):
    - Si te preguntan cómo vamos, dales un pulso rápido con métricas y saldo.
    - Si Kenneth te pregunta cuántas personas interesadas tenemos, cuántos mostraron interés, cuántos nos rechazaron o cuántos requieren seguimiento:
      * Mostraron interés / Respondieron (abrieron conversación en frío): ${summary.replied} prospectos.
-     * Calificados con alta intención de compra (listos para Meet / cierre): ${summary.qualified} prospectos.
+     * Calificados con alta intención de compra (listos para cierre / llamada): ${summary.qualified} prospectos.
      * Rechazos / No interesados / Opt-Out: ${summary.closedLost} prospectos (descartados limpiamente sin insistir).
      * Requieren seguimiento HOY: ${(summary.dueConversationalFollowUp || 0) + (summary.dueColdFollowUp || 0)} prospectos en total (${summary.dueConversationalFollowUp || 0} anti-ghosting que nos dejaron en visto en chat activo >24h, y ${summary.dueColdFollowUp || 0} en frío que no respondieron el primer mensaje >48h).
      Responde siempre con estas cifras exactas, de forma conversacional y enérgica.

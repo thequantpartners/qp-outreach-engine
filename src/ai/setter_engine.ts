@@ -25,11 +25,6 @@ export class SetterEngine {
     const isUSA = cleanPhone.startsWith('1') && cleanPhone.length === 11 ||
       !!(lead?.address || '').toLowerCase().match(/\b(usa|united states|eeuu|fl|florida|miami|doral|orlando|tampa|kissimmee|tx|texas|houston|dallas|austin|ny|new york|ca|california)\b/);
 
-    const priceRangeStr = isUSA ? '$850 a $1,500 USD/mes' : '$450 a $800 USD/mes';
-    const priceResponseStr = isUSA
-      ? 'La inversión es una tarifa plana de $850 a $1,500 USD al mes según el volumen de chats, mes a mes y listo en 48h (sin permanencia forzosa). Se autofinancia con 1-2 ventas adicionales al mes. ¿Cuántas consultas al mes manejan aproximadamente en su empresa?'
-      : 'Por lanzamiento este mes mantenemos la tarifa plana en S/. 1,100 PEN ($300 USD) para los primeros 5 proyectos (para asegurar entrega en 24h). Trabajamos con un adelanto inicial de S/. 500 y el saldo restante (S/. 600) recién tras instalarlo y verlo operando en vivo. ¿Cuántas consultas al mes manejan aproximadamente por WhatsApp?';
-
     return `Eres el asistente virtual de Kenneth Herrera en The Quant Partners (Lima, Perú).
 Hablas con directores y gerentes de empresas de alto ticket en ${isUSA ? 'USA (Comunidad Latina)' : 'Perú (clínicas, odontología, capacitación, diplomados)'} por WhatsApp en representación del equipo de Kenneth.
 
@@ -83,6 +78,58 @@ Y agrega al final: [ACTION:TRANSFER_KENNETH:rubro_o_empresa|horario_o_inmediato|
 
 5. SI DICEN QUE NO LES INTERESA O ES NÚMERO PRIVADO:
 "Entendido perfectamente y muchas gracias por su tiempo. ¡Muchos éxitos en su empresa! 🙌" -> [ACTION:OPT_OUT:no_interesado]`;
+  }
+
+  /**
+   * Valida si un mensaje entrante es un monosílabo o respuesta vaga que NO califica
+   * para transferencia ni confirmación sin antes repreguntar por volumen.
+   */
+  public static isVagueOrMonosyllable(text: string): boolean {
+    if (!text) return true;
+    const clean = text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[¿?¡!.,;:_()\-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (clean.length < 3) return true;
+
+    const vagueList = [
+      'si', 'sí', 'sip', 'sep', 'ok', 'okay', 'ya', 'dale', 'a ver', 'aver', 'claro',
+      'bien', 'bueno', 'yes', 'hola', 'buenas', 'ola', 'ola buenas', 'dime',
+      'haber', 'asi es', 'correcto', 'exacto', 'por supuesto', 'claro que si', 'de acuerdo'
+    ];
+
+    if (vagueList.includes(clean)) return true;
+
+    // Si tiene menos de 3 palabras y está compuesta enteramente por palabras de relleno afirmativo
+    const words = clean.split(' ').filter(Boolean);
+    if (words.length <= 2 && words.every(w => vagueList.includes(w))) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Verifica si el mensaje o el historial contienen indicios reales de volumen, horario de llamada o consulta concreta
+   */
+  public static hasSubstantiveIntent(text: string, history: Array<{ role: string; content: string }>): boolean {
+    const combined = (text + ' ' + history.map(h => h.content).join(' '))
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+
+    // Indicios de volumen numérico (ej: 50, 100, 200 consultas)
+    const hasVolumeNumber = /\b(\d{2,4})\b/.test(combined);
+    // Indicios de horario de llamada o llamada directa
+    const hasCallIntent = /\b(llamar|llamame|llamada|llamenme|marcar|horario|manana|tarde|noche|hora|horas|inmediato|ahora|ahorita|hoy|numero|telefono|fono|celular)\b/i.test(combined);
+    // Indicios de pregunta sobre confianza/equipo o pago
+    const hasTrustOrPayment = /\b(confianza|seguro|seguridad|estafa|quien eres|con quien hablo|donde estan|oficina|ruc|contrato|garantia|adelanto|bbva|yape|plin|transferencia|cuenta)\b/i.test(combined);
+
+    return hasVolumeNumber || hasCallIntent || hasTrustOrPayment;
   }
 
   /**
@@ -163,12 +210,23 @@ ${service.aiSystemPrompt}`;
       let cleanReply = rawReply;
       let details: LeadQualificationDetails | undefined;
 
+      const isVague = SetterEngine.isVagueOrMonosyllable(incomingText);
+      const hasIntent = SetterEngine.hasSubstantiveIntent(incomingText, chatHistory);
+
       if (transferMatch) {
         const actionType = transferMatch[1];
         cleanReply = rawReply.replace(transferMatch[0], '').trim();
         const parts = (transferMatch[2] || '').split('|');
 
-        if (actionType === 'SCHEDULED') {
+        // GUARDRAIL DETERMINISTA ANTI-FALSOS POSITIVOS:
+        // Si el cliente respondió con un monosílabo ("Si", "Ok", "Ya") o carece de indicios claros,
+        // ESTRICTAMENTE PROHIBIDO transferir, marcar calificado o alertar a Kenneth.
+        if (isVague || !hasIntent) {
+          console.warn(`🛡️ [SetterEngine] Intento de transferencia BLOQUEADO para +${cleanPhone}: respuesta vaga/monosílabo ("${incomingText}"). Repreguntando por volumen.`);
+          isQualified = false;
+          isTransferred = false;
+          cleanReply = 'Disculpa, ¿me podrías confirmar aproximadamente cuántas consultas o pacientes atienden al mes por WhatsApp (ej: 50, 100, 200)? Así vemos si la infraestructura se adapta a su volumen 🙌';
+        } else if (actionType === 'SCHEDULED') {
           const { GhostCRM } = await import('../crm/ghost_crm.js');
           await GhostCRM.transitionStatus(cleanPhone, 'MEETING_SCHEDULED', {
             handoffNotes: `Cita coordinada con prospecto: "${incomingText}"`
@@ -185,6 +243,12 @@ ${service.aiSystemPrompt}`;
           // Ejecutar traspaso y transición a QUALIFIED
           await SalesDispatcher.dispatchQualifiedLead(cleanPhone, details, service?.name);
           isTransferred = true;
+        }
+      } else if (isVague && !hasIntent) {
+        // Si el usuario dijo un monosílabo ("Si", "Ok") pero el bot intentó asumir que calificó o que ya cerró
+        if (cleanReply.toLowerCase().includes('bbva') || cleanReply.toLowerCase().includes('yape') || cleanReply.toLowerCase().includes('agendado') || cleanReply.toLowerCase().includes('transferencia')) {
+          console.warn(`🛡️ [SetterEngine] Respuesta de cobro/agendamiento sobreescrita para +${cleanPhone} ante monosílabo ("${incomingText}").`);
+          cleanReply = 'Disculpa, ¿me podrías confirmar aproximadamente cuántas consultas o pacientes atienden al mes por WhatsApp (ej: 50, 100, 200)? Así vemos si la infraestructura se adapta a su volumen 🙌';
         }
       }
 

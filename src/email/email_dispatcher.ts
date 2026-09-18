@@ -55,39 +55,33 @@ export class EmailDispatcher {
     let bullets: string[] = [];
 
     if (isLegal) {
-      subject = `Infraestructura Comercial de 4 Agentes de IA: Prospección, Triaje 24/7 & Seguimiento para ${companyName}`;
+      subject = `Infraestructura Comercial con 2 Agentes de IA: Triaje 24/7 & Seguimiento para ${companyName}`;
       introParagraph = `Les escribe Kenneth Herrera, fundador de The Quant Partners, en seguimiento a nuestra comunicación por WhatsApp y a su solicitud de compartirles información por correo electrónico formal.`;
-      nicheParagraph = `Conversando con directores de firmas legales y despachos jurídicos, notamos que el cuello de botella comercial suele ser triple: no tener un flujo predecible de nuevos prospectos calificados, demoras en responder consultas y perder horas atendiendo a personas sin viabilidad de caso o que dejan en visto.`;
+      nicheParagraph = `Conversando con directores de firmas legales y despachos jurídicos, notamos que el principal cuello de botella comercial es demorarse en responder consultas y perder horas con personas sin viabilidad de caso o prospectos que dejan en visto tras pedir precio.`;
       bullets = [
-        '1. Agente de Prospección Activa: Mapeo y contacto continuo de potenciales clientes en su zona para inyectar un flujo constante de casos calificados.',
-        '2. Agente de Atención y Triaje Inmediato en 5s (24/7): Responde al instante, perfilando estatus, tipo de caso y presupuesto antes de derivar.',
-        '3. Agente de Seguimiento Anti-Ghosting: Recontacta automáticamente a quienes dejan en visto o no responden para reactivar la cita de consulta.',
-        '4. Sincronización CRM & Entrega Lista: Deriva a sus abogados únicamente expedientes precalificados listos para pagar la consulta.'
+        '1. Agente Setter 24/7 (Atención en 5s): Responde dudas frecuentes de especialidades jurídicas, precalifica la urgencia/presupuesto y filtra a los curiosos.',
+        '2. Agente Reactivador Anti-Ghosting: Recontacta automáticamente a quienes pidieron cotización o dejaron en visto, reactivando consultas dormidas.'
       ];
     } else if (isClinic) {
-      subject = `Infraestructura Comercial de 4 Agentes de IA: Flujo de Pacientes, Atención 24/7 & Seguimiento para ${companyName}`;
+      subject = `Infraestructura Comercial con 2 Agentes de IA: Flujo de Pacientes, Atención 24/7 & Seguimiento para ${companyName}`;
       introParagraph = `Les escribe Kenneth Herrera, fundador de The Quant Partners, en seguimiento a nuestra comunicación por WhatsApp y a su solicitud de compartirles información por correo oficial.`;
-      nicheParagraph = `En clínicas y centros de salud notamos que las ventas se pierden por falta de flujo constante, tardanzas en responder a interesados y ausencia de seguimiento cuando un paciente potencial deja en visto a mitad de coordinación.`;
+      nicheParagraph = `En clínicas y centros de salud notamos que las ventas se pierden por tardanzas en responder a interesados y ausencia de seguimiento cuando un paciente potencial deja en visto a mitad de coordinación.`;
       bullets = [
-        '1. Agente de Prospección Activa: Inyección continua de nuevos pacientes potenciales de su zona geográfica semana a semana.',
-        '2. Agente de Respuesta Instantánea en 5s (24/7): Atiende de inmediato día y noche, evitando que el paciente consulte con otra clínica.',
-        '3. Agente de Seguimiento Anti-Ghosting: Recontacta de forma natural a pacientes que dejaron en visto para concretar el agendamiento.',
-        '4. Sincronización CRM & Meta Ads CAPI: Entrega a su equipo citas confirmadas y optimiza el Pixel de Meta para abaratar el costo por paciente.'
+        '1. Agente Setter 24/7 (Atención en 5s): Responde consultas sobre tratamientos o citas médicas al instante día y noche, evitando que el paciente busque otra clínica.',
+        '2. Agente Reactivador Anti-Ghosting: Recupera de forma empática a pacientes que dejaron en visto tras pedir precios o información de citas.'
       ];
     } else {
-      subject = `Infraestructura Comercial de 4 Agentes de IA: Flujo de Clientes, Atención 24/7 & Seguimiento para ${companyName}`;
+      subject = `Infraestructura Comercial con 2 Agentes de IA: Atención 24/7 & Seguimiento para ${companyName}`;
       introParagraph = `Les escribe Kenneth Herrera, fundador de The Quant Partners, en seguimiento a nuestra comunicación por WhatsApp y a su solicitud de compartirles información por correo oficial.`;
-      nicheParagraph = `Revisando empresas de su sector, comprobamos que el cuello de botella comercial suele ser triple: no contar con un flujo continuo de nuevos prospectos, tardar minutos en responder y perder hasta el 70% de las ventas porque los prospectos dejan en visto y nadie les hace seguimiento.`;
+      nicheParagraph = `Revisando empresas de su sector, comprobamos que el principal cuello de botella comercial es tardar minutos en responder consultas entrantes y perder hasta el 70% de las ventas porque los prospectos dejan en visto y nadie les hace seguimiento.`;
       bullets = [
-        '1. Agente de Prospección Activa: Mapeo continuo de su mercado para inyectar un flujo constante y predecible de clientes calificados.',
-        '2. Agente de Atención en 5 Segundos (24/7) y Filtrado con IA: Cero prospectos perdidos; separa a los curiosos de los compradores reales.',
-        '3. Agente de Seguimiento Anti-Ghosting: Recontacto automático e inteligente a prospectos que dejan en visto, recuperando ventas en automático.',
-        '4. Agente de Sincronización CRM & Manejo Nativo en WhatsApp: Sus asesores reciben directo en su chat al cliente calificado listo para agendar o comprar.'
+        '1. Agente Setter 24/7 (Atención en 5s): Recepción inmediata día y noche, precalificando presupuesto e interés real para no perder prospectos.',
+        '2. Agente Reactivador Anti-Ghosting: Recontacto automático e inteligente a prospectos que dejaron en visto, recuperando ventas en automático.'
       ];
     }
 
-    const ctaParagraph = `Para no hacerles perder tiempo con extensas presentaciones: ¿tendrían disponibilidad para un breve espacio de 10 a 15 minutos por Google Meet esta semana? Les compartiré pantalla para mostrarles la arquitectura en vivo y cómo opera para empresas de su sector.`;
-    const closingParagraph = `Quedo a su disposición para coordinar el día y horario que mejor les acomode.`;
+    const ctaParagraph = `Para no hacerles perder tiempo con extensas presentaciones: podemos coordinar una breve llamada telefónica de 5 a 10 minutos o coordinar directo por WhatsApp para resolver dudas técnicas y ver si su volumen se adapta a la infraestructura.`;
+    const closingParagraph = `Quedo a su entera disposición para coordinar el horario que mejor les acomode.`;
 
     const text = `Estimado equipo directivo de ${companyName},
 
