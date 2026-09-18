@@ -2752,6 +2752,36 @@ app.post('/api/webhooks/cal', async (req: Request, res: Response) => {
   }
 });
 
+// 17.5. Webhook de Alertas Coolify (Despliegues, Contenedores, Disco del VPS -> WhatsApp Kenneth)
+app.post('/api/webhooks/coolify', async (req: Request, res: Response) => {
+  try {
+    const payload = req.body || {};
+    console.log('📥 [Webhook Coolify] Notificación recibida:', JSON.stringify(payload).slice(0, 300));
+
+    const event = payload.event || payload.type || 'coolify.alert';
+    const description = payload.description || payload.message || payload.details || 'Evento del servidor Coolify';
+    const name = payload.name || payload.application_name || payload.server_name || 'Servidor VPS';
+    const status = payload.status || 'INFO';
+    const url = payload.url || 'https://coolify.thequantpartners.com';
+
+    const alertMessage = 
+      `🚨 *ALERTA DE INFRAESTRUCTURA COOLIFY*\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `📦 *Recurso:* ${name}\n` +
+      `⚡ *Evento:* ${event} (${status})\n` +
+      `🕒 *Hora:* ${new Date().toLocaleTimeString('es-PE')}\n` +
+      `📝 *Detalle:* ${description}\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `👉 *Panel:* ${url}`;
+
+    await whatsapp.notifyAdmin(alertMessage);
+    res.json({ success: true, message: 'Alerta despachada a WhatsApp' });
+  } catch (err: any) {
+    console.error('[Webhook Coolify] Error procesando alerta:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 18. Envío de documentos nativos (PDFs)
 app.post('/api/send/document', authenticate, async (req: Request, res: Response) => {
   const parseResult = SendDocumentSchema.safeParse(req.body);
