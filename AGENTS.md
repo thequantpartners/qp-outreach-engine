@@ -333,6 +333,14 @@ El motor toma la lista de prospectos y envía **1 mensaje cada N segundos** (def
    - **ESTRICTAMENTE PROHIBIDO** que cualquier bot o agente de IA mencione precios de transferencia por cita agendada (`$25-$50 USD`) o esquemas por porcentaje en el chat en frío.
    - Este modelo por resultados es un **as bajo la manga exclusivo de Kenneth** para la videollamada de Meet si el cliente objeta la tarifa fija o pide pagar por resultados.
 
+9. **Detección de Bots Ajenos y Blindaje Anti-Bucle (Bot-to-Bot Loop Defense - 2026):**
+   - Si el lead utiliza un bot de atención, chatbot o IVR que ofrece transferencia (*"¿Quieres que te transfiera con un asesor humano?"*):
+     - El motor intercepta determinísticamente el mensaje vía `BotDetector` antes de llamar al LLM (`SetterEngine`).
+     - Responde inmediatamente de forma afirmativa: *"¡Sí, por favor! 🙌 Te agradecería mucho que me transfieras con el asesor o encargado para coordinar directamente. Quedo muy atento por aquí, ¡muchas gracias! 🤝"*.
+   - Si el bot ajeno no ofrece transferencia pero se auto-identifica o muestra menú de opciones (IVR), solicita la conexión con un humano.
+   - Inmediatamente pasa el lead a `HUMAN_TAKEOVER` y notifica a Kenneth en WhatsApp Admin (`51902105668`) para que tome el control cuando el asesor responda.
+   - Si el bot ajeno sigue respondiendo automáticamente, el motor activa el silencio preventivo (`alreadyBotHandled = true`) para evitar bucles infinitos de mensajes (ping-pong entre bots) y consumo innecesario de tokens.
+
 ---
 
 ## 5.1. Arquitectura de 4 Agentes de IA en Paralelo y Matriz Oficial de Precios (2026)

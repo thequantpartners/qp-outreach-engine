@@ -348,6 +348,52 @@ app.post('/api/webhook/whatsapp', async (req: Request, res: Response) => {
           continue;
         }
 
+        // Detección Inteligente de Bots Ajenos / IVR / Menú (Bot-to-Bot Defense en Meta Webhook)
+        try {
+          const { BotDetector } = await import('../utils/bot_detector.js');
+          const botAnalysis = BotDetector.analyze(text);
+          if (botAnalysis.isBot) {
+            console.log(`🤖 [MetaWebhook] Mensaje de bot/IVR detectado de ${rawPhone}: ${botAnalysis.reason}`);
+            const alreadyBotHandled = lead.customFields?.otherBotDetected === true || lead.customFields?.botTransferAsked === true;
+
+            if (alreadyBotHandled) {
+              await OutreachRepo.updateLeadStatus(rawPhone, 'HUMAN_TAKEOVER', {
+                humanTakeoverAt: new Date().toISOString(),
+                handoffNotes: `🤖 Bot repetitivo (${botAnalysis.reason}). IA silenciada.`
+              });
+              continue;
+            }
+
+            if (botAnalysis.suggestedReply) {
+              const { MetaCloudEngine } = await import('../whatsapp/meta_cloud_engine.js');
+              await MetaCloudEngine.sendTextMessage(rawPhone, botAnalysis.suggestedReply);
+              await OutreachRepo.addChatMessage(rawPhone, 'assistant', botAnalysis.suggestedReply);
+            }
+
+            await OutreachRepo.updateLeadStatus(rawPhone, 'HUMAN_TAKEOVER', {
+              humanTakeoverAt: new Date().toISOString(),
+              handoffNotes: `🤖 ${botAnalysis.reason}. Solicitada transferencia a humano.`
+            });
+
+            await OutreachRepo.updateLeadCustomFields(rawPhone, {
+              otherBotDetected: true,
+              botReason: botAnalysis.reason,
+              botOffersTransfer: botAnalysis.offersHumanTransfer,
+              botTransferAsked: true,
+              botDetectedAt: new Date().toISOString()
+            });
+
+            broadcastDashboardEvent({
+              type: 'lead_updated',
+              phone: rawPhone,
+              status: 'HUMAN_TAKEOVER'
+            });
+            continue;
+          }
+        } catch (botErr: any) {
+          console.error('[MetaWebhook] Error en BotDetector:', botErr.message);
+        }
+
         // Comprobar si el lead YA está en estado terminal o control humano (inmunidad terminal)
         const isTerminalOrLocked = ['CLOSED_LOST', 'OPT_OUT', 'CLOSED_WON', 'HUMAN_TAKEOVER'].includes(lead.status) || !!lead.humanTakeoverAt;
         const nowIso = new Date().toISOString();

@@ -77,7 +77,12 @@ Nos envías la captura del comprobante por aquí para iniciar la configuración 
 Y agrega al final: [ACTION:TRANSFER_KENNETH:rubro_o_empresa|horario_o_inmediato|objecion_confianza_llamada]
 
 5. SI DICEN QUE NO LES INTERESA O ES NÚMERO PRIVADO:
-"Entendido perfectamente y muchas gracias por su tiempo. ¡Muchos éxitos en su empresa! 🙌" -> [ACTION:OPT_OUT:no_interesado]`;
+"Entendido perfectamente y muchas gracias por su tiempo. ¡Muchos éxitos en su empresa! 🙌" -> [ACTION:OPT_OUT:no_interesado]
+
+6. SI CONVERSAS CON OTRO BOT O ASISTENTE VIRTUAL (BOT-TO-BOT LOOP DEFENSE):
+Si el interlocutor es un chatbot/asistente virtual o pregunta si deseas que te transfiera con un asesor/humano:
+"¡Sí, por favor! 🙌 Te agradecería mucho que me transfieras con el asesor o encargado para coordinar directamente. Quedo muy atento por aquí, ¡muchas gracias! 🤝"
+Y agrega al final: [ACTION:TRANSFER_KENNETH:otro_bot_detectado|inmediato|transferencia_humano]`;
   }
 
   /**

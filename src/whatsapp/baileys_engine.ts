@@ -808,6 +808,112 @@ export class BaileysEngine {
           console.error('[BaileysEngine] Error procesando correo automático:', emailErr.message);
         }
 
+        // 4.08. Detección Inteligente de Bots Ajenos / IVR / Menú y Blindaje Anti-Bucle (Bot-to-Bot Defense)
+        try {
+          const { BotDetector } = await import('../utils/bot_detector.js');
+          const botAnalysis = BotDetector.analyze(incomingText);
+
+          if (botAnalysis.isBot) {
+            console.log(`🤖 [BotDetector] Mensaje de bot/IVR detectado de ${senderPhone}: ${botAnalysis.reason}`);
+
+            const alreadyBotHandled = 
+              lead.customFields?.otherBotDetected === true || 
+              lead.customFields?.botTransferAsked === true;
+
+            // Si ya interactuamos previamente con este bot o ya le pedimos transferencia, silenciamos para evitar ping-pong infinito
+            if (alreadyBotHandled) {
+              console.log(`🔇 [BotDetector] El bot de ${senderPhone} continúa respondiendo. Pausando bot para evitar bucle infinito.`);
+              await OutreachRepo.updateLeadStatus(senderPhone, 'HUMAN_TAKEOVER', {
+                humanTakeoverAt: new Date().toISOString(),
+                handoffNotes: `🤖 Bot repetitivo detectado (${botAnalysis.reason}). IA silenciada para evitar bucle.`
+              });
+              await OutreachRepo.updateLeadCustomFields(senderPhone, {
+                otherBotDetected: true,
+                botLoopPrevented: true,
+                lastBotMessageAt: new Date().toISOString()
+              });
+
+              // Alertar a Kenneth de que se pausó el bot para evitar bucle
+              const adminPhone = (settings.adminWhatsAppPhone || process.env.ADMIN_WHATSAPP_PHONE || '51902105668').replace(/[^0-9]/g, '');
+              if (adminPhone) {
+                const loopAlert = 
+                  `🤖 *BOT AJENO DETECTADO (BUCLE EVITADO)*\n` +
+                  `━━━━━━━━━━━━━━━━━━━━\n` +
+                  `🏢 Empresa: *${lead.companyName || 'Prospecto'}*\n` +
+                  `📱 Teléfono: *+${senderPhone}*\n` +
+                  `🔍 Razón: ${botAnalysis.reason}\n` +
+                  `💬 Mensaje: "${incomingText.substring(0, 140)}..."\n` +
+                  `━━━━━━━━━━━━━━━━━━━━\n` +
+                  `🛡️ *Acción:* La IA se pausó automáticamente (HUMAN_TAKEOVER) para evitar loop de respuestas entre bots. Toma el control cuando desees.`;
+                await this.sock?.sendMessage(`${adminPhone}@s.whatsapp.net`, { text: loopAlert });
+              }
+              continue;
+            }
+
+            // Primer contacto con el bot: Responder pidiendo humano o aceptando la transferencia
+            const jid = `${senderPhone}@s.whatsapp.net`;
+            const replyToSend = botAnalysis.suggestedReply;
+            if (replyToSend) {
+              await this.sock?.sendMessage(jid, { text: replyToSend });
+              await OutreachRepo.addChatMessage(senderPhone, 'assistant', replyToSend);
+              console.log(`🤖 [BotDetector] Respuesta a bot enviada a ${senderPhone}: "${replyToSend}"`);
+            }
+
+            // Inmediatamente activar HUMAN_TAKEOVER para no caer en loops
+            await OutreachRepo.updateLeadStatus(senderPhone, 'HUMAN_TAKEOVER', {
+              humanTakeoverAt: new Date().toISOString(),
+              handoffNotes: `🤖 ${botAnalysis.reason}. Solicitada transferencia a humano.`
+            });
+
+            await OutreachRepo.updateLeadCustomFields(senderPhone, {
+              otherBotDetected: true,
+              botReason: botAnalysis.reason,
+              botOffersTransfer: botAnalysis.offersHumanTransfer,
+              botTransferAsked: true,
+              botDetectedAt: new Date().toISOString()
+            });
+
+            // Sincronizar etiqueta de WhatsApp Business (🤝 Takeover / Cierre Humano)
+            try {
+              const { WhatsAppLabelManager } = await import('./label_manager.js');
+              await WhatsAppLabelManager.syncLeadLabel(this.sock, senderPhone, 'HUMAN_TAKEOVER', lead.status);
+            } catch {}
+
+            // Notificar prioritariamente a Kenneth
+            const adminPhone = (settings.adminWhatsAppPhone || process.env.ADMIN_WHATSAPP_PHONE || '51902105668').replace(/[^0-9]/g, '');
+            if (adminPhone) {
+              const botAlert = 
+                `🤖 *BOT DETECTADO · TRANSFERENCIA SOLICITADA*\n` +
+                `━━━━━━━━━━━━━━━━━━━━\n` +
+                `🏢 Empresa: *${lead.companyName || 'Prospecto'}*\n` +
+                `📱 Teléfono: *+${senderPhone}*\n` +
+                `🔍 Diagnóstico: ${botAnalysis.reason}\n` +
+                `💬 Mensaje recibido: "${incomingText.substring(0, 150)}..."\n` +
+                `━━━━━━━━━━━━━━━━━━━━\n` +
+                `⚡ *Acción ejecutada:*\n` +
+                `Se respondió: "${replyToSend}"\n` +
+                `Se activó *HUMAN_TAKEOVER* (IA en pausa).\n` +
+                `👉 *Listo:* Cuando el asesor humano de la empresa responda, coordinas directamente 🙌.`;
+
+              await this.sock?.sendMessage(`${adminPhone}@s.whatsapp.net`, { text: botAlert });
+              console.log(`📢 [BotDetector] Alerta de bot enviada a Kenneth (${adminPhone}).`);
+            }
+
+            try {
+              const { broadcastDashboardEvent } = await import('../gateway/server.js');
+              broadcastDashboardEvent({
+                type: 'lead_updated',
+                phone: senderPhone,
+                status: 'HUMAN_TAKEOVER'
+              });
+            } catch {}
+
+            continue;
+          }
+        } catch (botErr: any) {
+          console.error('[BaileysEngine] Error en BotDetector:', botErr.message);
+        }
+
         // 4.1. Evaluar si el AI Setter debe calificar y responder en 5s
         try {
           const { SetterEngine } = await import('../ai/setter_engine.js');
