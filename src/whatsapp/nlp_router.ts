@@ -45,6 +45,26 @@ export class NLPRouter {
       return { command: 'status', args: [] };
     }
 
+    // 1.5. VPS / Servidor / Infraestructura (Master)
+    if (
+      clean === 'vps' ||
+      clean === 'servidor' ||
+      clean === 'infra' ||
+      clean === 'infraestructura' ||
+      clean === 'capacidad' ||
+      clean === 'disco' ||
+      clean === 'memoria' ||
+      clean.includes('como esta el servidor') ||
+      clean.includes('como va el servidor') ||
+      clean.includes('cómo está el servidor') ||
+      clean.includes('cuanto espacio') ||
+      clean.includes('cuanta memoria') ||
+      clean.includes('capacidad del vps') ||
+      clean.includes('estado del vps')
+    ) {
+      return { command: 'vps', args: [] };
+    }
+
     // 2. Saldo / Créditos (Master)
     if (
       clean === 'saldo' ||

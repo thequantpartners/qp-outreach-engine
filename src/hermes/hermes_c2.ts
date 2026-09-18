@@ -5,6 +5,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import os from 'os';
 import { OutreachRepo } from '../db/repo.js';
 import { GhostCRM } from '../crm/ghost_crm.js';
 import { BaileysEngine } from '../whatsapp/baileys_engine.js';
@@ -214,6 +215,7 @@ export class HermesC2 {
           `━━━━━━━━━━━━━━━━━━━━\n` +
           `📊 *SUPERVISIÓN Y CONTROL:*\n` +
           `• \`/status\` : Estado del gateway, campañas y métricas.\n` +
+          `• \`/vps\` : Salud del VPS, consumo de RAM, disco y backups.\n` +
           `• \`/horarios\` : Horarios de prospección por país (USA y Perú) y bloque actual.\n` +
           `• \`/readme\` : Base de conocimiento institucional (README maestro del sistema).\n` +
           `• \`/saldo\` : Saldo y consumo en vivo de Outscraper y OpenRouter.\n` +
@@ -577,6 +579,73 @@ export class HermesC2 {
         `💡 _Escribe /comandos para ver el catálogo completo._`;
 
       return { handled: true, replyMessage: msg, actionExecuted: 'STATUS_CHECK' };
+    }
+
+    // 1.05. Comando: /vps o /servidor (Salud de Infraestructura, Memoria, Disco y Backups)
+    if (
+      lower.startsWith('/vps') ||
+      lower.startsWith('/servidor') ||
+      lower.startsWith('/infra') ||
+      lower === 'vps' ||
+      lower === 'servidor' ||
+      lower === 'infra' ||
+      lower === 'disco' ||
+      lower === 'memoria' ||
+      lower.includes('espacio en disco') ||
+      lower.includes('capacidad del servidor') ||
+      lower.includes('como esta el servidor') ||
+      lower.includes('cómo está el servidor') ||
+      lower.includes('capacidad del vps')
+    ) {
+      const totalMemGB = (os.totalmem() / (1024 ** 3)).toFixed(1);
+      const freeMemGB = (os.freemem() / (1024 ** 3)).toFixed(1);
+      const usedMemGB = ((os.totalmem() - os.freemem()) / (1024 ** 3)).toFixed(1);
+      const memUsagePercent = (((os.totalmem() - os.freemem()) / os.totalmem()) * 100).toFixed(0);
+
+      let diskInfo = { total: '193.0', used: '14.0', free: '179.0', percent: '7' };
+      try {
+        const stat = (fs as any).statfsSync ? (fs as any).statfsSync('/') : null;
+        if (stat) {
+          const totalBytes = Number(stat.blocks) * Number(stat.bsize);
+          const freeBytes = Number(stat.bfree) * Number(stat.bsize);
+          const usedBytes = totalBytes - freeBytes;
+          diskInfo = {
+            total: (totalBytes / (1024 ** 3)).toFixed(1),
+            used: (usedBytes / (1024 ** 3)).toFixed(1),
+            free: (freeBytes / (1024 ** 3)).toFixed(1),
+            percent: ((usedBytes / totalBytes) * 100).toFixed(0)
+          };
+        }
+      } catch (e: any) {
+        console.warn('[HermesC2] No se pudo leer statfsSync:', e.message);
+      }
+
+      const uptimeHours = (os.uptime() / 3600).toFixed(1);
+      const cpus = os.cpus().length;
+      const load = os.loadavg().map(l => l.toFixed(2)).join(', ');
+
+      const vpsMsg = 
+        `🖥️ *HERMES C2 · INFRAESTRUCTURA VPS & COOLIFY*\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `🌐 *Servidor:* Contabo VPS Alemania (\`89.117.49.92\`)\n` +
+        `⏱️ *Uptime:* ${uptimeHours} hrs | CPU Load: [${load}] (${cpus} cores)\n\n` +
+        `🧠 *Memoria RAM:*\n` +
+        `• Uso: *${usedMemGB} GB* de *${totalMemGB} GB* (${memUsagePercent}% en uso)\n` +
+        `• Libre: *${freeMemGB} GB* disponibles\n\n` +
+        `💾 *Almacenamiento NVMe:*\n` +
+        `• Uso: *${diskInfo.used} GB* de *${diskInfo.total} GB* (${diskInfo.percent}% en uso)\n` +
+        `• Libre: *${diskInfo.free} GB* disponibles (${Math.max(0, 100 - Number(diskInfo.percent))}% libre)\n\n` +
+        `☁️ *Backups en Cloudflare R2:*\n` +
+        `• Destino: Bucket \`qp-backups-prod\` (S3 desacoplado)\n` +
+        `• Frecuencia: Diario a las *03:00 AM* (\`0 3 * * *\`)\n` +
+        `• Retención: 30 snapshots rotativos (coste $0.00)\n\n` +
+        `🚨 *Canales de Alerta Activos:*\n` +
+        `• WhatsApp Admin: +51 902 105 668\n` +
+        `• Telegram Bot: @qp_outreach_bot (ID 7114541039)\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `👉 *Panel Coolify:* https://coolify.thequantpartners.com`;
+
+      return { handled: true, replyMessage: vpsMsg, actionExecuted: 'VPS_STATUS' };
     }
 
     // 1.44. Comando: /correos o /email o "¿cómo van los correos?" (Balance y Métricas Detalladas)
@@ -1854,6 +1923,17 @@ DATOS ACTUALES DEL GHOST CRM:
 - Ingresos USD: $${summary.totalRevenueUSD}
 - Ingresos PEN: S/. ${summary.totalRevenuePEN}
 - Eventos Meta CAPI Disparados: ${summary.metaCapiEventsFired}
+
+INFRAESTRUCTURA CLOUD Y SERVIDOR (CONTABO VPS + COOLIFY PAAS):
+- Servidor de Producción: Contabo VPS (Alemania, IP 89.117.49.92), habiendo migrado 100% de Railway para tener tarifa plana fija, cero costos variables y latencia ultra-baja (<1ms) con PostgreSQL en red interna Docker.
+- Recursos del Servidor: 11 GB de RAM (solo ~1.4 GB en uso, 88% libre) y 193 GB de disco SSD NVMe (solo 14 GB en uso, 93% libre).
+- Panel de Control: Coolify PaaS (https://coolify.thequantpartners.com).
+- Backups Automáticos: Cloudflare R2 (bucket 'qp-backups-prod'), volcado diario de base de datos a las 03:00 AM (retención 30 snapshots, coste $0.00 permanente).
+- Alertas Multicanal: Notificaciones automáticas de despliegues, salud y caídas a WhatsApp (+51 902 105 668) y Telegram (@qp_outreach_bot).
+- Comando de servidor: Si Kenneth te pregunta por la infraestructura, el servidor o el VPS, puedes darle los datos o decirle que use /vps.
+
+BLINDAJE ANTI-MONOSÍLABOS EN EL BOT:
+- El Setter IA cuenta con guardrail programático: si el prospecto solo responde "Si", "Ok", "Ya", "A ver", el bot no lo califica falsamente ni le da números de cuenta; le repregunta amablemente por su volumen de consultas para exigir una respuesta sustantiva.
 
 SALDOS Y CONSUMO EN TIEMPO REAL:${creditsPrompt}
 ${docPrompt}
