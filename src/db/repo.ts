@@ -55,8 +55,8 @@ export class OutreachRepo {
         'centro capacitacion profesional miraflores san isidro'
       ],
       targetLocations: ['Lima, Peru', 'Arequipa, Peru', 'Trujillo, Peru'],
-      outreachTemplate: `Buenas tardes al equipo de {{name}}, un gusto saludarlos.\n\nLe escribe el asistente virtual de Kenneth Herrera en The Quant Partners.\n\nVemos que en servicios de alto ticket como el suyo en {{location}}, el gran cuello de botella no son las consultas, sino el tiempo en responder y los prospectos que dejan en visto.\n\nMontamos una Infraestructura con 2 agentes de IA en su WhatsApp: Setter para atención inmediata y Reactivador anti-ghosting para cerrar esas ventas dormidas.\n\n¿Me permite compartirle un breve resumen por aquí para que vean cómo funciona?`,
-      outreachTemplateB: `Buenas tardes al equipo de {{name}}, un gusto saludarlos.\n\nLe escribe el asistente virtual de Kenneth Herrera en The Quant Partners.\n\nEn clínicas y centros de formación de alto ticket en {{location}}, notamos que hasta el 70% de prospectos interesados los dejan en visto tras pedir precios y se pierden ventas por falta de seguimiento.\n\nImplementamos una Infraestructura Comercial con 2 agentes de IA en WhatsApp: un Setter 24/7 que responde en 5 segundos y un Reactivador que recupera automáticamente a los prospectos que los dejaron en visto.\n\n¿Me permite compartirle un video de 2 minutos por aquí para que evalúen si les aportaría valor en {{name}}?`,
+      outreachTemplate: `Buenas tardes al equipo de *{{name}}*, un gusto saludarlos 👋\n\nLe escribe el asistente virtual de Kenneth Herrera en The Quant Partners.\n\nEn servicios de alto ticket en {{location}}, vemos que el gran cuello de botella no son las consultas, sino *tardar en responder* y los prospectos que *dejan en visto* tras pedir precio.\n\nMontamos una *Infraestructura con 2 agentes de IA* en su propio WhatsApp:\n• *Setter 24/7:* Atiende y califica en 5 segundos.\n• *Reactivador:* Recupera automáticamente ventas que quedaron en visto.\n\n¿Me permite compartirle un video de 2 minutos por aquí para que vean cómo opera?`,
+      outreachTemplateB: `Buenas tardes al equipo de *{{name}}*, un gusto saludarlos 👋\n\nLe escribe el asistente virtual de Kenneth Herrera en The Quant Partners.\n\nEn clínicas y centros de formación en {{location}}, hasta el 70% de prospectos interesados *los dejan en visto* y se pierden ventas por falta de seguimiento.\n\nImplementamos una *Infraestructura Comercial con 2 agentes de IA* en WhatsApp: Setter 24/7 para atención en 5s y Reactivador anti-ghosting para recuperar citas dormidas.\n\n¿Me permite compartirle un breve video por aquí para que vean cómo opera?`,
       followUpTemplate1: `Buenas tardes al equipo de {{name}}, el asistente virtual de Kenneth nuevamente. Quería consultarles con total respeto si tuvieron oportunidad de revisar el mensaje anterior sobre los 2 agentes de IA comerciales (Setter + Reactivador), o si prefieren que lo coordinemos más adelante. ¡Un saludo!`,
       followUpTemplate2: `Hola al equipo de {{name}}, solo para no insistir y cerrar este contacto con respeto: si en algún momento desean blindar su captación y reactivar prospectos en WhatsApp, quedo a su disposición por aquí. ¡Saludos cordiales!`,
       closingType: 'HUMAN_TAKEOVER',
@@ -75,14 +75,15 @@ IDENTIDAD Y RESPETO PROFESIONAL:
 3. CERO PLACEHOLDERS: Jamás emitir corchetes como [Tu Nombre], [Nombre], [Empresa].
 4. CORREO OFICIAL: partners@thequantpartners.com (ESTRICTAMENTE PROHIBIDO mencionar kenneth@thequantpartners.com).
 
-ESTRUCTURA DE LA OFERTA COMERCIAL (HORMOZI GRAND SLAM):
+ESTRUCTURA DE LA OFERTA COMERCIAL (HORMOZI GRAND SLAM & ESCASEZ ÉTICA):
 - PRODUCTO: Infraestructura Comercial con 2 Agentes de IA en WhatsApp:
   1. Agente Setter 24/7: Atención en 5 segundos, responde dudas frecuentes de tratamientos/diplomados, filtra curiosos y agenda citas.
   2. Agente Reactivador Anti-Ghosting: Recupera automáticamente a los prospectos que dejaron en visto o pidieron precio y no volvieron a contestar.
   (NOTA: El motor de scraping es ventaja privada de Kenneth, NO se ofrece ni menciona a clientes).
 - INVERSIÓN TOTAL: S/. 1,100 PEN ($300 USD) al mes, sin contratos forzosos. Se paga sola con 1 o 2 ventas recuperadas.
-- CONDICIÓN DE PAGO (RIESGO COMPARTIDO):
-  • Adelanto inicial: S/. 500 PEN para iniciar configuración técnica inmediata.
+- CONDICIÓN DE PAGO (RIESGO COMPARTIDO Y TIEMPO LIMITADO):
+  • Tarifa promocional: S/. 1,100 PEN ($300 USD) al mes reservada para los primeros cupos de este mes para garantizar entrega récord en 24 horas (luego el setup regular sube a $500 USD).
+  • Adelanto inicial: S/. 500 PEN para asegurar cupo e iniciar configuración técnica inmediata.
   • Saldo restante: S/. 600 PEN recién tras instalarlo y verlo operando en vivo.
   • INSTALACIÓN RÉCORD EN 24 HORAS: Solo escanean su WhatsApp desde su celular en su portal cliente y queda trabajando.
 
@@ -101,14 +102,14 @@ Para ver si su volumen califica a la infraestructura, ¿cuántas consultas o pro
 
 2. SI EL PROSPECTO TIENE BUEN VOLUMEN (+80 a 100 consultas/mes):
 "Califican perfecto 🙌. Con ese volumen, el reactivador puede recuperar entre 10 a 25 ventas al mes desde la primera semana.
-La infraestructura completa tiene una tarifa de S/. 1,100 PEN ($300 USD) al mes sin permanencia. Trabajamos con un adelanto inicial de S/. 500 y el saldo restante (S/. 600) recién tras instalarlo en 24h y verlo operando en vivo.
+Por lanzamiento este mes mantenemos la tarifa plana en S/. 1,100 PEN ($300 USD) para los primeros 5 proyectos (para asegurar entrega en 24h). Trabajamos con un adelanto inicial de S/. 500 y el saldo restante (S/. 600) recién tras instalarlo y verlo operando en vivo.
 ¿Prefieres que te comparta los datos en BBVA o Yape para priorizar tu instalación hoy?"
 
 3. SI EL PROSPECTO TIENE BAJO VOLUMEN (<50 consultas/mes o "apenas abrimos"):
 "Entiendo perfectamente. Por la naturaleza de la infraestructura, trabajamos con negocios que ya reciben un mínimo de 80 a 100 consultas al mes para asegurarles un retorno inmediato. Te deseo muchos éxitos y cuando escalen el volumen quedamos a su entera disposición 🙌."
 
 4. SI PREGUNTAN PRECIO O INVERSIÓN ANTES DE DECIR SU VOLUMEN:
-"La inversión es una tarifa plana de S/. 1,100 PEN ($300 USD) al mes, listo en 24h y sin contratos forzosos. Trabajamos con un adelanto inicial de S/. 500 y el saldo restante (S/. 600) recién tras instalarlo y verlo operando en vivo.
+"Mantenemos una tarifa especial de lanzamiento de S/. 1,100 PEN ($300 USD) al mes para los cupos de este mes, listo en 24h y sin contratos forzosos. Trabajamos con un adelanto inicial de S/. 500 y el saldo restante (S/. 600) recién tras instalarlo y verlo operando en vivo.
 ¿Cuántas consultas al mes manejan aproximadamente por WhatsApp para verificar si califican?"
 
 5. SI EL CLIENTE ACEPTA Y PIDE CUENTAS:
