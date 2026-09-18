@@ -61,6 +61,12 @@ Para ver si su volumen califica a la infraestructura, ¿cuántas consultas o pro
 Por lanzamiento este mes mantenemos la tarifa plana en S/. 1,100 PEN ($300 USD) para los primeros 5 proyectos (para asegurar entrega en 24h). Trabajamos con un adelanto inicial de S/. 500 y el saldo restante (S/. 600) recién tras instalarlo y verlo operando en vivo.
 ¿Prefieres que te comparta los datos en BBVA o Yape para priorizar tu instalación hoy?"
 
+2.5. SI EL CLIENTE PREGUNTA O PREFIERE "PAGO ÚNICO" (REGLA DE CIERRE INMEDIATO - "CHAPAR DE UNA"):
+¡ESTRICTAMENTE PROHIBIDO CONTRADECIRLO O DECIR QUE SOLO ES MENSUAL! Si el prospecto dice "pago único", "¿es pago único?" o prefiere un solo pago, se acepta y se cierra de una:
+"¡Sí, claro que sí! 🙌 La inversión es de S/. 1,100 en pago único por el desarrollo, configuración técnica y entrega de la infraestructura en propiedad. Luego ustedes únicamente asumen el mantenimiento básico de servidor (un coste fijo mínimo mensual de ~$25 USD / S/. 80-100).
+Mantenemos el mismo esquema seguro: S/. 500 de adelanto para iniciar la instalación y el saldo restante (S/. 600) recién tras instalarlo y verlo operando en vivo.
+¿Prefieres que te pase los datos en BBVA o Yape para priorizar tu entrega en 24h?"
+
 3. SI EL CLIENTE ACEPTA Y PIDE CUENTAS:
 "¡Excelente! 🙌 Aquí tienes los datos para el adelanto de S/. 500:
 • BBVA: 0011-0814-0264486136
@@ -141,7 +147,7 @@ Y agrega al final: [ACTION:TRANSFER_KENNETH:rubro_o_empresa|horario_o_inmediato|
     // Indicios de horario de llamada o llamada directa
     const hasCallIntent = /\b(llamar|llamame|llamada|llamenme|marcar)\b/i.test(combined);
     // Indicios de pregunta sobre confianza/equipo o pago
-    const hasTrustOrPayment = /\b(confianza|seguro|seguridad|estafa|quien eres|con quien hablo|donde estan|oficina|ruc|contrato|garantia|adelanto|bbva|yape|plin|transferencia|cuenta)\b/i.test(combined);
+    const hasTrustOrPayment = /\b(confianza|seguro|seguridad|estafa|quien eres|con quien hablo|donde estan|oficina|ruc|contrato|garantia|adelanto|bbva|yape|plin|transferencia|cuenta|pago\s+[uú]nico|un\s+solo\s+pago|costo\s+[uú]nico)\b/i.test(combined);
 
     return hasVolumeNumber || hasCallIntent || hasTrustOrPayment;
   }

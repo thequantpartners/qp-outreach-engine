@@ -589,7 +589,7 @@ export class BaileysEngine {
             const ackPaymentMsg = 
               `¡Muchas gracias! 🙌 Recibimos tu constancia de pago. Nuestro equipo lo está verificando en este momento; en unos breves minutos te confirmamos y te dejamos todo listo 🚀.`;
             const jid = `${senderPhone}@s.whatsapp.net`;
-            await this.sock?.sendMessage(jid, { text: ackPaymentMsg });
+            await this.sendHumanizedReply(jid, ackPaymentMsg, { minReadingMs: 2000, maxReadingMs: 3500 });
             await OutreachRepo.addChatMessage(senderPhone, 'assistant', ackPaymentMsg);
 
             // Notificación prioritaria a Kenneth para validación humana
@@ -641,7 +641,7 @@ export class BaileysEngine {
           if (!alreadyAsked) {
             try {
               const jid = `${senderPhone}@s.whatsapp.net`;
-              await this.sock?.sendMessage(jid, { text: rejection.suggestedRedirectAsk });
+              await this.sendHumanizedReply(jid, rejection.suggestedRedirectAsk);
               await OutreachRepo.addChatMessage(senderPhone, 'assistant', rejection.suggestedRedirectAsk);
               await OutreachRepo.updateLeadCustomFields(senderPhone, {
                 redirectAskSent: true,
@@ -673,7 +673,7 @@ export class BaileysEngine {
           if (!alreadyAcknowledged && rejection.suggestedSignoff) {
             try {
               const jid = `${senderPhone}@s.whatsapp.net`;
-              await this.sock?.sendMessage(jid, { text: rejection.suggestedSignoff });
+              await this.sendHumanizedReply(jid, rejection.suggestedSignoff, { minReadingMs: 2000, maxReadingMs: 4000 });
               await OutreachRepo.addChatMessage(senderPhone, 'assistant', rejection.suggestedSignoff);
               console.log(`🛑 [BaileysEngine] Despedida única enviada a ${senderPhone}: "${rejection.suggestedSignoff}"`);
             } catch (sendErr: any) {
@@ -854,9 +854,9 @@ export class BaileysEngine {
             const jid = `${senderPhone}@s.whatsapp.net`;
             const replyToSend = botAnalysis.suggestedReply;
             if (replyToSend) {
-              await this.sock?.sendMessage(jid, { text: replyToSend });
+              await this.sendHumanizedReply(jid, replyToSend, { minReadingMs: 2500, maxReadingMs: 4500 });
               await OutreachRepo.addChatMessage(senderPhone, 'assistant', replyToSend);
-              console.log(`🤖 [BotDetector] Respuesta a bot enviada a ${senderPhone}: "${replyToSend}"`);
+              console.log(`🤖 [BotDetector] Respuesta humana a bot enviada a ${senderPhone}: "${replyToSend}"`);
             }
 
             // Inmediatamente activar HUMAN_TAKEOVER para no caer en loops
@@ -920,9 +920,9 @@ export class BaileysEngine {
           const setterRes = await SetterEngine.processMessage(lead, incomingText, matchedService);
           if (setterRes.replyText && setterRes.replyText.trim().length > 0) {
             const jid = `${senderPhone}@s.whatsapp.net`;
-            await this.sock?.sendMessage(jid, { text: setterRes.replyText });
+            await this.sendHumanizedReply(jid, setterRes.replyText);
             await OutreachRepo.addChatMessage(senderPhone, 'assistant', setterRes.replyText);
-            console.log(`🤖 [SetterEngine] Respuesta enviada a ${senderPhone}: "${setterRes.replyText.substring(0, 70)}..."`);
+            console.log(`🤖 [SetterEngine] Respuesta humana enviada a ${senderPhone}: "${setterRes.replyText.substring(0, 70)}..."`);
           }
           if (setterRes.isTransferred) {
             // El Setter ya ejecutó el traspaso vía SalesDispatcher y activó HUMAN_TAKEOVER
@@ -1064,6 +1064,56 @@ export class BaileysEngine {
         }
       }
     });
+  }
+
+  /**
+   * Envía una respuesta simulando el comportamiento humano en WhatsApp:
+   * 1. Pausa de lectura reflexiva (3 a 6 segundos).
+   * 2. Envío de evento de presencia "composing" (el cliente ve "Escribiendo...").
+   * 3. Pausa de tipeo proporcional a la longitud del texto (4 a 8.5 segundos).
+   * 4. Envío de evento de presencia "paused" y despacho final del mensaje.
+   */
+  public async sendHumanizedReply(
+    jid: string, 
+    text: string, 
+    options: { minReadingMs?: number; maxReadingMs?: number } = {}
+  ): Promise<any> {
+    if (!this.sock) return;
+
+    const minReading = options.minReadingMs ?? 3500;
+    const maxReading = options.maxReadingMs ?? 6000;
+    const readingDelay = Math.floor(Math.random() * (maxReading - minReading + 1)) + minReading;
+
+    // 1. Simular tiempo de lectura antes de empezar a escribir
+    await new Promise(resolve => setTimeout(resolve, readingDelay));
+
+    // 2. Activar indicador de "Escribiendo..." en WhatsApp
+    try {
+      await this.sock.sendPresenceUpdate('composing', jid);
+    } catch (err: any) {
+      console.warn(`[BaileysEngine] No se pudo actualizar presencia composing a ${jid}:`, err.message);
+    }
+
+    // 3. Simular tiempo de tipeo humano (aprox 40-70 caracteres por segundo, min 4s, max 8.5s)
+    const charCount = text.length;
+    const typingDuration = Math.min(Math.max(Math.floor(charCount * 22), 4000), 8500);
+    const typingJitter = Math.floor(Math.random() * 1200);
+    const totalTyping = typingDuration + typingJitter;
+
+    await new Promise(resolve => setTimeout(resolve, totalTyping));
+
+    // 4. Detener indicador de tipeo
+    try {
+      await this.sock.sendPresenceUpdate('paused', jid);
+    } catch {}
+
+    // 5. Enviar mensaje final
+    const sentMsg = await this.sock.sendMessage(jid, { text });
+    if (sentMsg?.key?.id) {
+      BaileysEngine.outgoingEngineMsgIds.add(sentMsg.key.id);
+      setTimeout(() => BaileysEngine.outgoingEngineMsgIds.delete(sentMsg.key.id!), 60000);
+    }
+    return sentMsg;
   }
 
   /**

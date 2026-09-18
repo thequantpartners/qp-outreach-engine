@@ -341,6 +341,20 @@ El motor toma la lista de prospectos y envía **1 mensaje cada N segundos** (def
    - Inmediatamente pasa el lead a `HUMAN_TAKEOVER` y notifica a Kenneth en WhatsApp Admin (`51902105668`) para que tome el control cuando el asesor responda.
    - Si el bot ajeno sigue respondiendo automáticamente, el motor activa el silencio preventivo (`alreadyBotHandled = true`) para evitar bucles infinitos de mensajes (ping-pong entre bots) y consumo innecesario de tokens.
 
+10. **Emulación Humana de Lectura y Tipeo en WhatsApp (Human Typing Simulation):**
+    - Queda prohibido transmitir respuestas entrantes en sub-segundos sin presencia nativa.
+    - Toda respuesta inbound pasa obligatoriamente por `sendHumanizedReply`:
+      - **Pausa de lectura:** 3.5 a 6 segundos (simula que la persona ve y procesa el mensaje).
+      - **Presencia "Escribiendo...":** Emisión del evento XMPP `sock.sendPresenceUpdate('composing', jid)` durante 4 a 8.5 segundos según la longitud del texto.
+      - **Despacho final:** Transmisión tras completar el tipeo.
+    - **Resultado:** Tiempo de respuesta orgánico de 8 a 16 segundos, indistinguible de un operador humano y blindado contra telemetría de bots de Meta.
+
+11. **Flexibilidad Comercial: El Playbook "Pago Único" (Chapar la Venta):**
+    - Si un prospecto pregunta *"¿Es pago único?"*, *"¿Tienen pago único?"* o manifiesta rechazo a suscripciones mensuales recurrentes:
+    - **ESTRICTAMENTE PROHIBIDO** insistir en que solo es mensual o cerrarle la puerta a la venta.
+    - Se acepta de inmediato con el modelo híbrido: **S/. 1,100 PEN en pago único** por el desarrollo, configuración técnica y entrega de la infraestructura en propiedad, y el cliente únicamente asume el mantenimiento directo de servidor/tokens (coste mínimo mensual de ~$25 USD / S/. 80 - 100).
+    - Misma estructura de adelanto seguro: S/. 500 para iniciar instalación técnica y S/. 600 restante tras entrega en vivo en 24h.
+
 ---
 
 ## 5.1. Arquitectura de 4 Agentes de IA en Paralelo y Matriz Oficial de Precios (2026)
