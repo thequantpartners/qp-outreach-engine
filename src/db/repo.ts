@@ -1307,6 +1307,104 @@ LÍNEAS ROJAS:
   }
 
   /**
+   * Programa un mensaje personalizado para ser enviado automáticamente a un lead en fecha y hora específica
+   */
+  public static async scheduleLeadMessage(phone: string, scheduledAtIso: string, message: string): Promise<boolean> {
+    const clean = phone.replace(/[^0-9]/g, '');
+    const scheduledData = {
+      scheduledAt: scheduledAtIso,
+      message,
+      status: 'PENDING',
+      createdAt: new Date().toISOString()
+    };
+
+    if (DbConnection.isPg()) {
+      const res = await DbConnection.getPool().query(
+        `UPDATE leads 
+         SET custom_fields = jsonb_set(
+           COALESCE(custom_fields, '{}'::jsonb),
+           '{scheduledFollowUp}',
+           $2::jsonb,
+           true
+         ),
+         updated_at = NOW()
+         WHERE phone = $1`,
+        [clean, JSON.stringify(scheduledData)]
+      );
+      return (res.rowCount ?? 0) > 0;
+    } else {
+      const data = DbConnection.getFallbackData();
+      const lead = (data.leads || []).find((l: Lead) => l.phone === clean);
+      if (lead) {
+        lead.customFields = lead.customFields || {};
+        lead.customFields.scheduledFollowUp = scheduledData;
+        lead.updatedAt = new Date().toISOString();
+        DbConnection.saveFallbackData(data);
+        return true;
+      }
+      return false;
+    }
+  }
+
+  /**
+   * Obtiene el próximo lead cuyo mensaje programado ya venció (due) y está pendiente de envío
+   */
+  public static async getLeadWithDueScheduledMessage(): Promise<Lead | null> {
+    if (DbConnection.isPg()) {
+      const query = `
+        SELECT * FROM leads 
+        WHERE custom_fields->'scheduledFollowUp'->>'status' = 'PENDING'
+          AND (custom_fields->'scheduledFollowUp'->>'scheduledAt')::timestamptz <= NOW()
+        ORDER BY (custom_fields->'scheduledFollowUp'->>'scheduledAt')::timestamptz ASC
+        LIMIT 1
+      `;
+      const res = await DbConnection.getPool().query(query);
+      if (res.rows.length === 0) return null;
+      return OutreachRepo.mapLeadRow(res.rows[0]);
+    } else {
+      const data = DbConnection.getFallbackData();
+      const nowMs = Date.now();
+      const lead = (data.leads || []).find((l: Lead) => {
+        const sched = l.customFields?.scheduledFollowUp;
+        if (!sched || sched.status !== 'PENDING') return false;
+        const dueMs = new Date(sched.scheduledAt).getTime();
+        return dueMs <= nowMs;
+      });
+      return lead || null;
+    }
+  }
+
+  /**
+   * Marca el mensaje programado como enviado con éxito
+   */
+  public static async markScheduledMessageSent(phone: string): Promise<void> {
+    const clean = phone.replace(/[^0-9]/g, '');
+    if (DbConnection.isPg()) {
+      await DbConnection.getPool().query(
+        `UPDATE leads 
+         SET custom_fields = jsonb_set(
+           jsonb_set(COALESCE(custom_fields, '{}'::jsonb), '{scheduledFollowUp,status}', '"SENT"'::jsonb, true),
+           '{scheduledFollowUp,sentAt}', to_jsonb(NOW()::text), true
+         ),
+         last_message_at = NOW(),
+         updated_at = NOW()
+         WHERE phone = $1`,
+        [clean]
+      );
+    } else {
+      const data = DbConnection.getFallbackData();
+      const lead = (data.leads || []).find((l: Lead) => l.phone === clean);
+      if (lead && lead.customFields?.scheduledFollowUp) {
+        lead.customFields.scheduledFollowUp.status = 'SENT';
+        lead.customFields.scheduledFollowUp.sentAt = new Date().toISOString();
+        lead.lastMessageAt = new Date().toISOString();
+        lead.updatedAt = new Date().toISOString();
+        DbConnection.saveFallbackData(data);
+      }
+    }
+  }
+
+  /**
    * Actualiza lead tras agendar cita en Cal.com
    */
   public static async updateLeadSchedule(phone: string, scheduledMeetingAt: string, customFields?: Record<string, any>): Promise<void> {

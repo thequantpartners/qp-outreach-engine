@@ -3,6 +3,7 @@ import { MetaCloudEngine } from '../whatsapp/meta_cloud_engine.js';
 import { OutscraperScraper } from '../scraper/outscraper_scraper.js';
 import { SpintaxEngine } from '../utils/spintax.js';
 import { OutreachRepo } from '../db/repo.js';
+import { SlaAlertManager } from '../whatsapp/sla_manager.js';
 
 export class AutonomousPipeline {
   private static isRunning: boolean = false;
@@ -234,6 +235,19 @@ export class AutonomousPipeline {
       await this.dispatchMeetingReminder(meetingLead);
       this.scheduleNextTick(15000);
       return;
+    }
+
+    // 3.5. Comprobar mensajes de seguimiento programados puntualmente (Scheduled Follow-Ups)
+    const dueScheduledLead = await OutreachRepo.getLeadWithDueScheduledMessage();
+    if (dueScheduledLead) {
+      const schedMsg = dueScheduledLead.customFields?.scheduledFollowUp?.message;
+      if (schedMsg && schedMsg.trim().length > 0) {
+        await this.dispatchScheduledLeadMessage(dueScheduledLead, schedMsg);
+        this.scheduleNextTick(30000);
+        return;
+      } else {
+        await OutreachRepo.markScheduledMessageSent(dueScheduledLead.phone);
+      }
     }
 
     // 4. Obtener todos los servicios activos y filtrar por la región del bloque actual
@@ -540,6 +554,54 @@ export class AutonomousPipeline {
       const customFields = { ...(lead.customFields || {}), reminderSent: true };
       await OutreachRepo.updateLeadSchedule(lead.phone, lead.scheduledMeetingAt, customFields);
       console.log(`✅ [AutonomousPipeline] Recordatorio entregado a ${lead.companyName}!`);
+    }
+  }
+
+  /**
+   * Despacha un mensaje de seguimiento programado puntualmente a un prospecto
+   */
+  private static async dispatchScheduledLeadMessage(lead: any, message: string): Promise<void> {
+    const settings = await OutreachRepo.getSettings();
+    const provider = settings.whatsappProvider || 'direct_qr';
+    console.log(`⏰ [AutonomousPipeline] Despachando mensaje programado a ${lead.companyName || lead.phone} (${lead.phone})...`);
+
+    let result: { success: boolean; error?: string };
+
+    if (provider === 'meta_cloud_api') {
+      const metaRes = await MetaCloudEngine.sendTextMessage(lead.phone, message);
+      result = { success: metaRes.success, error: metaRes.error };
+    } else {
+      const whatsapp = BaileysEngine.getInstance();
+      const limpio = lead.phone.replace(/[^0-9]/g, '');
+      const jid = `${limpio}@s.whatsapp.net`;
+      try {
+        await whatsapp.sendHumanizedReply(jid, message);
+        SlaAlertManager.getInstance().cancelSlaTimer(limpio);
+        result = { success: true };
+      } catch (err: any) {
+        result = { success: false, error: err.message };
+      }
+    }
+
+    if (result.success) {
+      await OutreachRepo.markScheduledMessageSent(lead.phone);
+      await OutreachRepo.addChatMessage(lead.phone, 'assistant', message);
+      console.log(`✅ [AutonomousPipeline] Mensaje programado entregado a ${lead.companyName || lead.phone}!`);
+
+      // Notificar a Kenneth por WhatsApp Admin
+      try {
+        const whatsapp = BaileysEngine.getInstance();
+        const adminAlert = `🚀 *SEGUIMIENTO PROGRAMADO DESPACHADO*\n\n` +
+          `• *Contacto:* ${lead.companyName || 'Prospecto'}\n` +
+          `• *Teléfono:* +${lead.phone}\n` +
+          `• *Mensaje:*\n"${message}"\n\n` +
+          `_El prospecto continúa en Human Takeover para que cierres en cuanto responda._ 🤝`;
+        await whatsapp.notifyAdmin(adminAlert);
+      } catch (err: any) {
+        console.warn('[AutonomousPipeline] No se pudo notificar al admin sobre mensaje programado:', err.message);
+      }
+    } else {
+      console.error(`❌ [AutonomousPipeline] Error al enviar mensaje programado a ${lead.phone}:`, result.error);
     }
   }
 

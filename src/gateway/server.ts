@@ -2718,6 +2718,40 @@ app.post('/api/leads/import', authenticate, async (req: Request, res: Response) 
   }
 });
 
+// 16.5. Programar y consultar mensaje de seguimiento puntual para un lead
+app.post('/api/leads/:phone/schedule', authenticate, async (req: Request, res: Response) => {
+  try {
+    const phone = String(req.params.phone);
+    const { scheduledAt, message } = req.body;
+    if (!scheduledAt || !message) {
+      return res.status(400).json({ error: 'scheduledAt y message son requeridos' });
+    }
+    const success = await OutreachRepo.scheduleLeadMessage(phone, scheduledAt, message);
+    if (!success) {
+      return res.status(404).json({ error: 'Lead no encontrado para programar mensaje' });
+    }
+    res.json({ success: true, phone, scheduledAt, message });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/leads/:phone/schedule', authenticate, async (req: Request, res: Response) => {
+  try {
+    const phone = String(req.params.phone);
+    const lead = await OutreachRepo.getLeadByPhone(phone);
+    if (!lead) {
+      return res.status(404).json({ error: 'Lead no encontrado' });
+    }
+    res.json({ 
+      phone: lead.phone, 
+      scheduledFollowUp: lead.customFields?.scheduledFollowUp || null 
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 17. Webhook Cal.com / Agendamiento de Citas (Público para recibir eventos de Cal.com)
 app.post('/api/webhooks/cal', async (req: Request, res: Response) => {
   try {
