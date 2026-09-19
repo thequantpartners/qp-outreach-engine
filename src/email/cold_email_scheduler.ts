@@ -2,6 +2,8 @@ import { OutreachRepo } from '../db/repo.js';
 import { ZohoMailer } from './zoho_mailer.js';
 import { ColdEmailGenerator } from './cold_email_generator.js';
 import { ColdEmailCampaignStatus, EmailCampaignLead } from '../types/index.js';
+import fs from 'fs';
+import path from 'path';
 
 export class ColdEmailScheduler {
   private static isRunning: boolean = false;
@@ -161,12 +163,23 @@ export class ColdEmailScheduler {
     const emailContent = ColdEmailGenerator.generate(lead, variant);
     console.log(`📨 [ColdEmailScheduler] Despachando correo a ${lead.email} (${lead.companyName}) [Variante ${variant}]...`);
 
+    const cvPath = path.resolve('public/cv/Kenneth_Herrera_CV.pdf');
+    const attachments = fs.existsSync(cvPath)
+      ? [{ filename: 'Kenneth_Herrera_Senior_AI_Engineer_CV.pdf', path: cvPath }]
+      : undefined;
+
+    const isDev = ColdEmailGenerator.isDevContractorLead(lead);
+    const fromName = isDev
+      ? 'Kenneth Herrera · Senior AI & Full-Stack Engineer'
+      : 'Kenneth Herrera · The Quant Partners';
+
     const sendResult = await ZohoMailer.sendEmail({
       to: lead.email,
       subject: emailContent.subject,
       text: emailContent.text,
       html: emailContent.html,
-      fromName: 'Kenneth Herrera · The Quant Partners'
+      fromName,
+      attachments
     });
 
     if (sendResult.success) {

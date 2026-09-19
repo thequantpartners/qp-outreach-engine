@@ -102,6 +102,12 @@ export class ColdEmailIngestor {
         : `immigration law firm ${loc}`;
     }
 
+    if (niche.toLowerCase().includes('software') || niche.toLowerCase().includes('dev') || niche.toLowerCase().includes('tech') || niche.toLowerCase().includes('startup')) {
+      return country === 'PE'
+        ? `software factory desarrollo de software agencias ${loc}`
+        : `software development agency ${loc}`;
+    }
+
     return `${niche} ${loc}`;
   }
 

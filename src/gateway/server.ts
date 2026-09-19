@@ -85,6 +85,12 @@ app.get('/portal', (_req: Request, res: Response) => {
   res.sendFile(path.join(publicPortalDir, 'index.html'));
 });
 
+// Montar CV y Documentos públicos (/cv)
+const publicCvDir = fs.existsSync(path.resolve('public/cv'))
+  ? path.resolve('public/cv')
+  : path.resolve(__dirname, '../../public/cv');
+app.use('/cv', express.static(publicCvDir));
+
 // Endpoints de datos del Portal de Cliente (Protegidos con PIN de acceso)
 app.get('/api/portal/data', authenticateClientPin, async (_req: Request, res: Response) => {
   try {
@@ -2933,6 +2939,28 @@ app.post('/api/cold-email/launch', async (req: Request, res: Response) => {
       success: true,
       message: `Campaña iniciada para ${niche} (${country}): ${result.queuedCount} decisores encolados.`,
       result,
+      schedulerStatus: ColdEmailScheduler.getStatus()
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/cold-email/ingest-leads', async (req: Request, res: Response) => {
+  try {
+    const { leads, autoStart } = req.body;
+    if (!Array.isArray(leads) || leads.length === 0) {
+      res.status(400).json({ error: 'Se requiere un arreglo de prospectos no vacío.' });
+      return;
+    }
+    const result = await OutreachRepo.queueEmailLeads(leads);
+    if (autoStart) {
+      ColdEmailScheduler.start();
+    }
+    res.json({
+      success: true,
+      queued: result.queued,
+      skipped: result.skipped,
       schedulerStatus: ColdEmailScheduler.getStatus()
     });
   } catch (err: any) {

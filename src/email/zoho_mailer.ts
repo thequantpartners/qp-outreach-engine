@@ -1,5 +1,6 @@
 import nodemailer, { Transporter } from 'nodemailer';
 import dotenv from 'dotenv';
+import fs from 'fs';
 
 dotenv.config();
 
@@ -12,6 +13,12 @@ export interface SendEmailOptions {
   fromName?: string;
   cc?: string | string[];
   bcc?: string | string[];
+  attachments?: Array<{
+    filename: string;
+    path?: string;
+    content?: Buffer | string;
+    contentType?: string;
+  }>;
 }
 
 export interface SendEmailResult {
@@ -101,7 +108,8 @@ export class ZohoMailer {
       html: opts.html,
       replyTo: opts.replyTo || user,
       cc: opts.cc,
-      bcc: opts.bcc
+      bcc: opts.bcc,
+      attachments: opts.attachments
     };
 
     try {
@@ -155,6 +163,17 @@ export class ZohoMailer {
           if (opts.text) bodyPayload.text = opts.text;
           if (opts.html) bodyPayload.html = opts.html;
           if (opts.cc) bodyPayload.cc = Array.isArray(opts.cc) ? opts.cc : [opts.cc];
+          if (opts.attachments && Array.isArray(opts.attachments)) {
+            bodyPayload.attachments = opts.attachments.map(att => {
+              if (att.path && fs.existsSync(att.path)) {
+                return {
+                  filename: att.filename,
+                  content: fs.readFileSync(att.path).toString('base64')
+                };
+              }
+              return att;
+            });
+          }
 
           const res = await fetch('https://api.resend.com/emails', {
             method: 'POST',
