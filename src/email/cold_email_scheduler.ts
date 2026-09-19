@@ -10,7 +10,7 @@ export class ColdEmailScheduler {
   private static sentMorningCount: number = 0;
   private static sentAfternoonCount: number = 0;
   private static lastSentAt: number = 0;
-  private static currentDay: string = new Date().toISOString().slice(0, 10);
+  private static currentDay: string = '';
   private static variantRotationIndex: number = 0;
   private static variantStats = { variantA: 0, variantB: 0, variantC: 0 };
 
@@ -20,6 +20,19 @@ export class ColdEmailScheduler {
   private static readonly MAX_MORNING_EMAILS = 15;
   private static readonly MAX_AFTERNOON_EMAILS = 15;
   private static readonly MAX_DAILY_EMAILS = 30;
+
+  /**
+   * Obtiene la fecha actual en formato YYYY-MM-DD según la zona horaria oficial de Lima (America/Lima / UTC-5)
+   */
+  public static getLimaDateStr(): string {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Lima',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    return formatter.format(new Date());
+  }
 
   /**
    * Obtiene la hora actual en zona horaria oficial Lima (America/Lima / UTC-5)
@@ -189,8 +202,8 @@ export class ColdEmailScheduler {
   private static async tick(): Promise<void> {
     if (!this.isRunning) return;
 
-    // Reset diario a medianoche
-    const today = new Date().toISOString().slice(0, 10);
+    // Reset diario a medianoche de Lima (America/Lima)
+    const today = ColdEmailScheduler.getLimaDateStr();
     if (today !== this.currentDay) {
       this.currentDay = today;
       this.sentTodayCount = 0;

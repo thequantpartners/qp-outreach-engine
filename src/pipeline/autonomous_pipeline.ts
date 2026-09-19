@@ -11,7 +11,7 @@ export class AutonomousPipeline {
   private static sentTodayCount: number = 0;
   private static sentMorningCount: number = 0;
   private static serviceRoundRobinIndex: number = 0;
-  private static currentDay: string = new Date().toISOString().slice(0, 10);
+  private static currentDay: string = '';
   private static lastScrapeTime: number = 0;
   private static currentQueryIndex: number = 0;
   private static lastScrapedQuery: string = '';
@@ -24,7 +24,6 @@ export class AutonomousPipeline {
   private static consecutiveUnansweredOutreachCount: number = 0;
   private static circuitBreakerCooldownUntil: number = 0;
 
-  private static dailyReportSentDay: string = '';
   private static lastBillingAlertDate: string = '';
 
   /**
@@ -35,6 +34,19 @@ export class AutonomousPipeline {
       console.log(`💬 [AutonomousPipeline] Prospecto ${leadPhone ? `(${leadPhone}) ` : ''}respondió. Contador Circuit Breaker reseteado a 0 (era: ${this.consecutiveUnansweredOutreachCount}).`);
       this.consecutiveUnansweredOutreachCount = 0;
     }
+  }
+
+  /**
+   * Obtiene la fecha actual en formato YYYY-MM-DD según la zona horaria oficial de Lima (America/Lima / UTC-5)
+   */
+  public static getLimaDateStr(): string {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Lima',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    return formatter.format(new Date());
   }
 
   /**
@@ -153,13 +165,12 @@ export class AutonomousPipeline {
   private static async tick(): Promise<void> {
     if (!this.isRunning) return;
 
-    // Resetear contador diario a medianoche
-    const today = new Date().toISOString().slice(0, 10);
+    // Resetear contador diario a medianoche de Lima (America/Lima)
+    const today = AutonomousPipeline.getLimaDateStr();
     if (today !== this.currentDay) {
       this.currentDay = today;
       this.sentTodayCount = 0;
       this.sentMorningCount = 0;
-      this.dailyReportSentDay = '';
     }
 
     // 1. Obtener configuración
@@ -215,11 +226,7 @@ export class AutonomousPipeline {
       activeRegion = 'PERU';
       slotName = 'Tardes Perú (Todo el Perú)';
     } else {
-      // Fuera de horario comercial
-      if ((currentHour >= 19 || currentHour >= settings.endHour) && this.dailyReportSentDay !== today) {
-        await this.sendNightlyReport(today, settings);
-      }
-
+      // Fuera de horario comercial (Pausa nocturna - Hermes C2 envía el reporte oficial a las 19:00)
       console.log(`🌙 [AutonomousPipeline] Fuera de horario comercial (${limaTime.timeStr} Lima). Horarios Perú: 09:00-13:00 y 14:00-19:00. En pausa.`);
       this.scheduleNextTick(10 * 60 * 1000); // esperar 10 minutos
       return;
@@ -605,36 +612,6 @@ export class AutonomousPipeline {
     }
   }
 
-  /**
-   * Envía el reporte ejecutivo consolidado de la jornada al WhatsApp de Kenneth
-   */
-  private static async sendNightlyReport(today: string, settings: any): Promise<void> {
-    try {
-      this.dailyReportSentDay = today;
-      const activity = await OutreachRepo.getDailyActivity(today);
-      const stats = await OutreachRepo.getStats();
-
-      const report = `📊 *REPORTE DIARIO DE PROSPECCIÓN QP* (${today})
-
-• *Mensajes enviados hoy:* ${activity.sentCount}
-• *Respuestas de prospectos:* ${activity.repliedCount}
-• *Reuniones agendadas:* ${activity.meetingsCount}
-
-📈 *Embudo Global:*
-• En cola: ${stats.discovered}
-• Contactados: ${stats.outreachSent}
-• En seguimiento: ${stats.followUpSent}
-• Calificados / Cierres: ${stats.qualified + stats.closedWon}
-
-🌙 *El motor ha entrado en pausa nocturna hasta las ${settings.startHour}:00 AM.*`;
-
-      const whatsapp = BaileysEngine.getInstance();
-      await whatsapp.notifyAdmin(report);
-      console.log('📊 [AutonomousPipeline] Reporte diario nocturno despachado a Kenneth.');
-    } catch (err: any) {
-      console.error('[AutonomousPipeline] Error enviando reporte nocturno:', err.message);
-    }
-  }
 
   /**
    * Envía alertas preventivas y de pago mensual del servidor Railway al WhatsApp de Kenneth

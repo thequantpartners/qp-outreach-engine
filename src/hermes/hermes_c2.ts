@@ -2087,12 +2087,16 @@ PERSONALIDAD Y TONO DE COMUNICACIÓN (CERO ACARTONAMIENTO):
       `• Nuevas Respuestas: *${summary.replied}*\n` +
       `• Calificados por AI Setter: *${summary.qualified}*\n` +
       `• Ventas Cerradas: *${summary.closedWon}*\n\n` +
+      `📈 *Embudo Global:*\n` +
+      `• En Cola / Por Contactar: *${summary.discovered}*\n` +
+      `• En Seguimiento Activo: *${summary.followUpSent}*\n` +
+      `• Citas Agendadas: *${summary.meetingScheduled}*\n\n` +
       `📧 *Correos en Frío B2B (Resend Cloud):*\n` +
       `• Despachados Hoy: *${emailStats.sentToday}*\n` +
       `• Total Entregados Acumulado: *${emailStats.sent}*\n` +
       `• En Cola Pendientes: *${emailStats.queued}*\n` +
       `• Aperturas: *${emailStats.opened}* | Respuestas: *${emailStats.replied}*\n\n` +
-      `💤 _El despachador en frío pausa hasta las 09:00 AM. Setter WhatsApp 24/7 activo._`;
+      `💤 _El motor ha entrado en pausa nocturna hasta las 09:00 AM. Setter WhatsApp 24/7 activo._`;
 
     await BaileysEngine.getInstance().notifyAdmin(message);
   }
