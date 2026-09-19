@@ -104,10 +104,24 @@ Inspirado en la robustez operativa de plataformas consolidadas como **Flujos Int
 
 ---
 
-## 3. Verificación de Compilación y Calidad
+## 4. Sincronización Nativa de Zoho Mail SMTP y Fallback Resend (Despliegue #25)
 
-- `npx tsx scripts/test_handoff_resilience.ts`: **100% tests pasados (humano, frustración, producto normal, bucle).**
-- `npx tsc --noEmit`: **0 errores de compilación.**
-- `npm run build`: **Compilación a JavaScript exitosa y blueprints sincronizados en `dist/`.**
-- Base de datos: **Campaña `live-commerce-peru` activa y lista.**
+### 🎯 Diagnóstico y Causa Raíz
+1. **Entrega de Correo Verificada:** El correo aprobado a **Clínica de Encías (`info@clinicadeencias.pe`)** fue entregado a las 10:20:07 AM PET vía Resend API (AWS SES `sa-east-1`, ID `01a0ba40-d7c2-730d-8e72-9e9c76b97c10`).
+2. **Ausencia en "Enviados" de Zoho Mail:** Debido a que el motor priorizaba la API HTTP de Resend para evadir bloqueos de puertos, el correo nunca pasó por `smtp.zoho.com`. Por ende, el webmail de Zoho no tenía registro de la sesión y no guardó el mensaje en la carpeta "Enviados".
+
+### 🛠️ Solución Implementada
+1. **Prioridad 1 (Zoho SMTP - Puerto 587 STARTTLS):** Conexión directa y rápida a `smtp.zoho.com`. Todo correo aprobado se guarda automáticamente en la carpeta "Enviados" de `mail.zoho.com`.
+2. **Prioridad 2 (Resend API Fallback + BCC):** Si Zoho SMTP falla por límite o corte de red, Resend despacha de inmediato e incluye `bcc: partners@thequantpartners.com` como respaldo en la bandeja de entrada.
+3. **Alertas Transparentes en Hermes C2:** Informa si fue despachado vía Zoho Mail SMTP o Resend Cloud.
+
+### 🚀 Despliegue en Producción (Coolify VPS `89.117.49.92`)
+- **Commit:** `ec8b15d` (`fix(mailer): prioritize Zoho SMTP port 587 for native Sent folder sync and add Resend API fallback with BCC`)
+- **Coolify Deployment:** #25 -> `status: finished`
+- **Contenedor Activo:** `b90533de8825` verificado en vivo (`isWhatsAppReady: true`).
+- **Pruebas en Contenedor:**
+  - Envío directo Zoho SMTP (587): `✅ Guardado en Enviados de Zoho (MessageId: <91e75758-2df6-45a0-6d95-accd3dddf7a9@thequantpartners.com>)`.
+  - Simulación de fallback Resend con BCC: `✅ Entregado vía Resend API con BCC a partners@thequantpartners.com`.
+- **Dr. Manuel Sinchi (`+51 961 360 074`):** Confirmado recontacto a las 10:30:22 AM PET con oferta de pago único y adelanto de S/. 500 bajo `HUMAN_TAKEOVER`.
+
 
