@@ -63,6 +63,18 @@ export class BotDetector {
     /en\s+este\s+momento\s+(?:nuestros\s+asesores|no\s+nos\s+encontramos\s+disponibles)/i
   ];
 
+  /**
+   * Patrones de desconexión, cierre de sesión o inactividad automática de chatbots
+   */
+  private static readonly INACTIVITY_OR_TIMEOUT_PATTERNS: RegExp[] = [
+    /parece\s+que\s+te\s+(?:desconectaste|desconectase)/i,
+    /solo\s+env[ií]a\s+["']?hola["']?\s+y\s+te\s+ayudar[eé]/i,
+    /recuerda\s+que\s+puedes\s+escribirme\s+cuando\s+lo\s+desees/i,
+    /por\s+inactividad\s+(?:se\s+ha\s+cerrado|cerramos\s+la\s+sesi[oó]n|damos\s+por\s+finalizada)/i,
+    /la\s+sesi[oó]n\s+(?:ha\s+expirado|ha\s+terminado|se\s+ha\s+cerrado|ha\s+finalizado)/i,
+    /si\s+deseas\s+continuar[\s\S]*escribe\s+["']?hola["']?/i
+  ];
+
   public static analyze(text: string): BotAnalysis {
     const clean = (text || '').trim();
     if (!clean) {
@@ -91,11 +103,16 @@ export class BotDetector {
     // 4. Verificar si es auto-respuesta de bienvenida / ausencia
     const isAutoGreeting = this.AUTO_GREETING_PATTERNS.some(p => p.test(clean));
 
-    if (isBotSelf || isIvr || isAutoGreeting) {
+    // 5. Verificar si es mensaje de timeout o desconexión de chatbot
+    const isTimeout = this.INACTIVITY_OR_TIMEOUT_PATTERNS.some(p => p.test(clean));
+
+    if (isBotSelf || isIvr || isAutoGreeting || isTimeout) {
       const reason = isBotSelf 
         ? 'El remitente se identificó como bot o asistente virtual automático'
         : isIvr
         ? 'El remitente envió un menú interactivo de opciones (IVR/Chatbot)'
+        : isTimeout
+        ? 'Mensaje de cierre por inactividad o desconexión de chatbot ajeno'
         : 'Mensaje de auto-respuesta o bienvenida automática detectado';
 
       return {
@@ -104,7 +121,9 @@ export class BotDetector {
         isBotSelfIdentification: isBotSelf,
         isIvrOrMenu: isIvr,
         reason,
-        suggestedReply: 'Hola 🙌 Veo que este es un canal automatizado. ¿Sería posible que me comuniques con el encargado o un asesor humano para coordinar directamente? ¡Muchas gracias! 🤝'
+        suggestedReply: isTimeout
+          ? undefined // Si es timeout/desconexión, NO responder para no reactivar la sesión del bot
+          : 'Hola 🙌 Veo que este es un canal automatizado. ¿Sería posible que me comuniques con el encargado o un asesor humano para coordinar directamente? ¡Muchas gracias! 🤝'
       };
     }
 
