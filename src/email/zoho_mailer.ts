@@ -18,6 +18,7 @@ export interface SendEmailResult {
   success: boolean;
   messageId?: string;
   error?: string;
+  provider?: 'ZOHO_SMTP' | 'RESEND_API';
 }
 
 export class ZohoMailer {
@@ -49,45 +50,36 @@ export class ZohoMailer {
   public static getTransporter(): Transporter {
     if (this.transporter) return this.transporter;
     const port = parseInt(process.env.ZOHO_MAIL_PORT || '587', 10);
-    this.transporter = this.createTransporter(port);
+    const portToUse = port === 465 ? 587 : port;
+    this.transporter = this.createTransporter(portToUse);
     return this.transporter;
   }
 
   public static async verifyConnection(): Promise<boolean> {
-    const resendApiKey = process.env.RESEND_API_KEY;
-    if (resendApiKey) {
-      try {
-        const res = await fetch('https://api.resend.com/domains', {
-          headers: {
-            'Authorization': `Bearer ${resendApiKey.trim()}`
-          }
-        });
-        if (res.ok) {
-          console.log('[ZohoMailer/Resend] ✅ Conexión con Resend API verificada exitosamente.');
-          return true;
-        }
-      } catch (err: any) {
-        console.warn('[ZohoMailer/Resend] Error verificando API de Resend:', err.message);
-      }
-    }
-
     try {
       const transporter = this.getTransporter();
       await transporter.verify();
+      console.log('[ZohoMailer] ✅ Conexión con Zoho SMTP (587) verificada exitosamente.');
       return true;
     } catch (err: any) {
-      console.warn(`[ZohoMailer] Falló verificación con puerto primario (${err.message}), probando alternativo...`);
-      try {
-        const primaryPort = parseInt(process.env.ZOHO_MAIL_PORT || '587', 10);
-        const altPort = primaryPort === 465 ? 587 : 465;
-        const alt = this.createTransporter(altPort);
-        await alt.verify();
-        this.transporter = alt;
-        return true;
-      } catch (err2: any) {
-        console.error('[ZohoMailer] Error verificando conexión SMTP con ambos puertos:', err2.message);
-        return false;
+      console.warn(`[ZohoMailer] Falló verificación SMTP (${err.message}). Evaluando Resend API...`);
+      const resendApiKey = process.env.RESEND_API_KEY;
+      if (resendApiKey) {
+        try {
+          const res = await fetch('https://api.resend.com/domains', {
+            headers: {
+              'Authorization': `Bearer ${resendApiKey.trim()}`
+            }
+          });
+          if (res.ok) {
+            console.log('[ZohoMailer/Resend] ✅ Resend API verificada como respaldo.');
+            return true;
+          }
+        } catch (resendErr: any) {
+          console.warn('[ZohoMailer/Resend] Error verificando API de Resend:', resendErr.message);
+        }
       }
+      return false;
     }
   }
 
@@ -96,47 +88,11 @@ export class ZohoMailer {
     const fromName = opts.fromName || 'Kenneth Herrera · The Quant Partners';
     const resendApiKey = process.env.RESEND_API_KEY;
 
-    // 1. Prioridad: Despacho nativo por Resend API sobre HTTPS (Puerto 443) - Cero bloqueos en Cloud
-    if (resendApiKey) {
-      try {
-        const toList = Array.isArray(opts.to) ? opts.to : [opts.to];
-        const bodyPayload: any = {
-          from: `${fromName} <${user}>`,
-          to: toList,
-          subject: opts.subject,
-          reply_to: opts.replyTo || user
-        };
-        if (opts.text) bodyPayload.text = opts.text;
-        if (opts.html) bodyPayload.html = opts.html;
-        if (opts.cc) bodyPayload.cc = Array.isArray(opts.cc) ? opts.cc : [opts.cc];
-        if (opts.bcc) bodyPayload.bcc = Array.isArray(opts.bcc) ? opts.bcc : [opts.bcc];
-
-        const res = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${resendApiKey.trim()}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(bodyPayload)
-        });
-
-        const data: any = await res.json();
-        if (!res.ok) {
-          throw new Error(data.message || (data.name ? `${data.name}: ${data.message}` : JSON.stringify(data)));
-        }
-
-        console.log(`[ResendMailer] ✅ Correo entregado exitosamente vía Resend API a ${opts.to}. Resend ID: ${data.id}`);
-        return {
-          success: true,
-          messageId: data.id
-        };
-      } catch (resendErr: any) {
-        console.warn(`[ResendMailer] ⚠️ Falló envío vía Resend API (${resendErr.message}). Evaluando fallback SMTP...`);
-      }
-    }
-
-    // 2. Fallback SMTP (Nodemailer)
+    // 1. PRIORIDAD #1: Despacho nativo por Zoho SMTP (Puerto 587 STARTTLS)
+    // Esto asegura que el correo quede automáticamente guardado en la carpeta "Enviados" de mail.zoho.com
     const primaryPort = parseInt(process.env.ZOHO_MAIL_PORT || '587', 10);
+    const portToUse = primaryPort === 465 ? 587 : primaryPort;
+
     const mailOptions = {
       from: `"${fromName}" <${user}>`,
       to: opts.to,
@@ -149,33 +105,90 @@ export class ZohoMailer {
     };
 
     try {
-      const transporter = this.getTransporter();
+      const transporter = this.createTransporter(portToUse);
       const info = await transporter.sendMail(mailOptions);
-      console.log(`[ZohoMailer] Correo enviado exitosamente a ${opts.to} (puerto ${primaryPort}). MessageId: ${info.messageId}`);
+      console.log(`[ZohoMailer] ✅ Correo enviado exitosamente vía Zoho SMTP (puerto ${portToUse}). Guardado en Enviados de Zoho. MessageId: ${info.messageId}`);
       return {
         success: true,
-        messageId: info.messageId
+        messageId: info.messageId,
+        provider: 'ZOHO_SMTP'
       };
-    } catch (err: any) {
-      const altPort = primaryPort === 465 ? 587 : 465;
-      console.warn(`[ZohoMailer] Error enviando correo por puerto ${primaryPort} (${err.message}). Reintentando por puerto alternativo ${altPort}...`);
-      try {
-        const altTransporter = this.createTransporter(altPort);
-        const info = await altTransporter.sendMail(mailOptions);
-        console.log(`[ZohoMailer] ✅ Correo enviado exitosamente usando puerto alternativo ${altPort}. MessageId: ${info.messageId}`);
-        // Cachear el transporte que sí funcionó
-        this.transporter = altTransporter;
-        return {
-          success: true,
-          messageId: info.messageId
-        };
-      } catch (altErr: any) {
-        console.error('[ZohoMailer] Error al enviar correo con ambos puertos:', altErr.message);
-        return {
-          success: false,
-          error: altErr.message
-        };
+    } catch (smtpErr: any) {
+      console.warn(`[ZohoMailer] ⚠️ Falló envío vía Zoho SMTP puerto ${portToUse} (${smtpErr.message}). Evaluando fallback...`);
+
+      // Si el puerto fue 587 y falló, intentar 465 como último intento SMTP
+      if (portToUse === 587) {
+        try {
+          const altTransporter = this.createTransporter(465);
+          const info = await altTransporter.sendMail(mailOptions);
+          console.log(`[ZohoMailer] ✅ Correo enviado exitosamente usando puerto alternativo 465. MessageId: ${info.messageId}`);
+          this.transporter = altTransporter;
+          return {
+            success: true,
+            messageId: info.messageId,
+            provider: 'ZOHO_SMTP'
+          };
+        } catch (altErr: any) {
+          console.warn(`[ZohoMailer] ⚠️ Falló también Zoho SMTP puerto 465 (${altErr.message}).`);
+        }
       }
+
+      // 2. PRIORIDAD #2: Fallback de Alta Disponibilidad por Resend API sobre HTTPS (Puerto 443)
+      if (resendApiKey) {
+        console.log('[ZohoMailer] 🔄 Activando fallback de alta disponibilidad vía Resend API (HTTPS)...');
+        try {
+          const toList = Array.isArray(opts.to) ? opts.to : [opts.to];
+          const bccList = opts.bcc ? (Array.isArray(opts.bcc) ? [...opts.bcc] : [opts.bcc]) : [];
+          // Respaldo: si sale por Resend, incluir copia oculta (BCC) a partners@thequantpartners.com
+          // para que siempre aparezca en la bandeja de entrada de Zoho Mail
+          if (!bccList.includes(user)) {
+            bccList.push(user);
+          }
+
+          const bodyPayload: any = {
+            from: `${fromName} <${user}>`,
+            to: toList,
+            subject: opts.subject,
+            reply_to: opts.replyTo || user,
+            bcc: bccList
+          };
+          if (opts.text) bodyPayload.text = opts.text;
+          if (opts.html) bodyPayload.html = opts.html;
+          if (opts.cc) bodyPayload.cc = Array.isArray(opts.cc) ? opts.cc : [opts.cc];
+
+          const res = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${resendApiKey.trim()}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(bodyPayload)
+          });
+
+          const data: any = await res.json();
+          if (!res.ok) {
+            throw new Error(data.message || (data.name ? `${data.name}: ${data.message}` : JSON.stringify(data)));
+          }
+
+          console.log(`[ResendMailer] ✅ Correo entregado exitosamente vía Resend API (con BCC a ${user}) a ${opts.to}. Resend ID: ${data.id}`);
+          return {
+            success: true,
+            messageId: data.id,
+            provider: 'RESEND_API'
+          };
+        } catch (resendErr: any) {
+          console.error(`[ResendMailer] ❌ Falló también el fallback Resend API: ${resendErr.message}`);
+          return {
+            success: false,
+            error: `Zoho SMTP falló (${smtpErr.message}) y Resend falló (${resendErr.message})`
+          };
+        }
+      }
+
+      return {
+        success: false,
+        error: smtpErr.message
+      };
     }
   }
 

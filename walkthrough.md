@@ -71,6 +71,39 @@ Inspirado en la robustez operativa de plataformas consolidadas como **Flujos Int
 
 ---
 
+## 📊 Unificación del Reporte de Cierre y Corrección del Bug de Zona Horaria (UTC vs Lima)
+
+### 🎯 Diagnóstico y Problemas Encontrados
+1. **Doble Reporte Competidor a las 19:00:**
+   - **Reporte 1:** `HERMES C2 · REPORTE DE CIERRE (7:00 PM)` (`src/hermes/hermes_c2.ts`) — El reporte oficial, multi-canal (WhatsApp Ghost CRM + Cold Emails Resend Cloud + Estado Operativo) con métricas reales (28 contactados, 20 respuestas).
+   - **Reporte 2:** `REPORTE DIARIO DE PROSPECCIÓN QP` (`src/pipeline/autonomous_pipeline.ts`) — Un reporte legado paralelo que se disparaba en `AutonomousPipeline.tick()` al entrar en pausa nocturna.
+2. **Bug de Rollover de Zona Horaria UTC:**
+   - `AutonomousPipeline` y `ColdEmailScheduler` calculaban `today` con `new Date().toISOString().slice(0, 10)` (UTC).
+   - A las 7:00 PM Lima (19:00 PET / UTC-5), en UTC ya eran las 00:00 del día siguiente (`2026-09-19`).
+   - Por ende, consultaba la tabla `daily_activity` para el día 19 (que aún tenía 0 envíos y 0 respuestas), mostrando todo en 0.
+   - Además, reseteaba el contador `sentTodayCount` a las 7:00 PM en lugar de la medianoche de Lima.
+3. **Re-disparo en Reinicios / Redeploys Nocturnos:**
+   - Cada vez que el contenedor se reiniciaba durante la noche (ej. a las 19:16 al desplegar), `this.dailyReportSentDay` en memoria iniciaba vacío, la hora era `>= 19`, y volvía a despachar el reporte duplicado en ceros.
+
+### 🛠️ Solución Definitiva Implementada
+1. **Unificación en Hermes C2:**
+   - Se consolidó toda la telemetría en `HermesC2.dispatchEveningReport()` (7:00 PM), incorporando además las métricas consolidadas del Embudo Global (En Cola, En Seguimiento, Citas Agendadas).
+   - Se eliminó `sendNightlyReport` de `AutonomousPipeline` para que **NUNCA** existan dos reportes compitiendo.
+2. **Helper Oficial `getLimaDateStr()`:**
+   - Se implementó `getLimaDateStr()` usando `Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' })` tanto en `AutonomousPipeline` como en `ColdEmailScheduler`.
+   - El reseteo de contadores diarios ahora ocurre a la medianoche real de Perú, no a las 7:00 PM.
+3. **Cero Re-envíos en Reinicio:**
+   - `HermesC2.initScheduler()` restringe el reporte al intervalo estricto `peruHour === 19 && peruMinute < 5 && !this.eveningReportSentToday`.
+   - Cualquier reinicio posterior a las 19:05 jamás disparará un reporte tardío.
+
+### 🚀 Despliegue en Producción (Coolify VPS `89.117.49.92`)
+- **Commit:** `e9b9d3c` (`fix(reports): eliminate duplicate nightly report and fix Peru timezone rollover bug`)
+- **Coolify Deployment:** #24 (`vcrd7z1ffowhdsoggcd69qfj`) -> `status: finished`
+- **Contenedor:** `91f3cbc3248b` activo y verificado en vivo.
+- **Gateway Live:** `https://gateway.thequantpartners.com/api/status` -> `isWhatsAppReady: true`, `uptimeSeconds: 55`.
+
+---
+
 ## 3. Verificación de Compilación y Calidad
 
 - `npx tsx scripts/test_handoff_resilience.ts`: **100% tests pasados (humano, frustración, producto normal, bucle).**

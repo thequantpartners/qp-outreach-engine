@@ -170,7 +170,7 @@ Sitio Web: thequantpartners.com`;
    */
   public static async approvePendingEmail(
     draftIdOrPhone?: string
-  ): Promise<{ success: boolean; message: string; draft?: PendingEmailDraft }> {
+  ): Promise<{ success: boolean; message: string; draft?: PendingEmailDraft; provider?: 'ZOHO_SMTP' | 'RESEND_API' }> {
     let draft: PendingEmailDraft | null = null;
 
     if (draftIdOrPhone) {
@@ -210,6 +210,7 @@ Sitio Web: thequantpartners.com`;
         ...(lead.customFields || {}),
         emailSentAt: new Date().toISOString(),
         emailMessageId: result.messageId,
+        emailProvider: result.provider || 'ZOHO_SMTP',
         sentEmailTo: draft.recipientEmail,
         pendingEmailDraft: null
       };
@@ -219,7 +220,8 @@ Sitio Web: thequantpartners.com`;
     return {
       success: true,
       message: `Correo enviado exitosamente a ${draft.recipientEmail} (${draft.companyName}).`,
-      draft
+      draft,
+      provider: result.provider
     };
   }
 

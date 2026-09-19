@@ -458,6 +458,9 @@ export class HermesC2 {
       const { EmailDispatcher } = await import('../email/email_dispatcher.js');
       const res = await EmailDispatcher.approvePendingEmail(targetId);
       if (res.success && res.draft) {
+        const providerDesc = (res as any).provider === 'RESEND_API'
+          ? 'vía Resend Cloud API (copia de respaldo en tu bandeja de Zoho)'
+          : 'vía Zoho Mail SMTP (guardado en tu carpeta Enviados)';
         const reply = 
           `✅ *CORREO CORPORATIVO ENVIADO CON ÉXITO*\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
@@ -466,7 +469,7 @@ export class HermesC2 {
           `📝 Asunto: *${res.draft.subject}*\n` +
           `🕒 Enviado: *${new Date().toLocaleTimeString('es-PE')}*\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
-          `💼 Despachado desde partners@thequantpartners.com vía Zoho Mail.`;
+          `💼 Despachado desde partners@thequantpartners.com ${providerDesc}.`;
         return { handled: true, replyMessage: reply, actionExecuted: 'EMAIL_SENT' };
       } else {
         return { handled: true, replyMessage: `⚠️ ${res.message}` };
